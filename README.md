@@ -9,28 +9,31 @@ It does everything the stock thermostat card does — a draggable temperature di
 temperature, mode/fan/swing selectors — and adds **customizable labels & icons** per option plus
 **custom-entity selectors** (input_select, switch group/list, button list, entity tiles).
 
-> **Status: early bootstrap (v0.1).** The base card and climate HVAC/fan/swing selectors with
-> label/icon customization are implemented. The custom-entity feature types are on the roadmap
-> below.
+> **Status: v0.1.1.** Base card, climate selectors with label/icon customization, all custom-entity
+> feature types, dual setpoint, and visual editors are implemented.
 
 ## Features
 
 - 🎯 Draggable circular temperature dial (custom SVG, themed by HVAC mode/action)
+- 🔀 Dual setpoint support for `heat_cool` (two draggable handles)
 - 🌡️ Current temperature display, with an optional "show current as primary" mode
 - ➕➖ Step buttons, keyboard-accessible
 - 🎨 Material 3 Expressive styling via `--md-sys-*` tokens (graceful fallback to HA theme vars)
 - 🧩 Climate **HVAC / fan / swing** selectors as an **icon row** or **dropdown**
 - ✏️ Per-option **label and icon** overrides, plus hide options — all from the visual editor
+- 🎛️ Custom-entity selectors: **input_select**, **switch group**, **switch list**, **button list**
+- 🟦 **Entity tiles** (rounded cards) for sensor / switch / button with a configurable tap action
+- 🛠️ Visual editor for every feature type
 
 ### Roadmap
 
-- [ ] `input_select` selector (icons or dropdown)
-- [ ] Switch **group** (mutually exclusive; switches off others, then on the selected — off before on)
-- [ ] Switch **list** (independent toggles in a row)
-- [ ] Button **list** (independent `button.press`)
-- [ ] Entity **tiles** (rounded cards for sensor / switch / button)
-- [ ] Visual editors for each of the above
-- [ ] Dual setpoint (`heat_cool`) support
+- [x] `input_select` selector (icons or dropdown)
+- [x] Switch **group** (mutually exclusive; switches off others, then on the selected — off before on)
+- [x] Switch **list** (independent toggles in a row)
+- [x] Button **list** (independent `button.press`)
+- [x] Entity **tiles** (rounded cards for sensor / switch / button)
+- [x] Visual editors for each of the above
+- [x] Dual setpoint (`heat_cool`) support
 - [ ] Motion / shape polish and gallery screenshots
 
 ## Installation
@@ -88,6 +91,67 @@ features:
 
 Each climate feature accepts `display: icons | dropdown` and an `options` list of per-value
 overrides: `{ value, label?, icon?, hide? }`. Unset options use Home Assistant's defaults.
+
+## Feature types
+
+Add any number of feature rows under `features:`. All selectors render as an icon row or a
+dropdown (`display: icons | dropdown`); the lists and tile render as icon rows / tiles.
+
+| Type                  | Controls                                   | Selection behavior                                            |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------ |
+| `climate-hvac-modes`  | the card's climate entity                  | sets HVAC mode                                               |
+| `climate-fan-modes`   | the card's climate entity                  | sets fan mode                                               |
+| `climate-swing-modes` | the card's climate entity                  | sets swing mode                                             |
+| `input-select`        | an `input_select` entity                   | selects an option                                           |
+| `switch-group`        | a list of switches                         | mutually exclusive — turns others **off**, then selected on |
+| `switch-list`         | a list of switches                         | each toggles independently (multiple can be on)             |
+| `button-list`         | a list of buttons/scenes/scripts           | each pressed independently                                  |
+| `entity-tile`         | one sensor / switch / button               | rounded tile, runs `tap_action` (else the natural action)   |
+
+```yaml
+features:
+  # Bind an input_select; override option labels/icons
+  - type: input-select
+    entity: input_select.ac_preset
+    display: icons
+    options:
+      - value: comfort
+        label: Comfort
+        icon: mdi:sofa
+
+  # Mutually exclusive switches (turns the others off first, then the chosen one on)
+  - type: switch-group
+    label: Preset
+    entities:
+      - { entity: switch.eco, label: Eco, icon: mdi:leaf }
+      - { entity: switch.boost, label: Boost, icon: mdi:rocket-launch }
+
+  # Independent toggles
+  - type: switch-list
+    entities:
+      - { entity: switch.lamp, icon: mdi:lamp }
+      - { entity: switch.purifier, icon: mdi:air-purifier }
+
+  # Independent presses
+  - type: button-list
+    items:
+      - { entity: button.restart, icon: mdi:restart }
+      - { entity: scene.movie, label: Movie, icon: mdi:movie }
+
+  # Rounded tiles (à la Google Home)
+  - type: entity-tile
+    entity: sensor.living_humidity
+    name: Humidity
+    icon: mdi:water-percent
+  - type: entity-tile
+    entity: switch.fan_lamp
+    tap_action:
+      action: toggle
+```
+
+`switch-group`, `switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The
+entity tile accepts `name`, `icon`, and a standard Lovelace `tap_action` (defaults to toggle for
+switches, press for buttons, more-info otherwise).
 
 ## Theming
 

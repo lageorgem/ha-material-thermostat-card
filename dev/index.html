@@ -36,6 +36,7 @@
       }
       #card {
         width: 380px;
+        margin: 24px 0;
       }
       .note {
         position: fixed;
@@ -85,35 +86,82 @@
       if (!customElements.get('ha-list-item')) customElements.define('ha-list-item', HaListItem);
 
       // --- Mock hass ---
-      const state = {
-        entity_id: 'climate.living_room',
-        state: 'cool',
-        attributes: {
-          friendly_name: 'Living AC',
-          hvac_modes: ['off', 'cool', 'heat', 'dry', 'fan_only', 'auto'],
-          fan_modes: ['auto', 'low', 'medium', 'high'],
-          swing_modes: ['off', 'vertical', 'horizontal', 'both'],
-          fan_mode: 'high',
-          swing_mode: 'vertical',
-          hvac_action: 'cooling',
-          current_temperature: 26.7,
-          temperature: 24,
-          min_temp: 16,
-          max_temp: 30,
-          target_temp_step: 0.5,
+      const states = {
+        'climate.living_room': {
+          entity_id: 'climate.living_room',
+          state: 'cool',
+          attributes: {
+            friendly_name: 'Living AC',
+            hvac_modes: ['off', 'cool', 'heat', 'dry', 'fan_only', 'auto'],
+            fan_modes: ['auto', 'low', 'medium', 'high'],
+            swing_modes: ['off', 'vertical', 'horizontal', 'both'],
+            fan_mode: 'high',
+            swing_mode: 'vertical',
+            hvac_action: 'cooling',
+            current_temperature: 26.7,
+            temperature: 24,
+            min_temp: 16,
+            max_temp: 30,
+            target_temp_step: 0.5,
+          },
+        },
+        'input_select.scene': {
+          entity_id: 'input_select.scene',
+          state: 'Day',
+          attributes: { friendly_name: 'Scene', options: ['Day', 'Night', 'Movie'] },
+        },
+        'switch.eco': { entity_id: 'switch.eco', state: 'on', attributes: { friendly_name: 'Eco' } },
+        'switch.boost': {
+          entity_id: 'switch.boost',
+          state: 'off',
+          attributes: { friendly_name: 'Boost' },
+        },
+        'switch.quiet': {
+          entity_id: 'switch.quiet',
+          state: 'off',
+          attributes: { friendly_name: 'Quiet' },
+        },
+        'switch.lamp': {
+          entity_id: 'switch.lamp',
+          state: 'on',
+          attributes: { friendly_name: 'Lamp' },
+        },
+        'button.restart': {
+          entity_id: 'button.restart',
+          state: 'unknown',
+          attributes: { friendly_name: 'Restart' },
+        },
+        'button.sync': {
+          entity_id: 'button.sync',
+          state: 'unknown',
+          attributes: { friendly_name: 'Sync' },
+        },
+        'sensor.humidity': {
+          entity_id: 'sensor.humidity',
+          state: '53',
+          attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
         },
       };
 
       const hass = {
-        states: { 'climate.living_room': state },
+        states,
         config: { unit_system: { temperature: '°C' } },
         themes: {},
         callService(domain, service, data) {
           console.log('callService', domain, service, data);
-          if (service === 'set_temperature') state.attributes.temperature = data.temperature;
-          if (service === 'set_hvac_mode') state.state = data.hvac_mode;
-          if (service === 'set_fan_mode') state.attributes.fan_mode = data.fan_mode;
-          if (service === 'set_swing_mode') state.attributes.swing_mode = data.swing_mode;
+          const ac = states['climate.living_room'];
+          if (service === 'set_temperature') ac.attributes.temperature = data.temperature;
+          if (service === 'set_hvac_mode') ac.state = data.hvac_mode;
+          if (service === 'set_fan_mode') ac.attributes.fan_mode = data.fan_mode;
+          if (service === 'set_swing_mode') ac.attributes.swing_mode = data.swing_mode;
+          if (service === 'select_option') states[data.entity_id].state = data.option;
+          const ids = Array.isArray(data.entity_id) ? data.entity_id : [data.entity_id];
+          if (service === 'turn_on') ids.forEach((id) => states[id] && (states[id].state = 'on'));
+          if (service === 'turn_off') ids.forEach((id) => states[id] && (states[id].state = 'off'));
+          if (service === 'toggle')
+            ids.forEach(
+              (id) => states[id] && (states[id].state = states[id].state === 'on' ? 'off' : 'on')
+            );
           push();
         },
       };
@@ -129,13 +177,42 @@
           { type: 'climate-hvac-modes' },
           { type: 'climate-fan-modes' },
           { type: 'climate-swing-modes' },
+          { type: 'input-select', entity: 'input_select.scene' },
+          {
+            type: 'switch-group',
+            label: 'Preset',
+            entities: [
+              { entity: 'switch.eco', icon: 'mdi:leaf' },
+              { entity: 'switch.boost', icon: 'mdi:rocket-launch' },
+              { entity: 'switch.quiet', icon: 'mdi:volume-low' },
+            ],
+          },
+          {
+            type: 'switch-list',
+            entities: [
+              { entity: 'switch.lamp', icon: 'mdi:lamp' },
+              { entity: 'switch.eco', icon: 'mdi:leaf' },
+            ],
+          },
+          {
+            type: 'button-list',
+            items: [
+              { entity: 'button.restart', icon: 'mdi:restart' },
+              { entity: 'button.sync', icon: 'mdi:sync' },
+            ],
+          },
+          { type: 'entity-tile', entity: 'sensor.humidity', icon: 'mdi:water-percent' },
+          { type: 'entity-tile', entity: 'switch.lamp', name: 'Lamp', icon: 'mdi:lamp' },
         ],
       });
       document.getElementById('card').appendChild(card);
 
       function push() {
-        // Hand a fresh hass object so Lit's change detection fires.
-        card.hass = { ...hass, states: { 'climate.living_room': { ...state } } };
+        // Hand a fresh hass object (with cloned states) so Lit re-renders.
+        const cloned = {};
+        for (const k in states)
+          cloned[k] = { ...states[k], attributes: { ...states[k].attributes } };
+        card.hass = { ...hass, states: cloned };
       }
       push();
     </script>

@@ -35,8 +35,10 @@ const SERVICE_DEBOUNCE_MS = 600;
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _config!: MaterialThermostatCardConfig;
-  /** Optimistic target temperature while a service call is in flight. */
+  /** Optimistic target temperature(s) while a service call is in flight. */
   @state() private _selectedTemp?: number;
+  @state() private _selectedLow?: number;
+  @state() private _selectedHigh?: number;
 
   private _debounceTimer?: number;
 
@@ -113,32 +115,57 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         applyThemesOnElement(this, this.hass.themes, this._config.theme);
       }
     }
-    // Drop the optimistic value once the server confirms it.
-    if (changed.has('hass') && this._selectedTemp != null) {
-      const confirmed = this._stateObj?.attributes.temperature;
-      if (confirmed === this._selectedTemp) this._selectedTemp = undefined;
+    // Drop optimistic values once the server confirms them.
+    if (changed.has('hass')) {
+      const a = this._stateObj?.attributes;
+      if (this._selectedTemp != null && a?.temperature === this._selectedTemp)
+        this._selectedTemp = undefined;
+      if (this._selectedLow != null && a?.target_temp_low === this._selectedLow)
+        this._selectedLow = undefined;
+      if (this._selectedHigh != null && a?.target_temp_high === this._selectedHigh)
+        this._selectedHigh = undefined;
     }
   }
 
-  /** Current target temperature (optimistic value wins). */
-  private get _targetTemp(): number | undefined {
-    if (this._selectedTemp != null) return this._selectedTemp;
+  /** Whether the entity is using dual (heat_cool) setpoints. */
+  private get _isDual(): boolean {
     const a = this._stateObj?.attributes;
-    return a?.temperature ?? a?.target_temp_low;
+    return (
+      this._stateObj?.state === 'heat_cool' &&
+      a?.target_temp_low != null &&
+      a?.target_temp_high != null
+    );
+  }
+
+  /** Current single target temperature (optimistic value wins). */
+  private get _targetTemp(): number | undefined {
+    return this._selectedTemp ?? this._stateObj?.attributes.temperature;
+  }
+
+  /** Current low setpoint (optimistic value wins). */
+  private get _targetLow(): number | undefined {
+    return this._selectedLow ?? this._stateObj?.attributes.target_temp_low;
+  }
+
+  /** Current high setpoint (optimistic value wins). */
+  private get _targetHigh(): number | undefined {
+    return this._selectedHigh ?? this._stateObj?.attributes.target_temp_high;
   }
 
   /**
-   * Push the target temperature to Home Assistant, debounced.
-   * @param value the temperature to set
+   * Debounce a climate.set_temperature call using the current optimistic values.
    */
-  private _commitTemp(value: number): void {
-    this._selectedTemp = value;
+  private _scheduleCommit(): void {
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
     this._debounceTimer = window.setTimeout(() => {
-      this.hass.callService('climate', 'set_temperature', {
-        entity_id: this._config.entity,
-        temperature: value,
-      });
+      const data: Record<string, unknown> = { entity_id: this._config.entity };
+      if (this._isDual) {
+        data.target_temp_low = this._targetLow;
+        data.target_temp_high = this._targetHigh;
+      } else {
+        data.temperature = this._targetTemp;
+      }
+      this.hass.callService('climate', 'set_temperature', data);
     }, SERVICE_DEBOUNCE_MS);
   }
 
@@ -147,7 +174,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param e the dial's value-changing event
    */
   private _onChanging(e: CustomEvent): void {
-    this._selectedTemp = e.detail.value;
+    const { value, low, high } = e.detail;
+    if (low != null || high != null) {
+      this._selectedLow = low;
+      this._selectedHigh = high;
+    } else {
+      this._selectedTemp = value;
+    }
   }
 
   /**
@@ -155,7 +188,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param e the dial's value-changed event
    */
   private _onChanged(e: CustomEvent): void {
-    this._commitTemp(e.detail.value);
+    this._onChanging(e);
+    this._scheduleCommit();
   }
 
   /** Open the entity's more-info dialog. */
@@ -213,6 +247,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           .mode=${colorMode}
           .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
           .unit=${unit}
+          .dual=${this._isDual}
+          .lowValue=${this._targetLow}
+          .highValue=${this._targetHigh}
           .showCurrentAsPrimary=${this._config.show_current_as_primary ?? false}
           .disabled=${unavailable}
           @value-changing=${this._onChanging}

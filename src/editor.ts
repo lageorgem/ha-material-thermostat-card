@@ -4,6 +4,9 @@ import { type HomeAssistant, type LovelaceCardEditor, fireEvent } from 'custom-c
 import { EDITOR_TYPE } from './const';
 import type { FeatureConfig, FeatureType, MaterialThermostatCardConfig } from './types';
 import './editors/climate-feature-editor';
+import './editors/input-select-editor';
+import './editors/entity-list-editor';
+import './editors/entity-tile-editor';
 
 interface FormSchemaItem {
   name: string;
@@ -17,12 +20,37 @@ const BASE_SCHEMA: FormSchemaItem[] = [
   { name: 'show_current_as_primary', selector: { boolean: {} } },
 ];
 
-/** Feature types that can be added from the editor in this build. */
+/** Feature types that can be added from the editor. */
 const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes' },
   { type: 'climate-fan-modes', label: 'Climate fan modes' },
   { type: 'climate-swing-modes', label: 'Climate swing modes' },
+  { type: 'input-select', label: 'Input select' },
+  { type: 'switch-group', label: 'Switch group' },
+  { type: 'switch-list', label: 'Switch list' },
+  { type: 'button-list', label: 'Button list' },
+  { type: 'entity-tile', label: 'Entity tile' },
 ];
+
+/**
+ * Build a sensible default config for a newly added feature.
+ * @param type the feature type
+ */
+function defaultFeature(type: FeatureType): FeatureConfig {
+  switch (type) {
+    case 'input-select':
+      return { type, entity: '' };
+    case 'switch-group':
+    case 'switch-list':
+      return { type, entities: [] };
+    case 'button-list':
+      return { type, items: [] };
+    case 'entity-tile':
+      return { type, entity: '' };
+    default:
+      return { type } as FeatureConfig;
+  }
+}
 
 const FEATURE_LABELS: Record<FeatureType, string> = {
   'climate-hvac-modes': 'Climate HVAC modes',
@@ -123,7 +151,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   private _addFeature(e: CustomEvent): void {
     const type = ADDABLE_FEATURES[e.detail.index]?.type;
     if (!type) return;
-    const feature = { type } as FeatureConfig;
+    const feature = defaultFeature(type);
     this._setFeatures([...this._features, feature]);
     this._editingIndex = this._features.length; // open the new one
   }
@@ -236,28 +264,73 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
    * @param index the feature index
    */
   private _renderFeatureEditor(feature: FeatureConfig, index: number): TemplateResult {
-    const kind =
-      feature.type === 'climate-hvac-modes'
-        ? 'hvac'
-        : feature.type === 'climate-fan-modes'
-          ? 'fan'
-          : feature.type === 'climate-swing-modes'
-            ? 'swing'
-            : null;
-    if (kind) {
-      return html`<div class="feature-editor">
-        <mt-climate-feature-editor
+    const onChange = (e: CustomEvent) => this._featureChanged(index, e);
+    let inner: TemplateResult;
+    switch (feature.type) {
+      case 'climate-hvac-modes':
+      case 'climate-fan-modes':
+      case 'climate-swing-modes': {
+        const kind =
+          feature.type === 'climate-hvac-modes'
+            ? 'hvac'
+            : feature.type === 'climate-fan-modes'
+              ? 'fan'
+              : 'swing';
+        inner = html`<mt-climate-feature-editor
           .hass=${this.hass}
           .entityId=${this._config.entity}
           kind=${kind}
           .feature=${feature}
-          @feature-changed=${(e: CustomEvent) => this._featureChanged(index, e)}
-        ></mt-climate-feature-editor>
-      </div>`;
+          @feature-changed=${onChange}
+        ></mt-climate-feature-editor>`;
+        break;
+      }
+      case 'input-select':
+        inner = html`<mt-input-select-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          @feature-changed=${onChange}
+        ></mt-input-select-editor>`;
+        break;
+      case 'switch-group':
+        inner = html`<mt-entity-list-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          itemsKey="entities"
+          .showDisplay=${true}
+          .includeDomains=${['switch', 'input_boolean', 'light', 'fan']}
+          @feature-changed=${onChange}
+        ></mt-entity-list-editor>`;
+        break;
+      case 'switch-list':
+        inner = html`<mt-entity-list-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          itemsKey="entities"
+          .includeDomains=${['switch', 'input_boolean', 'light', 'fan']}
+          @feature-changed=${onChange}
+        ></mt-entity-list-editor>`;
+        break;
+      case 'button-list':
+        inner = html`<mt-entity-list-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          itemsKey="items"
+          .includeDomains=${['button', 'input_button', 'scene', 'script']}
+          @feature-changed=${onChange}
+        ></mt-entity-list-editor>`;
+        break;
+      case 'entity-tile':
+        inner = html`<mt-entity-tile-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          @feature-changed=${onChange}
+        ></mt-entity-tile-editor>`;
+        break;
+      default:
+        inner = html`<p class="hint">No editor available.</p>`;
     }
-    return html`<div class="feature-editor">
-      <p class="hint">This feature type has no visual editor yet — coming in a later release.</p>
-    </div>`;
+    return html`<div class="feature-editor">${inner}</div>`;
   }
 
   static styles = css`

@@ -3,12 +3,14 @@ import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureConfig } from '../types';
 import './climate-selector';
+import './input-select';
+import './switch-group';
+import './switch-list';
+import './button-list';
+import './entity-tile';
 
 /**
- * Dispatches a single feature config to its renderer. Climate selectors are
- * implemented in this phase; the custom-entity features (input_select, switch
- * group/list, button list, entity tile) land in later phases and currently
- * render nothing so an in-progress config never breaks the card.
+ * Dispatches a single feature config to its renderer.
  */
 @customElement('mt-feature-row')
 export class MtFeatureRow extends LitElement {
@@ -21,29 +23,51 @@ export class MtFeatureRow extends LitElement {
     const feature = this.feature;
     switch (feature.type) {
       case 'climate-hvac-modes':
-        return html`<mt-climate-selector
-          .hass=${this.hass}
-          entityId=${this.entityId}
-          kind="hvac"
-          display=${feature.display ?? 'icons'}
-          .options=${feature.options}
-        ></mt-climate-selector>`;
       case 'climate-fan-modes':
+      case 'climate-swing-modes': {
+        const kind =
+          feature.type === 'climate-hvac-modes'
+            ? 'hvac'
+            : feature.type === 'climate-fan-modes'
+              ? 'fan'
+              : 'swing';
         return html`<mt-climate-selector
           .hass=${this.hass}
           entityId=${this.entityId}
-          kind="fan"
+          kind=${kind}
           display=${feature.display ?? 'icons'}
           .options=${feature.options}
         ></mt-climate-selector>`;
-      case 'climate-swing-modes':
-        return html`<mt-climate-selector
+      }
+      case 'input-select':
+        return html`<mt-input-select
           .hass=${this.hass}
-          entityId=${this.entityId}
-          kind="swing"
+          entity=${feature.entity}
           display=${feature.display ?? 'icons'}
+          .label=${feature.label}
           .options=${feature.options}
-        ></mt-climate-selector>`;
+        ></mt-input-select>`;
+      case 'switch-group':
+        return html`<mt-switch-group
+          .hass=${this.hass}
+          .entities=${feature.entities}
+          display=${feature.display ?? 'icons'}
+          .label=${feature.label}
+        ></mt-switch-group>`;
+      case 'switch-list':
+        return html`<mt-switch-list
+          .hass=${this.hass}
+          .entities=${feature.entities}
+          .label=${feature.label}
+        ></mt-switch-list>`;
+      case 'button-list':
+        return html`<mt-button-list
+          .hass=${this.hass}
+          .items=${feature.items}
+          .label=${feature.label}
+        ></mt-button-list>`;
+      case 'entity-tile':
+        return html`<mt-entity-tile .hass=${this.hass} .config=${feature}></mt-entity-tile>`;
       default:
         return nothing;
     }
