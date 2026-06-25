@@ -1,0 +1,13 @@
+node_modules/
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+.rollup.cache/
+
+# Build output is committed so HACS can serve it directly from the repo,
+# and is also attached to GitHub releases. Comment the next line out if you
+# prefer release-only distribution.
+# dist/

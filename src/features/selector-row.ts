@@ -1,0 +1,173 @@
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { tokens } from '../theme';
+import type { FeatureDisplay, SelectorItem } from '../types';
+
+/**
+ * Shared selector row. Renders a set of {@link SelectorItem}s either as a row
+ * of Material 3 icon chips or as a themed dropdown, and emits `item-selected`
+ * with `{ value }` when the user picks one. Used by every selector-style
+ * feature (climate modes/fan/swing, input_select, switch group).
+ */
+@customElement('mt-selector-row')
+export class MtSelectorRow extends LitElement {
+  @property({ attribute: false }) items: SelectorItem[] = [];
+  @property() display: FeatureDisplay = 'icons';
+  @property() label?: string;
+
+  /**
+   * Dispatch the selection to the parent feature component.
+   * @param value the selected item's value
+   */
+  private _select(value: string): void {
+    this.dispatchEvent(
+      new CustomEvent('item-selected', { detail: { value }, bubbles: true, composed: true })
+    );
+  }
+
+  protected render(): TemplateResult | typeof nothing {
+    if (!this.items.length) return nothing;
+    return this.display === 'dropdown' ? this._renderDropdown() : this._renderIcons();
+  }
+
+  /**
+   * Render the items as a row of icon chips.
+   */
+  private _renderIcons(): TemplateResult {
+    return html`
+      <div class="row">
+        ${this.label ? html`<span class="row-label">${this.label}</span>` : nothing}
+        <div class="chips" role="group" aria-label=${this.label ?? 'options'}>
+          ${this.items.map(
+            (item) => html`
+              <button
+                class=${classMap({ chip: true, active: !!item.active })}
+                ?disabled=${item.disabled}
+                title=${item.label}
+                aria-label=${item.label}
+                aria-pressed=${item.active ? 'true' : 'false'}
+                @click=${() => this._select(item.value)}
+              >
+                ${item.icon
+                  ? html`<ha-icon icon=${item.icon}></ha-icon>`
+                  : html`<span class="chip-text">${item.label}</span>`}
+              </button>
+            `
+          )}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render the items as a Home Assistant themed dropdown.
+   */
+  private _renderDropdown(): TemplateResult {
+    const active = this.items.find((i) => i.active) ?? this.items[0];
+    return html`
+      <ha-select
+        class="dropdown"
+        naturalMenuWidth
+        fixedMenuPosition
+        .label=${this.label ?? ''}
+        .value=${active?.value ?? ''}
+        @selected=${(e: any) => {
+          const value = e.target?.value;
+          if (value && value !== active?.value) this._select(value);
+        }}
+        @closed=${(e: Event) => e.stopPropagation()}
+      >
+        ${active?.icon ? html`<ha-icon slot="icon" icon=${active.icon}></ha-icon>` : nothing}
+        ${this.items.map(
+          (item) => html`
+            <ha-list-item .value=${item.value} graphic=${item.icon ? 'icon' : undefined}>
+              ${item.icon ? html`<ha-icon slot="graphic" icon=${item.icon}></ha-icon>` : nothing}
+              ${item.label}
+            </ha-list-item>
+          `
+        )}
+      </ha-select>
+    `;
+  }
+
+  static styles = [
+    tokens,
+    css`
+      :host {
+        display: block;
+        width: 100%;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+      }
+      .row-label {
+        color: var(--mt-on-surface-variant);
+        font-size: var(--md-sys-typescale-label-large-size, 14px);
+        white-space: nowrap;
+      }
+      .chips {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        padding: 4px;
+        background: var(--mt-surface-container);
+        border-radius: var(--mt-shape-full);
+      }
+      .chip {
+        flex: 1;
+        height: 44px;
+        min-width: 44px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: var(--mt-shape-full);
+        background: transparent;
+        color: var(--mt-on-surface-variant);
+        cursor: pointer;
+        padding: 0 8px;
+        transition:
+          background-color 180ms cubic-bezier(0.2, 0, 0, 1),
+          color 180ms cubic-bezier(0.2, 0, 0, 1);
+        -webkit-tap-highlight-color: transparent;
+      }
+      .chip ha-icon {
+        --mdc-icon-size: 24px;
+      }
+      .chip-text {
+        font-size: var(--md-sys-typescale-label-large-size, 14px);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .chip:hover:not(.active):not([disabled]) {
+        background: color-mix(in srgb, var(--mt-on-surface) 8%, transparent);
+      }
+      .chip:active:not([disabled]) {
+        background: color-mix(in srgb, var(--mt-on-surface) 12%, transparent);
+      }
+      .chip.active {
+        background: var(--mt-selected-bg, var(--mt-primary));
+        color: var(--mt-selected-fg, var(--mt-on-primary));
+      }
+      .chip[disabled] {
+        opacity: 0.38;
+        cursor: default;
+      }
+      .dropdown {
+        width: 100%;
+        --mdc-theme-primary: var(--mt-primary);
+      }
+    `,
+  ];
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'mt-selector-row': MtSelectorRow;
+  }
+}
