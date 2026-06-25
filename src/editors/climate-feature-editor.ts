@@ -8,6 +8,7 @@ import type {
   OptionOverride,
 } from '../types';
 import { prettyLabel } from '../theme';
+import './display-toggle';
 
 type ClimateFeature =
   | ClimateModesFeatureConfig
@@ -82,20 +83,13 @@ export class MtClimateFeatureEditor extends LitElement {
     const display = this.feature.display ?? 'icons';
     return html`
       <div class="editor">
-        <ha-select
-          label="Display"
-          .value=${display}
-          naturalMenuWidth
-          fixedMenuPosition
-          @selected=${(e: any) => {
-            const v = e.target?.value;
-            if (v && v !== display) this._emit({ display: v });
-          }}
-          @closed=${(e: Event) => e.stopPropagation()}
-        >
-          <ha-list-item value="icons">Icons</ha-list-item>
-          <ha-list-item value="dropdown">Dropdown</ha-list-item>
-        </ha-select>
+        <div class="field">
+          <span class="field-label">Display</span>
+          <mt-display-toggle
+            .value=${display}
+            @value-changed=${(e: CustomEvent) => this._emit({ display: e.detail.value })}
+          ></mt-display-toggle>
+        </div>
 
         ${values.length === 0
           ? html`<p class="hint">
@@ -151,8 +145,15 @@ export class MtClimateFeatureEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
-    ha-select {
-      width: 100%;
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .field-label {
+      color: var(--secondary-text-color);
+      font-size: 14px;
     }
     .options {
       display: flex;

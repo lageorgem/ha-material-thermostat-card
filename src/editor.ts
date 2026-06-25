@@ -7,6 +7,7 @@ import './editors/climate-feature-editor';
 import './editors/input-select-editor';
 import './editors/entity-list-editor';
 import './editors/entity-tile-editor';
+import { ensureHaComponents } from './editors/load-ha';
 
 interface FormSchemaItem {
   name: string;
@@ -68,6 +69,14 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _config!: MaterialThermostatCardConfig;
   @state() private _editingIndex: number | null = null;
+  @state() private _addOpen = false;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    // HA lazily loads its form components; make sure the pickers/forms used by
+    // the feature sub-editors are registered, then re-render once they are.
+    ensureHaComponents().then(() => this.requestUpdate());
+  }
 
   /**
    * Receive the current card configuration.
@@ -145,15 +154,14 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   }
 
   /**
-   * Add a feature of the chosen type.
-   * @param e ha-button-menu's action event
+   * Add a feature of the chosen type and open its editor.
+   * @param type the feature type
    */
-  private _addFeature(e: CustomEvent): void {
-    const type = ADDABLE_FEATURES[e.detail.index]?.type;
-    if (!type) return;
-    const feature = defaultFeature(type);
-    this._setFeatures([...this._features, feature]);
-    this._editingIndex = this._features.length; // open the new one
+  private _pickFeature(type: FeatureType): void {
+    this._addOpen = false;
+    const features = [...this._features, defaultFeature(type)];
+    this._editingIndex = features.length - 1;
+    this._setFeatures(features);
   }
 
   /**
@@ -213,15 +221,25 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           </div>
         </ha-sortable>
 
-        <ha-button-menu fixed @action=${this._addFeature}>
-          <ha-button slot="trigger">
-            <ha-icon icon="mdi:plus" slot="icon"></ha-icon>
-            Add feature
-          </ha-button>
-          ${ADDABLE_FEATURES.map(
-            (f) => html`<ha-list-item .value=${f.type}>${f.label}</ha-list-item>`
-          )}
-        </ha-button-menu>
+        <div class="add">
+          <button
+            class="add-btn"
+            aria-expanded=${this._addOpen ? 'true' : 'false'}
+            @click=${() => (this._addOpen = !this._addOpen)}
+          >
+            <ha-icon icon=${this._addOpen ? 'mdi:close' : 'mdi:plus'}></ha-icon>
+            <span>Add feature</span>
+          </button>
+          ${this._addOpen
+            ? html`<div class="add-menu">
+                ${ADDABLE_FEATURES.map(
+                  (f) => html`<button class="add-opt" @click=${() => this._pickFeature(f.type)}>
+                    ${f.label}
+                  </button>`
+                )}
+              </div>`
+            : nothing}
+        </div>
       </div>
     `;
   }
@@ -391,8 +409,50 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       font-size: 13px;
       margin: 0;
     }
-    ha-button-menu ha-button {
-      --mdc-theme-primary: var(--primary-color);
+    .add {
+      position: relative;
+    }
+    .add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 999px;
+      background: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .add-btn ha-icon {
+      --mdc-icon-size: 18px;
+    }
+    .add-menu {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      background: var(--card-background-color, var(--secondary-background-color));
+      border: 1px solid var(--divider-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .add-opt {
+      text-align: left;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      color: var(--primary-text-color);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+    }
+    .add-opt:hover {
+      background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08);
+    }
+    .add-opt:not(:last-child) {
+      border-bottom: 1px solid var(--divider-color);
     }
   `;
 }

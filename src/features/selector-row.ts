@@ -3,6 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { tokens } from '../theme';
 import type { FeatureDisplay, SelectorItem } from '../types';
+import './dropdown';
 
 /**
  * Shared selector row. Renders a set of {@link SelectorItem}s either as a row
@@ -64,31 +65,11 @@ export class MtSelectorRow extends LitElement {
    * Render the items as a Home Assistant themed dropdown.
    */
   private _renderDropdown(): TemplateResult {
-    const active = this.items.find((i) => i.active) ?? this.items[0];
-    return html`
-      <ha-select
-        class="dropdown"
-        naturalMenuWidth
-        fixedMenuPosition
-        .label=${this.label ?? ''}
-        .value=${active?.value ?? ''}
-        @selected=${(e: any) => {
-          const value = e.target?.value;
-          if (value && value !== active?.value) this._select(value);
-        }}
-        @closed=${(e: Event) => e.stopPropagation()}
-      >
-        ${active?.icon ? html`<ha-icon slot="icon" icon=${active.icon}></ha-icon>` : nothing}
-        ${this.items.map(
-          (item) => html`
-            <ha-list-item .value=${item.value} graphic=${item.icon ? 'icon' : undefined}>
-              ${item.icon ? html`<ha-icon slot="graphic" icon=${item.icon}></ha-icon>` : nothing}
-              ${item.label}
-            </ha-list-item>
-          `
-        )}
-      </ha-select>
-    `;
+    return html`<mt-dropdown
+      .items=${this.items}
+      .placeholder=${this.label ?? ''}
+      @item-selected=${(e: CustomEvent) => this._select(e.detail.value)}
+    ></mt-dropdown>`;
   }
 
   static styles = [
@@ -157,10 +138,6 @@ export class MtSelectorRow extends LitElement {
       .chip[disabled] {
         opacity: 0.38;
         cursor: default;
-      }
-      .dropdown {
-        width: 100%;
-        --mdc-theme-primary: var(--mt-primary);
       }
     `,
   ];

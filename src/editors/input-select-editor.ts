@@ -3,6 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { InputSelectFeatureConfig, OptionOverride } from '../types';
 import { prettyLabel } from '../theme';
+import './display-toggle';
 
 /**
  * Editor for the `input_select` feature: entity picker, optional row label,
@@ -79,20 +80,13 @@ export class MtInputSelectEditor extends LitElement {
           @input=${(e: any) => this._emit({ label: e.target.value || undefined })}
         ></ha-textfield>
 
-        <ha-select
-          label="Display"
-          .value=${display}
-          naturalMenuWidth
-          fixedMenuPosition
-          @selected=${(e: any) => {
-            const v = e.target?.value;
-            if (v && v !== display) this._emit({ display: v });
-          }}
-          @closed=${(e: Event) => e.stopPropagation()}
-        >
-          <ha-list-item value="icons">Icons</ha-list-item>
-          <ha-list-item value="dropdown">Dropdown</ha-list-item>
-        </ha-select>
+        <div class="field">
+          <span class="field-label">Display</span>
+          <mt-display-toggle
+            .value=${display}
+            @value-changed=${(e: CustomEvent) => this._emit({ display: e.detail.value })}
+          ></mt-display-toggle>
+        </div>
 
         ${values.length === 0
           ? html`<p class="hint">Pick an input_select entity to customize its options.</p>`
@@ -136,9 +130,18 @@ export class MtInputSelectEditor extends LitElement {
       padding: 4px 0;
     }
     ha-entity-picker,
-    ha-textfield,
-    ha-select {
+    ha-textfield {
       width: 100%;
+    }
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .field-label {
+      color: var(--secondary-text-color);
+      font-size: 14px;
     }
     .options {
       display: flex;

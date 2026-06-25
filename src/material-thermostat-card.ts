@@ -277,7 +277,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       ha-card {
         padding: 12px 16px 20px;
         border-radius: var(--mt-shape-card);
-        overflow: hidden;
+        /* visible so an open dropdown menu can extend past the card edge */
+        overflow: visible;
       }
       .header {
         display: grid;

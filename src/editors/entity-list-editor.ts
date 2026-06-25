@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { EntityItem, FeatureConfig } from '../types';
+import './display-toggle';
 
 /**
  * Shared editor for features backed by a list of entities: switch group,
@@ -84,20 +85,13 @@ export class MtEntityListEditor extends LitElement {
         ></ha-textfield>
 
         ${this.showDisplay
-          ? html`<ha-select
-              label="Display"
-              .value=${display}
-              naturalMenuWidth
-              fixedMenuPosition
-              @selected=${(e: any) => {
-                const v = e.target?.value;
-                if (v && v !== display) this._emit({ display: v });
-              }}
-              @closed=${(e: Event) => e.stopPropagation()}
-            >
-              <ha-list-item value="icons">Icons</ha-list-item>
-              <ha-list-item value="dropdown">Dropdown</ha-list-item>
-            </ha-select>`
+          ? html`<div class="field">
+              <span class="field-label">Display</span>
+              <mt-display-toggle
+                .value=${display}
+                @value-changed=${(e: CustomEvent) => this._emit({ display: e.detail.value })}
+              ></mt-display-toggle>
+            </div>`
           : nothing}
 
         <div class="items">
@@ -144,9 +138,18 @@ export class MtEntityListEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
-    ha-textfield,
-    ha-select {
+    ha-textfield {
       width: 100%;
+    }
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .field-label {
+      color: var(--secondary-text-color);
+      font-size: 14px;
     }
     .items {
       display: flex;
