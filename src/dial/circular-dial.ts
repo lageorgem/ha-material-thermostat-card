@@ -493,6 +493,7 @@ export class MtCircularDial extends LitElement {
         transition: --dial-color var(--mt-motion-dur) var(--mt-motion-ease);
       }
       svg {
+        display: block; /* avoid inline baseline gap that offsets the SVG vs marker overlays */
         width: 100%;
         height: 100%;
         touch-action: none;
