@@ -7,9 +7,10 @@ import {
   fireEvent,
   applyThemesOnElement,
 } from 'custom-card-helpers';
+import { styleMap, type StyleInfo } from 'lit/directives/style-map.js';
 import { CARD_TYPE, EDITOR_TYPE, CARD_NAME, CARD_DESCRIPTION, CARD_VERSION } from './const';
 import { tokens, climateModeColor, prettyLabel } from './theme';
-import type { FeatureConfig, MaterialThermostatCardConfig } from './types';
+import type { FeatureConfig, MaterialThermostatCardConfig, OptionOverride } from './types';
 import './dial/circular-dial';
 import './features/feature-row';
 
@@ -31,6 +32,24 @@ console.info(
 
 const SERVICE_DEBOUNCE_MS = 600;
 
+/*
+ * Internal grid system.
+ *
+ * The card lays its content out on an internal grid whose unit is one icon.
+ * Per the Home Assistant sections grid (48 units full width):
+ *   1 internal unit  =  1 icon  =  2 sections-grid units  (~48px)
+ * A half-width card (24 sections-grid units) is therefore 12 internal units —
+ * 6 for the circular controls and 6 for a 6-icon list. The wide format spans up
+ * to 36 sections-grid units → 18 internal units, hence the cap.
+ */
+const SECTION_UNIT_PX = 24; // ~1 sections-grid unit
+const INTERNAL_UNIT_PX = SECTION_UNIT_PX * 2; // 48px — 1 internal unit = 1 icon
+const MAX_INTERNAL_UNITS = 18; // cap (36 sections-grid units, wide format)
+const DIAL_INTERNAL_UNITS = 6; // circular controls = 12 sections-grid units
+const SIDE_BY_SIDE_MIN_UNITS = 12; // ≥ 50% of the grid → controls beside features
+const DROPDOWN_UNITS = 4; // a dropdown row is icon-less; give it a sane width
+const TILE_UNITS = 6; // entity tiles wrap; give their area a sane width
+
 @customElement(CARD_TYPE)
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -39,8 +58,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @state() private _selectedTemp?: number;
   @state() private _selectedLow?: number;
   @state() private _selectedHigh?: number;
+  /** The card's inner content width in px (measured), for the internal grid. */
+  @state() private _widthPx = 0;
 
   private _debounceTimer?: number;
+  private _resizeObserver?: ResizeObserver;
 
   /**
    * Lazily load and return the card's visual editor element.
@@ -125,6 +147,120 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       if (this._selectedHigh != null && a?.target_temp_high === this._selectedHigh)
         this._selectedHigh = undefined;
     }
+  }
+
+  /**
+   * Observe the card's inner width so the internal grid can recompute on resize.
+   * Idempotent — safe to call again after a disconnect/reconnect.
+   */
+  private _observeWidth(): void {
+    if (this._resizeObserver || typeof ResizeObserver === 'undefined') return;
+    const card = this.shadowRoot?.querySelector('ha-card');
+    if (!card) return;
+    this._resizeObserver = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (Math.abs(w - this._widthPx) >= 1) this._widthPx = w;
+    });
+    this._resizeObserver.observe(card);
+  }
+
+  protected firstUpdated(): void {
+    this._observeWidth();
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    // Re-establish the observer if the card was detached and re-attached.
+    if (this.hasUpdated) this._observeWidth();
+  }
+
+  /**
+   * Count the visible options of a selector (entity values minus hidden ones).
+   * @param values the underlying option values from the entity
+   * @param overrides per-option config overrides (a `hide` removes the option)
+   */
+  private _visibleCount(values: string[] | undefined, overrides?: OptionOverride[]): number {
+    if (!values?.length) return 0;
+    if (!overrides?.length) return values.length;
+    const hidden = new Set(overrides.filter((o) => o.hide).map((o) => o.value));
+    return values.filter((v) => !hidden.has(v)).length;
+  }
+
+  /**
+   * How many internal grid units a feature wants — one unit per icon for icon
+   * rows, a fixed sane width for dropdowns/tiles.
+   * @param f the feature config
+   */
+  private _featureUnits(f: FeatureConfig): number {
+    const a = this._stateObj?.attributes;
+    switch (f.type) {
+      case 'climate-hvac-modes':
+        return f.display === 'dropdown'
+          ? DROPDOWN_UNITS
+          : this._visibleCount(a?.hvac_modes, f.options);
+      case 'climate-fan-modes':
+        return f.display === 'dropdown'
+          ? DROPDOWN_UNITS
+          : this._visibleCount(a?.fan_modes, f.options);
+      case 'climate-swing-modes':
+        return f.display === 'dropdown'
+          ? DROPDOWN_UNITS
+          : this._visibleCount(a?.swing_modes, f.options);
+      case 'input-select':
+        return f.display === 'dropdown'
+          ? DROPDOWN_UNITS
+          : this._visibleCount(this.hass.states[f.entity]?.attributes?.options, f.options);
+      case 'switch-group':
+        return f.display === 'dropdown' ? DROPDOWN_UNITS : (f.entities?.length ?? 0);
+      case 'switch-list':
+        return f.entities?.length ?? 0;
+      case 'button-list':
+        return f.items?.length ?? 0;
+      case 'entity-tile':
+        return TILE_UNITS;
+      default:
+        return 0;
+    }
+  }
+
+  /** The widest internal-unit demand across all feature rows. */
+  private _maxFeatureUnits(): number {
+    const feats = this._config.features ?? [];
+    if (!feats.length) return 0;
+    return Math.max(1, ...feats.map((f) => this._featureUnits(f)));
+  }
+
+  /**
+   * Resolve the internal-grid layout for the current width: stacked (narrow) or
+   * side-by-side (wide). In the wide format the circular controls keep a fixed
+   * 12-sections-grid footprint and any surplus from a wider side-control column
+   * is distributed as padding around them, so they never appear stretched.
+   */
+  private _layout(): { wide: boolean; dialStyle: StyleInfo; featureStyle: StyleInfo } {
+    const feats = this._config.features ?? [];
+    const avail = Math.min(
+      MAX_INTERNAL_UNITS,
+      Math.max(1, Math.floor(this._widthPx / INTERNAL_UNIT_PX))
+    );
+    const wide = this._widthPx > 0 && feats.length > 0 && avail >= SIDE_BY_SIDE_MIN_UNITS;
+    if (!wide) return { wide: false, dialStyle: {}, featureStyle: {} };
+
+    // Side controls want one unit per icon (capped at half the max grid); the
+    // dial column grows to match a wider feature column, padding the dial.
+    let featureUnits = Math.min(this._maxFeatureUnits(), MAX_INTERNAL_UNITS / 2);
+    let dialUnits = Math.max(DIAL_INTERNAL_UNITS, featureUnits);
+    while (dialUnits + featureUnits > avail && featureUnits > 1) {
+      featureUnits -= 1;
+      dialUnits = Math.max(DIAL_INTERNAL_UNITS, featureUnits);
+    }
+    // Feature-3 spacing: (side-control units × 2) − 12 sections-grid units, split
+    // either side of the fixed-width circular controls.
+    const padPx = (dialUnits - DIAL_INTERNAL_UNITS) * SECTION_UNIT_PX;
+    return {
+      wide: true,
+      dialStyle: { flex: `0 0 ${dialUnits * INTERNAL_UNIT_PX}px`, paddingInline: `${padPx}px` },
+      featureStyle: { flex: `0 0 ${featureUnits * INTERNAL_UNIT_PX}px` },
+    };
   }
 
   /** Whether the entity is using dual (heat_cool) setpoints. */
@@ -228,6 +364,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const unavailable = state.state === 'unavailable' || state.state === 'unknown';
     const unit = this.hass.config?.unit_system?.temperature ?? '°C';
     const colorMode = this._colorMode();
+    const layout = this._layout();
 
     return html`
       <ha-card style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
@@ -238,8 +375,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           </button>
         </div>
 
-        <div class="body">
-          <div class="dial-wrap">
+        <div class=${`body ${layout.wide ? 'wide' : 'stacked'}`}>
+          <div class="dial-wrap" style=${styleMap(layout.dialStyle)}>
             <mt-circular-dial
               .value=${this._targetTemp ?? a.min_temp ?? 20}
               .min=${a.min_temp ?? 7}
@@ -260,7 +397,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           </div>
 
           ${this._config.features?.length
-            ? html`<div class="features">
+            ? html`<div class="features" style=${styleMap(layout.featureStyle)}>
                 ${this._config.features.map(
                   (feature: FeatureConfig) => html`<mt-feature-row
                     .hass=${this.hass}
@@ -283,8 +420,6 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         border-radius: var(--mt-shape-card);
         /* visible so an open dropdown menu can extend past the card edge */
         overflow: visible;
-        /* enables width-based @container layout switches below */
-        container-type: inline-size;
       }
       .header {
         display: grid;
@@ -323,35 +458,34 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       }
       .body {
         display: flex;
-        flex-direction: column;
-        gap: 16px;
         margin-top: 8px;
       }
+      /* Stacked (narrow): controls above a full-width feature area. */
+      .body.stacked {
+        flex-direction: column;
+        gap: 16px;
+      }
+      /* Side-by-side (wide): dial and feature columns, centered as a block so
+         neither over-stretches; column widths are set inline in internal units. */
+      .body.wide {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+      }
       .dial-wrap {
+        box-sizing: border-box;
         display: flex;
         justify-content: center;
         min-width: 0;
       }
       .features {
+        box-sizing: border-box;
         display: flex;
         flex-wrap: wrap;
         align-content: flex-start;
         gap: 10px;
-      }
-      /* Wide enough (≈ grid width 21+): dial and controls side by side. */
-      @container (min-width: 560px) {
-        .body {
-          flex-direction: row;
-          align-items: center;
-          gap: 24px;
-        }
-        .dial-wrap {
-          flex: 0 0 300px;
-        }
-        .features {
-          flex: 1;
-          min-width: 0;
-        }
+        min-width: 0;
       }
       .error {
         padding: 24px;
@@ -364,6 +498,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
   }
 }
 

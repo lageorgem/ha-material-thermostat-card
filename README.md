@@ -163,14 +163,22 @@ title) and `width` (max width in px) so multiple tiles share a row.
 
 ## Responsiveness
 
-The card adapts to its width (Home Assistant sections grid), degrading gracefully from narrow:
+The card lays its content out on an **internal grid** keyed to the Home Assistant sections grid
+(48 units across a full-width view):
 
-- Selector rows (modes/fan/swing, input_select, switch/button lists) **scroll horizontally** when
-  there isn't room for all icons, so they stay usable on narrow cards.
-- The dial's text and markers scale with the dial, so it renders cleanly at small sizes.
-- At wide widths (≈ grid width 21+) the dial and the controls move **side by side**.
-- Entity tiles wrap onto multiple per row; use `compact` + `width` to pack several across (e.g. six
-  compact tiles at grid width 12).
+- **1 internal unit = 1 icon = 2 sections-grid units** (~48px). All feature widths are defined in
+  these units rather than pixels, and the internal grid is capped at **18 units** (the wide format
+  spans up to 36 sections-grid units).
+- **Scrollable icon rows.** Each icon claims one internal unit. When the space per icon drops below
+  2 sections-grid units, icons keep their size and the row **scrolls horizontally** instead of
+  squishing — e.g. a 6-icon row stays un-scrolled down to 12 sections-grid units of width.
+- **Side-by-side at ≥ 50% width.** At 24 sections-grid units (12 internal) and up, the circular
+  controls (a fixed 12 sections-grid footprint) and the feature column sit **side by side**; below
+  that they stack with the feature area full width.
+- **No stretching.** In the wide format the circular controls keep their fixed size; if the side
+  controls need a wider column, the surplus is distributed as padding **around** the controls rather
+  than stretching them, and the whole block is centered so it never over-extends on large cards.
+- Entity tiles wrap onto multiple per row; use `compact` + `width` to pack several across.
 
 ## Theming
 

@@ -94,12 +94,14 @@ export class MtSelectorRow extends LitElement {
         display: flex;
         flex: 1;
         align-items: center;
+        justify-content: safe center;
         gap: 4px;
-        padding: 4px;
+        padding: 4px 2px;
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
-        /* Stay usable at narrow widths: grow to fill when there's room,
-           otherwise keep icon size and scroll horizontally. */
+        /* Internal grid: each icon wants one internal unit (= 2 sections-grid
+           units). When space per icon drops below that, icons hold their size
+           and the row scrolls horizontally instead of squishing. */
         overflow-x: auto;
         scrollbar-width: none;
       }
@@ -107,9 +109,13 @@ export class MtSelectorRow extends LitElement {
         display: none;
       }
       .chip {
-        flex: 1 0 auto;
+        /* Footprint (44px + 4px gap) = one internal unit (= 2 sections-grid
+           units), so N icons fit exactly N internal units. Grow to fill, capped
+           so icons never over-stretch when there is spare room. */
+        flex: 1 1 44px;
         height: 44px;
         min-width: 44px;
+        max-width: 120px;
         display: grid;
         place-items: center;
         border: none;

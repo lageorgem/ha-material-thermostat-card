@@ -46,6 +46,22 @@
         opacity: 0.6;
         max-width: 320px;
       }
+      .width-ctl {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        opacity: 0.85;
+        background: #211f29;
+        padding: 8px 12px;
+        border-radius: 12px;
+      }
+      .width-ctl input {
+        width: 320px;
+      }
     </style>
   </head>
   <body>
@@ -53,6 +69,11 @@
       Dev harness. HA web components (ha-icon, ha-select, …) are stubbed, so icons render as dots —
       this is for layout/dial/interaction iteration only. Real fidelity requires Home Assistant.
     </div>
+    <label class="width-ctl">
+      Card width
+      <input id="width" type="range" min="300" max="1400" step="10" value="380" />
+      <span id="width-val">380px</span>
+    </label>
     <div id="card"></div>
 
     <script type="module">
@@ -205,7 +226,16 @@
           { type: 'entity-tile', entity: 'switch.lamp', name: 'Lamp', icon: 'mdi:lamp' },
         ],
       });
-      document.getElementById('card').appendChild(card);
+      const cardWrap = document.getElementById('card');
+      cardWrap.appendChild(card);
+
+      // Width slider to exercise the internal-grid responsive layout.
+      const widthInput = document.getElementById('width');
+      const widthVal = document.getElementById('width-val');
+      widthInput.addEventListener('input', () => {
+        cardWrap.style.width = `${widthInput.value}px`;
+        widthVal.textContent = `${widthInput.value}px`;
+      });
 
       function push() {
         // Hand a fresh hass object (with cloned states) so Lit re-renders.
