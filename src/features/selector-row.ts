@@ -78,12 +78,14 @@ export class MtSelectorRow extends LitElement {
       :host {
         display: block;
         width: 100%;
+        min-width: 0;
       }
       .row {
         display: flex;
         align-items: center;
         gap: 12px;
         width: 100%;
+        min-width: 0;
       }
       .row-label {
         color: var(--mt-on-surface-variant);
@@ -93,16 +95,23 @@ export class MtSelectorRow extends LitElement {
       .chips {
         display: flex;
         flex: 1;
+        flex-wrap: wrap;
         align-items: center;
-        justify-content: safe center;
+        align-content: flex-start;
+        justify-content: center;
         gap: 4px;
         padding: 4px 2px;
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
-        /* Internal grid: each icon wants one internal unit (= 2 sections-grid
-           units). When space per icon drops below that, icons hold their size
-           and the row scrolls horizontally instead of squishing. */
-        overflow-x: auto;
+        /* min-width:0 lets the pill shrink to its container instead of growing
+           to its content (the default min-width:auto), so icons stay inside the
+           rounded container. Each icon keeps one internal unit (2 sections-grid
+           units); when they don't all fit on a line they wrap, and the pill
+           scrolls vertically (clipped to its rounded shape) past two rows. */
+        min-width: 0;
+        max-height: 100px;
+        overflow-x: hidden;
+        overflow-y: auto;
         scrollbar-width: none;
       }
       .chips::-webkit-scrollbar {

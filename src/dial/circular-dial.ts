@@ -652,7 +652,8 @@ export class MtCircularDial extends LitElement {
         top: 80%;
         transform: translate(-50%, -50%);
         display: flex;
-        gap: 28px;
+        /* scale the gap with the dial so +/- stay well spaced at every size */
+        gap: clamp(28px, 20cqi, 64px);
         pointer-events: none;
       }
       .step {

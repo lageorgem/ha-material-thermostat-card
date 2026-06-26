@@ -108,6 +108,9 @@ export class MtFeatureRow extends LitElement {
   static styles = css`
     :host {
       display: block;
+      /* allow shrinking below content so a wide icon list wraps/scrolls inside
+         its column instead of overflowing the card */
+      min-width: 0;
     }
   `;
 }
