@@ -572,7 +572,7 @@ export class MtCircularDial extends LitElement {
         transition: transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .o-label .num {
-        font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
+        font-size: clamp(8px, 4.6cqi, var(--md-sys-typescale-title-medium-size, 16px));
         font-weight: 500;
         line-height: 1;
         color: var(--mt-on-surface);
@@ -652,13 +652,15 @@ export class MtCircularDial extends LitElement {
         top: 80%;
         transform: translate(-50%, -50%);
         display: flex;
-        /* scale the gap with the dial so +/- stay well spaced at every size */
-        gap: clamp(28px, 20cqi, 64px);
+        /* gap scales with the dial (low floor) so +/- track the circle's size */
+        gap: clamp(10px, 8.5cqi, 30px);
         pointer-events: none;
       }
       .step {
-        width: clamp(34px, 13.75cqi, 44px);
-        height: clamp(34px, 13.75cqi, 44px);
+        /* scale with the dial; low floor so the buttons shrink with the circle
+           (not pinned large) at small sizes */
+        width: clamp(22px, 11cqi, 38px);
+        height: clamp(22px, 11cqi, 38px);
         border-radius: var(--mt-shape-full);
         border: none;
         background: transparent;
@@ -673,7 +675,7 @@ export class MtCircularDial extends LitElement {
         -webkit-tap-highlight-color: transparent;
       }
       .step ha-icon {
-        --mdc-icon-size: clamp(18px, 8cqi, 26px);
+        --mdc-icon-size: clamp(12px, 6cqi, 22px);
       }
       .step:hover:not([disabled]) {
         background: color-mix(in srgb, var(--mt-on-surface) 8%, transparent);
