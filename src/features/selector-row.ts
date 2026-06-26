@@ -95,23 +95,20 @@ export class MtSelectorRow extends LitElement {
       .chips {
         display: flex;
         flex: 1;
-        flex-wrap: wrap;
         align-items: center;
-        align-content: flex-start;
-        justify-content: center;
+        justify-content: safe center;
         gap: 4px;
         padding: 4px 2px;
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
         /* min-width:0 lets the pill shrink to its container instead of growing
-           to its content (the default min-width:auto), so icons stay inside the
-           rounded container. Each icon keeps one internal unit (2 sections-grid
-           units); when they don't all fit on a line they wrap, and the pill
-           scrolls vertically (clipped to its rounded shape) past two rows. */
+           to its content (the default min-width:auto), so it stays inside the
+           rounded container. Icons keep one internal unit each (2 sections-grid
+           units) on a single row; when they don't all fit, the row scrolls
+           horizontally (clipped to the rounded shape) instead of squishing. */
         min-width: 0;
-        max-height: 100px;
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
       }
       .chips::-webkit-scrollbar {
