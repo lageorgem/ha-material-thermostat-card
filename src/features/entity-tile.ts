@@ -66,6 +66,15 @@ export class MtEntityTile extends LitElement {
     const icon = this.config.icon ?? state?.attributes.icon ?? DOMAIN_ICONS[domain] ?? 'mdi:eye';
     const secondary = this._secondary();
 
+    if (this.config.compact) {
+      return html`
+        <button class="tile compact" @click=${this._tap} aria-label=${name} title=${name}>
+          <div class="ic ${this._isOn ? 'on' : ''}"><ha-icon icon=${icon}></ha-icon></div>
+          ${secondary ? html`<div class="val">${secondary}</div>` : nothing}
+        </button>
+      `;
+    }
+
     return html`
       <button class="tile" @click=${this._tap} aria-label=${name}>
         <div class="ic ${this._isOn ? 'on' : ''}"><ha-icon icon=${icon}></ha-icon></div>
@@ -101,6 +110,26 @@ export class MtEntityTile extends LitElement {
       }
       .tile:hover {
         background: color-mix(in srgb, var(--mt-on-surface) 6%, var(--mt-surface-container));
+      }
+      /* Compact: icon over value, no title — fits many per row. */
+      .tile.compact {
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 6px;
+        min-height: 0;
+        text-align: center;
+      }
+      .tile.compact .ic {
+        width: 36px;
+        height: 36px;
+      }
+      .tile.compact .val {
+        font-size: var(--md-sys-typescale-label-large-size, 13px);
+        color: var(--mt-on-surface);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .tile:active {
         background: color-mix(in srgb, var(--mt-on-surface) 12%, var(--mt-surface-container));

@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureConfig } from '../types';
@@ -18,6 +18,24 @@ export class MtFeatureRow extends LitElement {
   /** The card's climate entity (used by the climate selectors). */
   @property() entityId!: string;
   @property({ attribute: false }) feature!: FeatureConfig;
+
+  /**
+   * Size the host as a flex item in the card's wrapping feature area: entity
+   * tiles take a bounded width (so several share a row), everything else takes
+   * a full row.
+   * @param changed changed properties
+   */
+  protected willUpdate(changed: PropertyValues): void {
+    if (!changed.has('feature') || !this.feature) return;
+    const f = this.feature as FeatureConfig & { compact?: boolean; width?: number };
+    if (f.type === 'entity-tile') {
+      this.style.flex = `1 1 ${f.compact ? '76px' : '150px'}`;
+      this.style.maxWidth = f.width ? `${f.width}px` : f.compact ? '120px' : 'none';
+    } else {
+      this.style.flex = '1 1 100%';
+      this.style.maxWidth = 'none';
+    }
+  }
 
   protected render(): TemplateResult | typeof nothing {
     const feature = this.feature;
@@ -76,7 +94,6 @@ export class MtFeatureRow extends LitElement {
   static styles = css`
     :host {
       display: block;
-      width: 100%;
     }
   `;
 }

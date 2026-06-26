@@ -147,11 +147,30 @@ features:
     entity: switch.fan_lamp
     tap_action:
       action: toggle
+
+  # Compact tiles (icon + value only) — several fit per row
+  - type: entity-tile
+    entity: sensor.living_humidity
+    icon: mdi:water-percent
+    compact: true
+    width: 80
 ```
 
 `switch-group`, `switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The
-entity tile accepts `name`, `icon`, and a standard Lovelace `tap_action` (defaults to toggle for
-switches, press for buttons, more-info otherwise).
+entity tile accepts `name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for
+switches, press for buttons, more-info otherwise), plus `compact: true` (icon + value only, no
+title) and `width` (max width in px) so multiple tiles share a row.
+
+## Responsiveness
+
+The card adapts to its width (Home Assistant sections grid), degrading gracefully from narrow:
+
+- Selector rows (modes/fan/swing, input_select, switch/button lists) **scroll horizontally** when
+  there isn't room for all icons, so they stay usable on narrow cards.
+- The dial's text and markers scale with the dial, so it renders cleanly at small sizes.
+- At wide widths (≈ grid width 21+) the dial and the controls move **side by side**.
+- Entity tiles wrap onto multiple per row; use `compact` + `width` to pack several across (e.g. six
+  compact tiles at grid width 12).
 
 ## Theming
 

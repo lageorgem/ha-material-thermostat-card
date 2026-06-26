@@ -94,14 +94,20 @@ export class MtSelectorRow extends LitElement {
         display: flex;
         flex: 1;
         align-items: center;
-        justify-content: space-between;
         gap: 4px;
         padding: 4px;
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
+        /* Stay usable at narrow widths: grow to fill when there's room,
+           otherwise keep icon size and scroll horizontally. */
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chips::-webkit-scrollbar {
+        display: none;
       }
       .chip {
-        flex: 1;
+        flex: 1 0 auto;
         height: 44px;
         min-width: 44px;
         display: grid;

@@ -82,6 +82,10 @@ export interface EntityTileFeatureConfig {
   name?: string;
   icon?: string;
   tap_action?: ActionConfig;
+  /** Compact variant: icon + value only (no title), for fitting many per row. */
+  compact?: boolean;
+  /** Maximum width in px so multiple tiles can share a row. */
+  width?: number;
 }
 
 export type FeatureConfig =

@@ -12,6 +12,11 @@ const SCHEMA: FormSchemaItem[] = [
   { name: 'entity', selector: { entity: {} } },
   { name: 'name', selector: { text: {} } },
   { name: 'icon', selector: { icon: {} } },
+  { name: 'compact', selector: { boolean: {} } },
+  {
+    name: 'width',
+    selector: { number: { min: 60, max: 400, step: 10, mode: 'slider', unit_of_measurement: 'px' } },
+  },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
 
@@ -30,6 +35,8 @@ export class MtEntityTileEditor extends LitElement {
       entity: this.feature.entity,
       name: this.feature.name,
       icon: this.feature.icon,
+      compact: this.feature.compact ?? false,
+      width: this.feature.width,
       tap_action: this.feature.tap_action,
     };
   }
@@ -46,6 +53,10 @@ export class MtEntityTileEditor extends LitElement {
         return 'Name (optional)';
       case 'icon':
         return 'Icon (optional)';
+      case 'compact':
+        return 'Compact (icon + value only)';
+      case 'width':
+        return 'Max width';
       case 'tap_action':
         return 'Tap action';
       default:
@@ -67,6 +78,8 @@ export class MtEntityTileEditor extends LitElement {
             entity: d.entity,
             name: d.name || undefined,
             icon: d.icon || undefined,
+            compact: d.compact || undefined,
+            width: d.width || undefined,
             tap_action: d.tap_action || undefined,
           } as EntityTileFeatureConfig,
         },

@@ -482,6 +482,8 @@ export class MtCircularDial extends LitElement {
         margin: 0 auto;
         aspect-ratio: 1 / 1;
         transition: --dial-color var(--mt-motion-dur) var(--mt-motion-ease);
+        /* let inner text/markers scale with the dial via cqi units */
+        container-type: inline-size;
       }
       svg {
         display: block; /* avoid inline baseline gap that offsets the SVG vs marker overlays */
@@ -551,12 +553,12 @@ export class MtCircularDial extends LitElement {
         background: var(--mt-on-surface);
       }
       .o-dot.setpoint {
-        width: 14px;
-        height: 14px;
+        width: clamp(9px, 4.4cqi, 14px);
+        height: clamp(9px, 4.4cqi, 14px);
       }
       .o-dot.current {
-        width: 10px;
-        height: 10px;
+        width: clamp(7px, 3.1cqi, 10px);
+        height: clamp(7px, 3.1cqi, 10px);
         opacity: 0.55;
       }
       .o-label {
@@ -566,7 +568,7 @@ export class MtCircularDial extends LitElement {
         transition: transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .o-label .num {
-        font-size: var(--md-sys-typescale-title-medium-size, 16px);
+        font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
         font-weight: 500;
         line-height: 1;
         color: var(--mt-on-surface);
@@ -581,7 +583,7 @@ export class MtCircularDial extends LitElement {
         position: relative;
       }
       .mode-icon {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: clamp(13px, 6.25cqi, 20px);
         color: var(--dial-color);
       }
       .mode-icon.inline {
@@ -604,7 +606,7 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface);
       }
       .mode {
-        font-size: var(--md-sys-typescale-title-medium-size, 16px);
+        font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
         color: var(--mt-on-surface-variant);
         font-weight: 500;
       }
@@ -618,20 +620,20 @@ export class MtCircularDial extends LitElement {
         gap: 6px;
       }
       .temp.dual .value-text {
-        font-size: var(--md-sys-typescale-display-small-size, 40px);
+        font-size: clamp(15px, 12.5cqi, var(--md-sys-typescale-display-small-size, 40px));
       }
       .temp.dual .dash {
-        font-size: var(--md-sys-typescale-display-small-size, 40px);
+        font-size: clamp(15px, 12.5cqi, var(--md-sys-typescale-display-small-size, 40px));
         color: var(--mt-on-surface-variant);
       }
       .value-text {
-        font-size: var(--md-sys-typescale-display-large-size, 64px);
+        font-size: clamp(22px, 20cqi, var(--md-sys-typescale-display-large-size, 64px));
         font-weight: 400;
         letter-spacing: -0.02em;
         color: var(--dial-color);
       }
       .unit {
-        font-size: var(--md-sys-typescale-title-large-size, 22px);
+        font-size: clamp(11px, 7cqi, var(--md-sys-typescale-title-large-size, 22px));
         margin-top: 0.4em;
         margin-left: 2px;
         color: var(--mt-on-surface-variant);
@@ -650,8 +652,8 @@ export class MtCircularDial extends LitElement {
         pointer-events: none;
       }
       .step {
-        width: 44px;
-        height: 44px;
+        width: clamp(34px, 13.75cqi, 44px);
+        height: clamp(34px, 13.75cqi, 44px);
         border-radius: var(--mt-shape-full);
         border: none;
         background: transparent;
@@ -666,7 +668,7 @@ export class MtCircularDial extends LitElement {
         -webkit-tap-highlight-color: transparent;
       }
       .step ha-icon {
-        --mdc-icon-size: 26px;
+        --mdc-icon-size: clamp(18px, 8cqi, 26px);
       }
       .step:hover:not([disabled]) {
         background: color-mix(in srgb, var(--mt-on-surface) 8%, transparent);

@@ -238,35 +238,39 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           </button>
         </div>
 
-        <mt-circular-dial
-          .value=${this._targetTemp ?? a.min_temp ?? 20}
-          .min=${a.min_temp ?? 7}
-          .max=${a.max_temp ?? 35}
-          .step=${a.target_temp_step ?? 0.5}
-          .current=${a.current_temperature}
-          .mode=${colorMode}
-          .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
-          .unit=${unit}
-          .dual=${this._isDual}
-          .lowValue=${this._targetLow}
-          .highValue=${this._targetHigh}
-          .showCurrentAsPrimary=${this._config.show_current_as_primary ?? false}
-          .disabled=${unavailable}
-          @value-changing=${this._onChanging}
-          @value-changed=${this._onChanged}
-        ></mt-circular-dial>
+        <div class="body">
+          <div class="dial-wrap">
+            <mt-circular-dial
+              .value=${this._targetTemp ?? a.min_temp ?? 20}
+              .min=${a.min_temp ?? 7}
+              .max=${a.max_temp ?? 35}
+              .step=${a.target_temp_step ?? 0.5}
+              .current=${a.current_temperature}
+              .mode=${colorMode}
+              .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
+              .unit=${unit}
+              .dual=${this._isDual}
+              .lowValue=${this._targetLow}
+              .highValue=${this._targetHigh}
+              .showCurrentAsPrimary=${this._config.show_current_as_primary ?? false}
+              .disabled=${unavailable}
+              @value-changing=${this._onChanging}
+              @value-changed=${this._onChanged}
+            ></mt-circular-dial>
+          </div>
 
-        ${this._config.features?.length
-          ? html`<div class="features">
-              ${this._config.features.map(
-                (feature: FeatureConfig) => html`<mt-feature-row
-                  .hass=${this.hass}
-                  .entityId=${this._config.entity}
-                  .feature=${feature}
-                ></mt-feature-row>`
-              )}
-            </div>`
-          : nothing}
+          ${this._config.features?.length
+            ? html`<div class="features">
+                ${this._config.features.map(
+                  (feature: FeatureConfig) => html`<mt-feature-row
+                    .hass=${this.hass}
+                    .entityId=${this._config.entity}
+                    .feature=${feature}
+                  ></mt-feature-row>`
+                )}
+              </div>`
+            : nothing}
+        </div>
       </ha-card>
     `;
   }
@@ -279,6 +283,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         border-radius: var(--mt-shape-card);
         /* visible so an open dropdown menu can extend past the card edge */
         overflow: visible;
+        /* enables width-based @container layout switches below */
+        container-type: inline-size;
       }
       .header {
         display: grid;
@@ -315,11 +321,37 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       .more:hover {
         background: color-mix(in srgb, var(--mt-on-surface) 8%, transparent);
       }
-      .features {
+      .body {
         display: flex;
         flex-direction: column;
+        gap: 16px;
+        margin-top: 8px;
+      }
+      .dial-wrap {
+        display: flex;
+        justify-content: center;
+        min-width: 0;
+      }
+      .features {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
         gap: 10px;
-        margin-top: 16px;
+      }
+      /* Wide enough (≈ grid width 21+): dial and controls side by side. */
+      @container (min-width: 560px) {
+        .body {
+          flex-direction: row;
+          align-items: center;
+          gap: 24px;
+        }
+        .dial-wrap {
+          flex: 0 0 300px;
+        }
+        .features {
+          flex: 1;
+          min-width: 0;
+        }
       }
       .error {
         padding: 24px;
