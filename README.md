@@ -182,6 +182,35 @@ The card lays its content out on an **internal grid** keyed to the Home Assistan
   than stretching them, and the whole block is centered so it never over-extends on large cards.
 - Entity tiles wrap onto multiple per row; use `compact` + `width` to pack several across.
 
+## AC swing icons (`mt:` icon set)
+
+The card registers a set of **AC swing icons** with Home Assistant, so they're usable anywhere an
+icon is (this card's option overrides, other cards, etc.) as `mt:<name>`. Each comes in a **filled**
+variant and an **outline** variant (`-outline` suffix, matching MDI's convention). Preview them in
+[`icons/index.html`](icons/) (or the individual SVGs in `icons/`).
+
+| Group | Names (add `-outline` for the outlined variant) |
+| --- | --- |
+| **Vertical — fixed** | `swing-vertical-fixed-top`, `swing-vertical-fixed-upper-middle`, `swing-vertical-fixed-middle`, `swing-vertical-fixed-lower-middle`, `swing-vertical-fixed-bottom` |
+| **Vertical — swing** | `swing-vertical-top`, `swing-vertical-middle`, `swing-vertical-bottom`, `swing-vertical-full` |
+| **Horizontal — fixed** | `swing-horizontal-fixed-left`, `swing-horizontal-fixed-left-middle`, `swing-horizontal-fixed-middle`, `swing-horizontal-fixed-right-middle`, `swing-horizontal-fixed-right` |
+| **Horizontal — swing** | `swing-horizontal-left`, `swing-horizontal-middle`, `swing-horizontal-right`, `swing-horizontal-full` |
+
+```yaml
+- type: climate-swing-modes
+  options:
+    - value: vertical
+      icon: mt:swing-vertical-full
+    - value: 'off'
+      icon: mt:swing-vertical-fixed-middle-outline
+```
+
+> Type the full `mt:…` name in the icon field. The icons render everywhere `ha-icon` is used; some
+> HA versions don't list custom icon sets in the icon-picker dropdown, but the name still resolves.
+
+The icons are generated from `tools/gen-icons.mjs` (`node tools/gen-icons.mjs`) into
+`src/icons.generated.ts` — edit the generator, not the output.
+
 ## Theming
 
 The card reads Material 3 system tokens (`--md-sys-color-*`, `--md-sys-typescale-*`,

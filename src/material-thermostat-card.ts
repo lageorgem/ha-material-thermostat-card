@@ -22,8 +22,12 @@ import {
 } from './grid';
 import { tokens, climateModeColor, prettyLabel } from './theme';
 import type { FeatureConfig, MaterialThermostatCardConfig, OptionOverride } from './types';
+import { registerMtIcons } from './register-icons';
 import './dial/circular-dial';
 import './features/feature-row';
+
+// Make the `mt:` AC swing icons available to Home Assistant as early as possible.
+registerMtIcons();
 
 console.info(
   `%c MATERIAL-THERMOSTAT-CARD %c v${CARD_VERSION} `,
