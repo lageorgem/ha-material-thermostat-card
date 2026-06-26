@@ -66,7 +66,26 @@ export class MtEntityTile extends LitElement {
     const icon = this.config.icon ?? state?.attributes.icon ?? DOMAIN_ICONS[domain] ?? 'mdi:eye';
     const secondary = this._secondary();
 
-    if (this.config.compact) {
+    // Narrow widths degrade gracefully: 1 unit = an icon-only button (like a
+    // mode chip), ≤ 2 units = compact (icon + value, no title).
+    const w = this.config.width;
+    const iconOnly = w === 1;
+    const compact = this.config.compact || (typeof w === 'number' && w <= 2);
+
+    if (iconOnly) {
+      return html`
+        <button
+          class="tile icon-only ${this._isOn ? 'on' : ''}"
+          @click=${this._tap}
+          aria-label=${name}
+          title=${name}
+        >
+          <ha-icon icon=${icon}></ha-icon>
+        </button>
+      `;
+    }
+
+    if (compact) {
       return html`
         <button class="tile compact" @click=${this._tap} aria-label=${name} title=${name}>
           <div class="ic ${this._isOn ? 'on' : ''}"><ha-icon icon=${icon}></ha-icon></div>
@@ -110,6 +129,24 @@ export class MtEntityTile extends LitElement {
       }
       .tile:hover {
         background: color-mix(in srgb, var(--mt-on-surface) 6%, var(--mt-surface-container));
+      }
+      /* Icon-only (width 1): a single centered icon, like a mode chip. */
+      .tile.icon-only {
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        padding: 0;
+        min-height: 48px;
+        height: 100%;
+        border-radius: var(--mt-shape-full);
+        color: var(--mt-on-surface-variant);
+      }
+      .tile.icon-only ha-icon {
+        --mdc-icon-size: 24px;
+      }
+      .tile.icon-only.on {
+        background: var(--mt-selected-bg);
+        color: var(--mt-selected-fg);
       }
       /* Compact: icon over value, no title — fits many per row. */
       .tile.compact {

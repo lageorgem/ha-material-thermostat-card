@@ -90,6 +90,7 @@ export class MtInputSelectEditor extends LitElement {
         </div>
 
         <mt-width-field
+          .hass=${this.hass}
           .value=${this.feature.width}
           @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
         ></mt-width-field>

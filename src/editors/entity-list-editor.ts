@@ -96,6 +96,7 @@ export class MtEntityListEditor extends LitElement {
           : nothing}
 
         <mt-width-field
+          .hass=${this.hass}
           .value=${(this.feature as { width?: number }).width}
           @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
         ></mt-width-field>

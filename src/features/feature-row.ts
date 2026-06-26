@@ -35,9 +35,11 @@ export class MtFeatureRow extends LitElement {
     const f = this.feature as FeatureConfig & { compact?: boolean; width?: number };
     const units = typeof f.width === 'number' && f.width > 0 ? f.width : undefined;
     if (units) {
+      // Exact size (no grow/shrink) so features pack predictably and wrap rather
+      // than squish; capped so they never exceed the bounded feature column.
       const px = unitsToPx(units);
-      this.style.flex = `1 1 ${px}px`;
-      this.style.maxWidth = `${px}px`;
+      this.style.flex = `0 0 ${px}px`;
+      this.style.maxWidth = '100%';
     } else if (f.type === 'entity-tile') {
       const basis = unitsToPx(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
       this.style.flex = `1 1 ${basis}px`;

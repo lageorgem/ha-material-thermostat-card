@@ -110,7 +110,14 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   protected shouldUpdate(changed: PropertyValues): boolean {
-    if (changed.has('_config') || changed.has('_selectedTemp')) return true;
+    if (
+      changed.has('_config') ||
+      changed.has('_selectedTemp') ||
+      changed.has('_selectedLow') ||
+      changed.has('_selectedHigh') ||
+      changed.has('_widthPx')
+    )
+      return true;
     if (!this._config) return false;
     if (changed.has('hass')) {
       const old = changed.get('hass') as HomeAssistant | undefined;

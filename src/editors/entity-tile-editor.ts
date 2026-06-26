@@ -15,7 +15,7 @@ const SCHEMA: FormSchemaItem[] = [
   { name: 'compact', selector: { boolean: {} } },
   {
     name: 'width',
-    selector: { number: { min: 1, max: 18, step: 1, mode: 'slider' } },
+    selector: { number: { min: 1, max: 18, step: 1, mode: 'box' } },
   },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
