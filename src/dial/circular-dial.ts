@@ -1,6 +1,10 @@
 import { LitElement, html, css, svg, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { tokens, climateModeColor, HVAC_MODE_ICONS } from '../theme';
+
+/** HVAC modes that carry a color (everything else is treated as "off"). */
+const COLORED_MODES = ['cool', 'heat', 'heat_cool', 'auto', 'dry', 'fan_only'];
 
 // Geometry: a 320x320 viewBox. The draggable range spans 270° with a gap at
 // the bottom, so mid-range values sit near the top (à la Google Home / Nest).
@@ -262,7 +266,8 @@ export class MtCircularDial extends LitElement {
   }
 
   protected render(): TemplateResult {
-    const color = climateModeColor(this.mode);
+    const isOff = !COLORED_MODES.includes(this.mode);
+    const color = isOff ? 'var(--mt-on-surface-variant)' : climateModeColor(this.mode);
     const modeIcon = HVAC_MODE_ICONS[this.mode] ?? 'mdi:thermostat';
 
     const showCurrent =
@@ -283,7 +288,10 @@ export class MtCircularDial extends LitElement {
     }
 
     return html`
-      <div class="dial" style=${`--dial-color: ${color}`}>
+      <div
+        class=${classMap({ dial: true, off: isOff, disabled: this.disabled })}
+        style=${`--dial-color: ${color}`}
+      >
         <svg
           viewBox="0 0 ${VIEW} ${VIEW}"
           role="slider"
@@ -307,7 +315,7 @@ export class MtCircularDial extends LitElement {
           </defs>
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <path class="ring" d=${arcPath(ARC_START, ARC_START + SWEEP, RADIUS)} />
-          ${segLo != null && segHi != null
+          ${segLo != null && segHi != null && !isOff
             ? svg`<path class="value" d=${arcPath(segLo, segHi, RADIUS)} />`
             : nothing}
           ${this.dual
@@ -315,6 +323,7 @@ export class MtCircularDial extends LitElement {
               ${this._dot(this._angleOf(this._displayHigh), 'dot setpoint')}`
             : this._dot(this._angleOf(this._displayValue), 'dot setpoint')}
           ${showCurrent ? this._dot(curAngle, 'dot current', 5) : nothing}
+          <path class="hit" d=${arcPath(ARC_START, ARC_START + SWEEP, RADIUS)} />
         </svg>
 
         <div class="markers">
@@ -328,12 +337,14 @@ export class MtCircularDial extends LitElement {
                 >
                   ${this._fmtCompact(this._displayHigh)}°
                 </div>`
-            : html`<div
-                class="marker icon"
-                style=${this._at(this._angleOf(this._displayValue), LABEL_RADIUS)}
-              >
-                <ha-icon icon=${modeIcon}></ha-icon>
-              </div>`}
+            : isOff
+              ? nothing
+              : html`<div
+                  class="marker icon"
+                  style=${this._at(this._angleOf(this._displayValue), LABEL_RADIUS)}
+                >
+                  <ha-icon icon=${modeIcon}></ha-icon>
+                </div>`}
           ${showCurrent
             ? html`<div class="marker num current" style=${this._at(curAngle, LABEL_RADIUS)}>
                 ${this._fmtCompact(this.current!)}°
@@ -439,6 +450,28 @@ export class MtCircularDial extends LitElement {
       .glow {
         transition: opacity 280ms cubic-bezier(0.2, 0, 0, 1);
       }
+      /* Only the ring annulus is interactive — clicks in the center, the bottom
+         gap, and outside the circle are ignored. */
+      .glow,
+      .ring,
+      .value,
+      .dot {
+        pointer-events: none;
+      }
+      .hit {
+        fill: none;
+        stroke: transparent;
+        stroke-width: 50;
+        stroke-linecap: round;
+        pointer-events: stroke;
+        cursor: pointer;
+      }
+      .dial.disabled .hit {
+        cursor: default;
+      }
+      .dial.off .glow {
+        opacity: 0.5;
+      }
       .dot {
         transition: fill 280ms cubic-bezier(0.2, 0, 0, 1);
       }
@@ -537,6 +570,7 @@ export class MtCircularDial extends LitElement {
         transform: translate(-50%, -50%);
         display: flex;
         gap: 28px;
+        pointer-events: none;
       }
       .step {
         width: 44px;
@@ -548,6 +582,7 @@ export class MtCircularDial extends LitElement {
         display: grid;
         place-items: center;
         cursor: pointer;
+        pointer-events: auto;
         transition:
           background-color 180ms cubic-bezier(0.2, 0, 0, 1),
           transform 120ms cubic-bezier(0.2, 0, 0, 1);
