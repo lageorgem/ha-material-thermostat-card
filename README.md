@@ -185,16 +185,20 @@ The card lays its content out on an **internal grid** keyed to the Home Assistan
 ## AC swing icons (`mt:` icon set)
 
 The card registers a set of **AC swing icons** with Home Assistant, so they're usable anywhere an
-icon is (this card's option overrides, other cards, etc.) as `mt:<name>`. Each comes in a **filled**
-variant and an **outline** variant (`-outline` suffix, matching MDI's convention). Preview them in
-[`icons/index.html`](icons/) (or the individual SVGs in `icons/`).
+icon is (this card's option overrides, other cards, etc.) as `mt:<name>`. Preview the SVGs in
+[`icons/`](icons/).
 
-| Group | Names (add `-outline` for the outlined variant) |
+Each icon shows **five positions** (vertical cones, top→bottom; or horizontal rays, left→right).
+The active ones are drawn solid (**dark**); the rest are dimmed (**gray**, via HA's secondary-icon
+opacity) for context — a **fixed** position selects one, a **partial swing** selects three, and
+**full swing** selects all five. Vertical swings also carry an oscillation arrow.
+
+| Group | Names |
 | --- | --- |
 | **Vertical — fixed** | `swing-vertical-fixed-top`, `swing-vertical-fixed-upper-middle`, `swing-vertical-fixed-middle`, `swing-vertical-fixed-lower-middle`, `swing-vertical-fixed-bottom` |
-| **Vertical — swing** | `swing-vertical-top`, `swing-vertical-middle`, `swing-vertical-bottom`, `swing-vertical-full` |
+| **Vertical — swing** | `swing-vertical-top` (top 3), `swing-vertical-middle` (middle 3), `swing-vertical-bottom` (bottom 3), `swing-vertical-full` |
 | **Horizontal — fixed** | `swing-horizontal-fixed-left`, `swing-horizontal-fixed-left-middle`, `swing-horizontal-fixed-middle`, `swing-horizontal-fixed-right-middle`, `swing-horizontal-fixed-right` |
-| **Horizontal — swing** | `swing-horizontal-left`, `swing-horizontal-middle`, `swing-horizontal-right`, `swing-horizontal-full` |
+| **Horizontal — swing** | `swing-horizontal-left` (left 3), `swing-horizontal-middle` (middle 3), `swing-horizontal-right` (right 3), `swing-horizontal-full` |
 
 ```yaml
 - type: climate-swing-modes
@@ -202,7 +206,7 @@ variant and an **outline** variant (`-outline` suffix, matching MDI's convention
     - value: vertical
       icon: mt:swing-vertical-full
     - value: 'off'
-      icon: mt:swing-vertical-fixed-middle-outline
+      icon: mt:swing-vertical-fixed-middle
 ```
 
 > Type the full `mt:…` name in the icon field. The icons render everywhere `ha-icon` is used; some

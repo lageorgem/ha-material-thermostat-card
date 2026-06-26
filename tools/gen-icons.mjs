@@ -1,185 +1,195 @@
 /*
- * Generates the AC swing icon set (filled + outlined) as single filled SVG
- * paths on a 24x24 grid, for Home Assistant's `window.customIcons` registry.
+ * Generates the AC swing icon set as two-tone single-icon paths (primary +
+ * secondary) for Home Assistant's `window.customIcons` registry. HA renders the
+ * secondary path at 50% opacity, giving the dark-selected / gray-unselected look.
  *
- * Metaphor: an AC outlet (rounded bar) emitting airflow.
- *   - Vertical swing   = side view: outlet on the LEFT, air fans up/down.
- *   - Horizontal swing = top view:  outlet at the TOP, air fans left/right.
- *   - Fixed position    = a single arrow at one vane angle.
- *   - Swing             = two arrows bracketing the swept angular range.
- *   - Filled variant    = thick shafts + solid triangular heads.
- *   - Outlined variant  = thin shafts + open chevron heads.
+ *   - Vertical swing   = corner (L) + a quarter fan of 5 cone wedges (top..bottom).
+ *   - Horizontal swing = a vent bar + 5 fanned rays (left..right).
+ *   - Selected positions are PRIMARY (dark); unselected are SECONDARY (gray).
+ *   - Fixed = 1 selected; partial swing = 3 selected (top3/mid3/bottom3 …);
+ *     full swing = all 5. Vertical swings also get an oscillation double-arrow.
  *
- * Run: node tools/gen-icons.mjs
- * Writes: src/icons.generated.ts and preview SVGs in icons/.
+ * Run: node tools/gen-icons.mjs  -> src/icons.generated.ts + icons/ previews.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-
 const f = (n) => {
-  const r = Math.round(n * 100) / 100;
+  const r = Math.round(n * 1000) / 1000;
   return Object.is(r, -0) ? 0 : r;
 };
+const D = Math.PI / 180;
+const dir = (deg) => [Math.cos(deg * D), Math.sin(deg * D)];
 
-/** Filled quad for a segment P1->P2 of width w (butt caps). */
-function seg(x1, y1, x2, y2, w) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / len) * (w / 2);
-  const ny = (dx / len) * (w / 2);
-  return (
-    `M${f(x1 + nx)} ${f(y1 + ny)}` +
-    `L${f(x2 + nx)} ${f(y2 + ny)}` +
-    `L${f(x2 - nx)} ${f(y2 - ny)}` +
-    `L${f(x1 - nx)} ${f(y1 - ny)}Z`
-  );
-}
-
-/** An arrow from S to E. Filled => solid triangle head; else open chevron. */
-function arrow(sx, sy, ex, ey, { w, headLen, headHalf, filled }) {
-  const dx = ex - sx;
-  const dy = ey - sy;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
+/** Round-capped line (capsule). */
+function capsule(x1, y1, x2, y2, w) {
+  const r = w / 2;
+  let ux = x2 - x1;
+  let uy = y2 - y1;
+  const len = Math.hypot(ux, uy) || 1;
+  ux /= len;
+  uy /= len;
   const nx = -uy;
   const ny = ux;
-  const bx = ex - ux * headLen;
-  const by = ey - uy * headLen;
-  if (filled) {
-    const c1x = bx + nx * headHalf;
-    const c1y = by + ny * headHalf;
-    const c2x = bx - nx * headHalf;
-    const c2y = by - ny * headHalf;
-    return seg(sx, sy, bx, by, w) + `M${f(ex)} ${f(ey)}L${f(c1x)} ${f(c1y)}L${f(c2x)} ${f(c2y)}Z`;
-  }
   return (
-    seg(sx, sy, ex, ey, w) +
-    seg(bx + nx * headHalf, by + ny * headHalf, ex, ey, w) +
-    seg(bx - nx * headHalf, by - ny * headHalf, ex, ey, w)
+    `M${f(x1 + nx * r)} ${f(y1 + ny * r)}L${f(x2 + nx * r)} ${f(y2 + ny * r)}` +
+    `A${f(r)} ${f(r)} 0 0 1 ${f(x2 - nx * r)} ${f(y2 - ny * r)}` +
+    `L${f(x1 - nx * r)} ${f(y1 - ny * r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 + nx * r)} ${f(y1 + ny * r)}Z`
   );
 }
 
-/** Solid rounded rectangle. */
-function roundRect(x, y, w, h, r) {
+/** Annular sector (cone wedge): radii r0<r1, angles a0<a1 (deg, screen). */
+function wedge(cx, cy, r0, r1, a0, a1) {
+  const [c0, s0] = dir(a0);
+  const [c1, s1] = dir(a1);
+  const large = a1 - a0 > 180 ? 1 : 0;
   return (
-    `M${f(x + r)} ${f(y)}H${f(x + w - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x + w)} ${f(y + r)}` +
-    `V${f(y + h - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x + w - r)} ${f(y + h)}` +
-    `H${f(x + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x)} ${f(y + h - r)}` +
-    `V${f(y + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x + r)} ${f(y)}Z`
+    `M${f(cx + r1 * c0)} ${f(cy + r1 * s0)}` +
+    `A${f(r1)} ${f(r1)} 0 ${large} 1 ${f(cx + r1 * c1)} ${f(cy + r1 * s1)}` +
+    `L${f(cx + r0 * c1)} ${f(cy + r0 * s1)}` +
+    `A${f(r0)} ${f(r0)} 0 ${large} 0 ${f(cx + r0 * c0)} ${f(cy + r0 * s0)}Z`
   );
 }
 
-/** Hollow rounded-rectangle frame (4 overlapping side bars). */
-function frame(x, y, w, h, s) {
-  return (
-    seg(x, y + s / 2, x + w, y + s / 2, s) +
-    seg(x + w - s / 2, y, x + w - s / 2, y + h, s) +
-    seg(x, y + h - s / 2, x + w, y + h - s / 2, s) +
-    seg(x + s / 2, y, x + s / 2, y + h, s)
-  );
+/** Triangular arrowhead: tip at (tx,ty), pointing dirDeg, length L, half-width hw. */
+function head(tx, ty, dirDeg, L, hw) {
+  const [ux, uy] = dir(dirDeg);
+  const nx = -uy;
+  const ny = ux;
+  const bx = tx - ux * L;
+  const by = ty - uy * L;
+  return `M${f(tx)} ${f(ty)}L${f(bx + nx * hw)} ${f(by + ny * hw)}L${f(bx - nx * hw)} ${f(by - ny * hw)}Z`;
 }
 
-const STYLE = {
-  // The small outlet stays solid in both; outline vs fill is conveyed by the
-  // airflow arrows (thin + open chevron heads vs thick + solid triangle heads).
-  filled: { w: 2.4, headLen: 4.2, headHalf: 3.3, filled: true, solidBar: true },
-  outline: { w: 1.7, headLen: 4, headHalf: 2.9, filled: false, solidBar: true },
-};
-
-// Vane angles, degrees. Vertical: + = up. Horizontal: + = right.
-const FIXED = {
-  // vertical fixed
-  'vertical-fixed-top': { axis: 'v', angles: [40] },
-  'vertical-fixed-upper-middle': { axis: 'v', angles: [20] },
-  'vertical-fixed-middle': { axis: 'v', angles: [0] },
-  'vertical-fixed-lower-middle': { axis: 'v', angles: [-20] },
-  'vertical-fixed-bottom': { axis: 'v', angles: [-40] },
-  // vertical swing (two bracketing arrows)
-  'vertical-top': { axis: 'v', angles: [40, 12] },
-  'vertical-middle': { axis: 'v', angles: [20, -20] },
-  'vertical-bottom': { axis: 'v', angles: [-12, -40] },
-  'vertical-full': { axis: 'v', angles: [40, -40] },
-  // horizontal fixed
-  'horizontal-fixed-left': { axis: 'h', angles: [-40] },
-  'horizontal-fixed-left-middle': { axis: 'h', angles: [-20] },
-  'horizontal-fixed-middle': { axis: 'h', angles: [0] },
-  'horizontal-fixed-right-middle': { axis: 'h', angles: [20] },
-  'horizontal-fixed-right': { axis: 'h', angles: [40] },
-  // horizontal swing
-  'horizontal-left': { axis: 'h', angles: [-40, -12] },
-  'horizontal-middle': { axis: 'h', angles: [-20, 20] },
-  'horizontal-right': { axis: 'h', angles: [12, 40] },
-  'horizontal-full': { axis: 'h', angles: [-40, 40] },
-};
-
-const D2R = Math.PI / 180;
-
-/** Build one icon path for the given spec + style. */
-function build(spec, st) {
-  const single = spec.angles.length === 1;
-  const L = single ? 12.6 : 11.6;
-  let d = '';
-  if (spec.axis === 'v') {
-    // outlet bar on the left (side view)
-    d += st.solidBar ? roundRect(3, 4.5, 3.3, 15, 1.2) : frame(3, 4.5, 3.3, 15, st.barStroke);
-    const sx = 6.7;
-    const sy = 12;
-    for (const a of spec.angles) {
-      const r = a * D2R;
-      d += arrow(sx, sy, sx + Math.cos(r) * L, sy - Math.sin(r) * L, st);
-    }
-  } else {
-    // outlet bar on top (top view)
-    d += st.solidBar ? roundRect(4.5, 3, 15, 3.3, 1.2) : frame(4.5, 3, 15, 3.3, st.barStroke);
-    const sx = 12;
-    const sy = 6.7;
-    for (const a of spec.angles) {
-      const r = a * D2R;
-      d += arrow(sx, sy, sx + Math.sin(r) * L, sy + Math.cos(r) * L, st);
-    }
-  }
+// ----- vertical: corner + 5 cone wedges (index 0 = top .. 4 = bottom) -----
+const V = { O: [4.6, 4.6], r0: 4.3, r1: 13.4, a0: -2, span: 90, gap: 4.6, N: 5 };
+V.wedgeW = (V.span - V.gap * (V.N - 1)) / V.N;
+function vConeAngles(k) {
+  const s = V.a0 + k * (V.wedgeW + V.gap);
+  return [s, s + V.wedgeW];
+}
+function vCorner() {
+  return capsule(3.7, 3.3, 3.7, 20.9, 1.8) + capsule(3.3, 3.3, 20.2, 3.3, 1.8);
+}
+function vArrow() {
+  const [cx, cy] = V.O;
+  const R = 15.4;
+  const a0 = 24;
+  const a1 = 96;
+  let d = wedge(cx, cy, R - 0.85, R + 0.85, a0, a1);
+  const p0 = [cx + R * Math.cos(a0 * D), cy + R * Math.sin(a0 * D)];
+  const p1 = [cx + R * Math.cos(a1 * D), cy + R * Math.sin(a1 * D)];
+  d += head(p0[0] + Math.sin(a0 * D) * 3.3, p0[1] - Math.cos(a0 * D) * 3.3, a0 - 90, 3.4, 2.7);
+  d += head(p1[0] - Math.sin(a1 * D) * 3.3, p1[1] + Math.cos(a1 * D) * 3.3, a1 + 90, 3.4, 2.7);
   return d;
 }
-
-const icons = {};
-for (const [name, spec] of Object.entries(FIXED)) {
-  icons[`swing-${name}`] = build(spec, STYLE.filled);
-  icons[`swing-${name}-outline`] = build(spec, STYLE.outline);
+function vertical(selected, arrow) {
+  let primary = vCorner();
+  let secondary = '';
+  for (let k = 0; k < V.N; k++) {
+    const [a, b] = vConeAngles(k);
+    const slice = wedge(V.O[0], V.O[1], V.r0, V.r1, a, b);
+    if (selected.includes(k)) primary += slice;
+    else secondary += slice;
+  }
+  if (arrow) primary += vArrow();
+  return { path: primary, secondary };
 }
 
-// --- write the TS module ---
-const lines = Object.entries(icons).map(([k, v]) => `  '${k}': '${v}',`);
-const ts =
-  `/* AUTO-GENERATED by tools/gen-icons.mjs — do not edit by hand. */\n\n` +
-  `/** AC swing icons, keyed by name. Registered as the \`mt:\` icon set. */\n` +
-  `export const MT_ICONS: Record<string, string> = {\n${lines.join('\n')}\n};\n`;
-writeFileSync(join(ROOT, 'src/icons.generated.ts'), ts);
-
-// --- write preview SVGs ---
-const previewDir = join(ROOT, 'icons');
-mkdirSync(previewDir, { recursive: true });
-const index = [];
-for (const [k, v] of Object.entries(icons)) {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">` +
-    `<rect width="24" height="24" fill="#1c1b22"/>` +
-    `<path d="${v}" fill="#e3e3e3"/></svg>`;
-  writeFileSync(join(previewDir, `${k}.svg`), svg);
-  index.push(
-    `<figure style="margin:0;text-align:center"><img src="${k}.svg" width="72" height="72"><figcaption style="font:11px monospace;color:#ccc">${k}</figcaption></figure>`
-  );
+// ----- horizontal: vent bar + 5 fanned rays (index 0 = left .. 4 = right) -----
+const H = {
+  topY: 8.9,
+  botY: 19,
+  topX: [7.2, 9.6, 12, 14.4, 16.8],
+  botX: [4.6, 8.3, 12, 15.7, 19.4],
+};
+function horizontal(selected) {
+  let primary = capsule(3, 6.6, 21, 6.6, 2);
+  let secondary = '';
+  for (let k = 0; k < 5; k++) {
+    if (selected.includes(k)) {
+      primary += capsule(H.topX[k], H.topY, H.botX[k], H.botY, 2.4);
+    } else {
+      secondary += capsule(H.topX[k], H.topY, H.botX[k], H.botY, 1.6);
+    }
+  }
+  return { path: primary, secondary };
 }
+
+const TOP3 = [0, 1, 2];
+const MID3 = [1, 2, 3];
+const BOT3 = [2, 3, 4];
+const ALL = [0, 1, 2, 3, 4];
+
+const icons = {
+  'swing-vertical-fixed-top': vertical([0], false),
+  'swing-vertical-fixed-upper-middle': vertical([1], false),
+  'swing-vertical-fixed-middle': vertical([2], false),
+  'swing-vertical-fixed-lower-middle': vertical([3], false),
+  'swing-vertical-fixed-bottom': vertical([4], false),
+  'swing-vertical-top': vertical(TOP3, true),
+  'swing-vertical-middle': vertical(MID3, true),
+  'swing-vertical-bottom': vertical(BOT3, true),
+  'swing-vertical-full': vertical(ALL, true),
+  'swing-horizontal-fixed-left': horizontal([0]),
+  'swing-horizontal-fixed-left-middle': horizontal([1]),
+  'swing-horizontal-fixed-middle': horizontal([2]),
+  'swing-horizontal-fixed-right-middle': horizontal([3]),
+  'swing-horizontal-fixed-right': horizontal([4]),
+  'swing-horizontal-left': horizontal(TOP3),
+  'swing-horizontal-middle': horizontal(MID3),
+  'swing-horizontal-right': horizontal(BOT3),
+  'swing-horizontal-full': horizontal(ALL),
+};
+
+// ----- emit TS -----
+const entries = Object.entries(icons).map(([k, v]) => {
+  const sec = v.secondary ? `, secondary: '${v.secondary}'` : '';
+  return `  '${k}': { path: '${v.path}'${sec} },`;
+});
 writeFileSync(
-  join(previewDir, 'index.html'),
-  `<!doctype html><meta charset=utf-8><title>mt icons</title>` +
-    `<body style="background:#0e0d12;display:flex;flex-wrap:wrap;gap:16px;padding:16px">` +
-    index.join('') +
-    `</body>`
+  join(ROOT, 'src/icons.generated.ts'),
+  `/* AUTO-GENERATED by tools/gen-icons.mjs — do not edit by hand. */\n\n` +
+    `/** AC swing icons (primary = selected, secondary = gray/unselected). */\n` +
+    `export const MT_ICONS: Record<string, { path: string; secondary?: string }> = {\n` +
+    entries.join('\n') +
+    `\n};\n`
 );
 
-console.log(`Generated ${Object.keys(icons).length} icons -> src/icons.generated.ts + icons/*.svg`);
+// ----- previews -----
+const previewDir = join(ROOT, 'icons');
+mkdirSync(previewDir, { recursive: true });
+const cells = [];
+for (const [k, v] of Object.entries(icons)) {
+  const sec = v.secondary ? `<path d="${v.secondary}" fill="#1c1b22" opacity="0.5"/>` : '';
+  const inner = `<path d="${v.path}" fill="#1c1b22"/>${sec}`;
+  writeFileSync(
+    join(previewDir, `${k}.svg`),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">` +
+      `<rect width="24" height="24" fill="#ece4d8"/>${inner}</svg>`
+  );
+  cells.push({ k, inner });
+}
+const cols = 5;
+const cell = 120;
+const labelH = 22;
+const rows = Math.ceil(cells.length / cols);
+let body = '';
+cells.forEach((c, i) => {
+  const x = (i % cols) * cell;
+  const y = Math.floor(i / cols) * (cell + labelH);
+  const s = (cell - 20) / 24;
+  body +=
+    `<g transform="translate(${x},${y})"><rect width="${cell}" height="${cell}" fill="#ece4d8"/>` +
+    `<g transform="translate(10,10) scale(${s})">${c.inner}</g>` +
+    `<text x="${cell / 2}" y="${cell + 14}" fill="#bbb" font-family="monospace" font-size="8" text-anchor="middle">${c.k.replace('swing-', '')}</text></g>`;
+});
+const W = cols * cell;
+const Hh = rows * (cell + labelH);
+writeFileSync(
+  '/tmp/sheet.svg',
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}"><rect width="${W}" height="${Hh}" fill="#0e0d12"/>${body}</svg>`
+);
+console.log(`Generated ${cells.length} icons + /tmp/sheet.svg`);

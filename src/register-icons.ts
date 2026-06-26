@@ -2,6 +2,7 @@ import { MT_ICONS } from './icons.generated';
 
 interface CustomIcon {
   path: string;
+  secondaryPath?: string;
   viewBox?: string;
 }
 interface CustomIconSet {
@@ -20,9 +21,10 @@ export function registerMtIcons(): void {
   if (w.customIcons.mt) return; // already registered (e.g. card loaded twice)
   w.customIcons.mt = {
     getIcon: async (name: string): Promise<CustomIcon> => {
-      const path = MT_ICONS[name];
-      if (!path) throw new Error(`Unknown mt icon: mt:${name}`);
-      return { path };
+      const icon = MT_ICONS[name];
+      if (!icon) throw new Error(`Unknown mt icon: mt:${name}`);
+      // Secondary path renders at 50% opacity → the gray "unselected" blades.
+      return icon.secondary ? { path: icon.path, secondaryPath: icon.secondary } : { path: icon.path };
     },
   };
 }
