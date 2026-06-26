@@ -23,6 +23,20 @@ function polar(angleDeg: number, r: number): { x: number; y: number } {
 }
 
 /**
+ * Build an SVG arc path between two angles (clockwise). No CSS `d` transition
+ * is applied to consumers of this — interpolating arc flags bends the path.
+ * @param startAngle start angle in degrees
+ * @param endAngle end angle in degrees
+ * @param r radius
+ */
+function arcPath(startAngle: number, endAngle: number, r: number): string {
+  const start = polar(startAngle, r);
+  const end = polar(endAngle, r);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+}
+
+/**
  * A circular temperature dial inspired by the Google Home / Nest thermostat:
  * a mode-colored radial halo, a faint ring, and dot markers for the setpoint
  * (with the mode icon) and the current temperature (with its value). Controlled
@@ -255,6 +269,19 @@ export class MtCircularDial extends LitElement {
       this.current != null && this.current >= this.min && this.current <= this.max;
     const curAngle = showCurrent ? this._angleOf(this.current!) : 0;
 
+    // Mode-colored segment: between the two setpoints (dual) or between the
+    // setpoint and the current temperature (single).
+    const spAngle = this._angleOf(this._displayValue);
+    let segLo: number | undefined;
+    let segHi: number | undefined;
+    if (this.dual) {
+      segLo = this._angleOf(this._displayLow);
+      segHi = this._angleOf(this._displayHigh);
+    } else if (showCurrent) {
+      segLo = Math.min(spAngle, curAngle);
+      segHi = Math.max(spAngle, curAngle);
+    }
+
     return html`
       <div class="dial" style=${`--dial-color: ${color}`}>
         <svg
@@ -279,7 +306,10 @@ export class MtCircularDial extends LitElement {
             </radialGradient>
           </defs>
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
-          <circle class="ring" cx=${CENTER} cy=${CENTER} r=${RADIUS} />
+          <path class="ring" d=${arcPath(ARC_START, ARC_START + SWEEP, RADIUS)} />
+          ${segLo != null && segHi != null
+            ? svg`<path class="value" d=${arcPath(segLo, segHi, RADIUS)} />`
+            : nothing}
           ${this.dual
             ? html`${this._dot(this._angleOf(this._displayLow), 'dot setpoint')}
               ${this._dot(this._angleOf(this._displayHigh), 'dot setpoint')}`
@@ -395,7 +425,15 @@ export class MtCircularDial extends LitElement {
         fill: none;
         stroke: var(--dial-color);
         stroke-width: 10;
+        stroke-linecap: round;
         opacity: 0.18;
+        transition: stroke 280ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .value {
+        fill: none;
+        stroke: var(--dial-color);
+        stroke-width: 10;
+        stroke-linecap: round;
         transition: stroke 280ms cubic-bezier(0.2, 0, 0, 1);
       }
       .glow {
@@ -495,10 +533,10 @@ export class MtCircularDial extends LitElement {
       .adjust {
         position: absolute;
         left: 50%;
-        bottom: 9%;
-        transform: translateX(-50%);
+        top: 80%;
+        transform: translate(-50%, -50%);
         display: flex;
-        gap: 24px;
+        gap: 28px;
       }
       .step {
         width: 44px;
