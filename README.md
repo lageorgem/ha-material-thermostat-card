@@ -209,8 +209,8 @@ opacity) for context — a **fixed** position selects one, a **partial swing** s
       icon: mt:swing-vertical-fixed-middle
 ```
 
-> Type the full `mt:…` name in the icon field. The icons render everywhere `ha-icon` is used; some
-> HA versions don't list custom icon sets in the icon-picker dropdown, but the name still resolves.
+> Searchable in the icon picker — type **`mt:`** (or `swing`, `ac`, `vane`) to list them. You can
+> also just type the full `mt:…` name; the icons render anywhere `ha-icon` is used.
 
 The icons are generated from `tools/gen-icons.mjs` (`node tools/gen-icons.mjs`) into
 `src/icons.generated.ts` — edit the generator, not the output.
