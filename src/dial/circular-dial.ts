@@ -1,7 +1,20 @@
-import { LitElement, html, css, svg, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { tokens, climateModeColor, HVAC_MODE_ICONS } from '../theme';
+
+// Register --dial-color as an animatable <color> so the halo/ring/number can
+// cross-fade between mode colors (a plain custom property would jump).
+try {
+  (CSS as any).registerProperty?.({
+    name: '--dial-color',
+    syntax: '<color>',
+    inherits: true,
+    initialValue: 'transparent',
+  });
+} catch {
+  // already registered or unsupported — degrades to an instant color change
+}
 
 /** HVAC modes that carry a color (everything else is treated as "off"). */
 const COLORED_MODES = ['cool', 'heat', 'heat_cool', 'auto', 'dry', 'fan_only'];
@@ -27,8 +40,7 @@ function polar(angleDeg: number, r: number): { x: number; y: number } {
 }
 
 /**
- * Build an SVG arc path between two angles (clockwise). No CSS `d` transition
- * is applied to consumers of this — interpolating arc flags bends the path.
+ * Build an SVG arc path between two angles (clockwise).
  * @param startAngle start angle in degrees
  * @param endAngle end angle in degrees
  * @param r radius
@@ -42,10 +54,11 @@ function arcPath(startAngle: number, endAngle: number, r: number): string {
 
 /**
  * A circular temperature dial inspired by the Google Home / Nest thermostat:
- * a mode-colored radial halo, a faint ring, and dot markers for the setpoint
- * (with the mode icon) and the current temperature (with its value). Controlled
- * component: emits `value-changing` during a drag and `value-changed` when
- * committed. Single mode emits `{ value }`; dual (heat_cool) emits `{ low, high }`.
+ * a mode-colored radial halo, a faint ring, dot markers for the setpoint (with
+ * the mode icon) and the current temperature (with its value), and a colored
+ * segment between them. Controlled component: emits `value-changing` during a
+ * drag and `value-changed` when committed. Single mode emits `{ value }`; dual
+ * (heat_cool) emits `{ low, high }`.
  */
 @customElement('mt-circular-dial')
 export class MtCircularDial extends LitElement {
@@ -99,11 +112,29 @@ export class MtCircularDial extends LitElement {
     return ARC_START + Math.min(1, Math.max(0, frac)) * SWEEP;
   }
 
+  /** Map a value to its fraction (0..1) along the ring path. */
+  private _fracOf(value: number): number {
+    return (this._angleOf(value) - ARC_START) / SWEEP;
+  }
+
   /** Round a raw value to the configured step, clamped to [min, max]. */
   private _roundToStep(raw: number): number {
     const clamped = Math.min(this.max, Math.max(this.min, raw));
     const snapped = Math.round(clamped / this.step) * this.step;
     return parseFloat(snapped.toFixed(this._precision));
+  }
+
+  /** Whether a client point lands on the interactive ring (not center/gap/outside). */
+  private _isRingHit(clientX: number, clientY: number): boolean {
+    const rect = this._svg.getBoundingClientRect();
+    const scale = rect.width / VIEW || 1;
+    const dx = clientX - (rect.left + rect.width / 2);
+    const dy = clientY - (rect.top + rect.height / 2);
+    const dist = Math.hypot(dx, dy) / scale;
+    if (dist < RADIUS - 32 || dist > RADIUS + 22) return false;
+    let a = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+    a = ((a % 360) + 360) % 360;
+    return a >= ARC_START || a <= ARC_END_WRAP; // exclude the bottom gap
   }
 
   /** Compute a value from a client (x, y) pointer position over the dial. */
@@ -137,11 +168,11 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
-   * Begin a drag interaction.
+   * Begin a drag interaction (only when the pointer is on the ring).
    * @param e pointer event
    */
   private _onPointerDown = (e: PointerEvent): void => {
-    if (this.disabled) return;
+    if (this.disabled || !this._isRingHit(e.clientX, e.clientY)) return;
     e.preventDefault();
     this._svg.setPointerCapture(e.pointerId);
     this._dragging = true;
@@ -254,17 +285,6 @@ export class MtCircularDial extends LitElement {
     return `left:${(p.x / VIEW) * 100}%; top:${(p.y / VIEW) * 100}%;`;
   }
 
-  /**
-   * A small dot marker on the ring.
-   * @param angle angle in degrees
-   * @param cls CSS class for the dot
-   * @param r dot radius
-   */
-  private _dot(angle: number, cls: string, r = 7): TemplateResult {
-    const p = polar(angle, RADIUS);
-    return svg`<circle class=${cls} cx=${p.x} cy=${p.y} r=${r} />`;
-  }
-
   protected render(): TemplateResult {
     const isOff = !COLORED_MODES.includes(this.mode);
     const color = isOff ? 'var(--mt-on-surface-variant)' : climateModeColor(this.mode);
@@ -274,22 +294,27 @@ export class MtCircularDial extends LitElement {
       this.current != null && this.current >= this.min && this.current <= this.max;
     const curAngle = showCurrent ? this._angleOf(this.current!) : 0;
 
-    // Mode-colored segment: between the two setpoints (dual) or between the
-    // setpoint and the current temperature (single).
-    const spAngle = this._angleOf(this._displayValue);
-    let segLo: number | undefined;
-    let segHi: number | undefined;
+    // Colored segment: between the two setpoints (dual) or between the setpoint
+    // and the current temperature (single). Drawn by dashing the ring path.
+    let segS = 0;
+    let segE = 0;
+    let showSeg = false;
     if (this.dual) {
-      segLo = this._angleOf(this._displayLow);
-      segHi = this._angleOf(this._displayHigh);
-    } else if (showCurrent) {
-      segLo = Math.min(spAngle, curAngle);
-      segHi = Math.max(spAngle, curAngle);
+      segS = this._fracOf(this._displayLow);
+      segE = this._fracOf(this._displayHigh);
+      showSeg = true;
+    } else if (showCurrent && !isOff) {
+      segS = Math.min(this._fracOf(this._displayValue), this._fracOf(this.current!));
+      segE = Math.max(this._fracOf(this._displayValue), this._fracOf(this.current!));
+      showSeg = true;
     }
+    const ringPath = arcPath(ARC_START, ARC_START + SWEEP, RADIUS);
+    const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
+    const dashOffset = (-segS * 1000).toFixed(2);
 
     return html`
       <div
-        class=${classMap({ dial: true, off: isOff, disabled: this.disabled })}
+        class=${classMap({ dial: true, off: isOff, disabled: this.disabled, dragging: this._dragging })}
         style=${`--dial-color: ${color}`}
       >
         <svg
@@ -314,35 +339,36 @@ export class MtCircularDial extends LitElement {
             </radialGradient>
           </defs>
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
-          <path class="ring" d=${arcPath(ARC_START, ARC_START + SWEEP, RADIUS)} />
-          ${segLo != null && segHi != null && !isOff
-            ? svg`<path class="value" d=${arcPath(segLo, segHi, RADIUS)} />`
-            : nothing}
-          ${this.dual
-            ? html`${this._dot(this._angleOf(this._displayLow), 'dot setpoint')}
-              ${this._dot(this._angleOf(this._displayHigh), 'dot setpoint')}`
-            : this._dot(this._angleOf(this._displayValue), 'dot setpoint')}
-          ${showCurrent ? this._dot(curAngle, 'dot current', 5) : nothing}
-          <path class="hit" d=${arcPath(ARC_START, ARC_START + SWEEP, RADIUS)} />
+          <path class="ring" d=${ringPath} />
+          <path
+            class="value"
+            d=${ringPath}
+            pathLength="1000"
+            stroke-dasharray=${dashArray}
+            stroke-dashoffset=${dashOffset}
+            style=${`opacity:${showSeg ? 1 : 0}`}
+          />
+          <path class="hit" d=${ringPath} />
         </svg>
 
         <div class="markers">
           ${this.dual
+            ? html`<div class="dot setpoint" style=${this._at(this._angleOf(this._displayLow), RADIUS)}></div>
+                <div class="dot setpoint" style=${this._at(this._angleOf(this._displayHigh), RADIUS)}></div>`
+            : html`<div class="dot setpoint" style=${this._at(this._angleOf(this._displayValue), RADIUS)}></div>`}
+          ${showCurrent
+            ? html`<div class="dot current" style=${this._at(curAngle, RADIUS)}></div>`
+            : nothing}
+          ${this.dual
             ? html`<div class="marker num" style=${this._at(this._angleOf(this._displayLow), LABEL_RADIUS)}>
                   ${this._fmtCompact(this._displayLow)}°
                 </div>
-                <div
-                  class="marker num"
-                  style=${this._at(this._angleOf(this._displayHigh), LABEL_RADIUS)}
-                >
+                <div class="marker num" style=${this._at(this._angleOf(this._displayHigh), LABEL_RADIUS)}>
                   ${this._fmtCompact(this._displayHigh)}°
                 </div>`
             : isOff
               ? nothing
-              : html`<div
-                  class="marker icon"
-                  style=${this._at(this._angleOf(this._displayValue), LABEL_RADIUS)}
-                >
+              : html`<div class="marker icon" style=${this._at(this._angleOf(this._displayValue), LABEL_RADIUS)}>
                   <ha-icon icon=${modeIcon}></ha-icon>
                 </div>`}
           ${showCurrent
@@ -425,6 +451,7 @@ export class MtCircularDial extends LitElement {
         max-width: 320px;
         margin: 0 auto;
         aspect-ratio: 1 / 1;
+        transition: --dial-color var(--mt-motion-dur) var(--mt-motion-ease);
       }
       svg {
         width: 100%;
@@ -432,64 +459,71 @@ export class MtCircularDial extends LitElement {
         touch-action: none;
         outline: none;
       }
-      .ring {
-        fill: none;
-        stroke: var(--dial-color);
-        stroke-width: 10;
-        stroke-linecap: round;
-        opacity: 0.18;
-        transition: stroke 280ms cubic-bezier(0.2, 0, 0, 1);
-      }
-      .value {
-        fill: none;
-        stroke: var(--dial-color);
-        stroke-width: 10;
-        stroke-linecap: round;
-        transition: stroke 280ms cubic-bezier(0.2, 0, 0, 1);
-      }
-      .glow {
-        transition: opacity 280ms cubic-bezier(0.2, 0, 0, 1);
-      }
-      /* Only the ring annulus is interactive — clicks in the center, the bottom
-         gap, and outside the circle are ignored. */
+      /* Only the ring annulus is interactive (handlers also gate by geometry). */
       .glow,
       .ring,
-      .value,
-      .dot {
+      .value {
         pointer-events: none;
       }
       .hit {
         fill: none;
         stroke: transparent;
         stroke-width: 50;
-        stroke-linecap: round;
+        stroke-linecap: butt;
         pointer-events: stroke;
         cursor: pointer;
       }
       .dial.disabled .hit {
         cursor: default;
       }
+      .ring {
+        fill: none;
+        stroke: var(--dial-color);
+        stroke-width: 10;
+        stroke-linecap: round;
+        opacity: 0.18;
+      }
+      .value {
+        fill: none;
+        stroke: var(--dial-color);
+        stroke-width: 10;
+        stroke-linecap: round;
+        transition:
+          stroke-dasharray var(--mt-motion-dur) var(--mt-motion-ease),
+          stroke-dashoffset var(--mt-motion-dur) var(--mt-motion-ease),
+          opacity var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .glow {
+        transition: opacity var(--mt-motion-dur) var(--mt-motion-ease);
+      }
       .dial.off .glow {
         opacity: 0.5;
       }
-      .dot {
-        transition: fill 280ms cubic-bezier(0.2, 0, 0, 1);
-      }
-      .dot.setpoint {
-        fill: var(--mt-on-surface);
-      }
-      .dot.current {
-        fill: var(--mt-on-surface);
-        opacity: 0.55;
-      }
-      svg:focus-visible .dot.setpoint {
-        stroke: var(--mt-on-surface);
-        stroke-width: 3;
+      .dial.dragging .value {
+        transition: opacity var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .markers {
         position: absolute;
         inset: 0;
         pointer-events: none;
+      }
+      .dot {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: var(--mt-on-surface);
+        transition:
+          left var(--mt-motion-dur) var(--mt-motion-ease),
+          top var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dot.setpoint {
+        width: 14px;
+        height: 14px;
+      }
+      .dot.current {
+        width: 10px;
+        height: 10px;
+        opacity: 0.55;
       }
       .marker {
         position: absolute;
@@ -498,10 +532,16 @@ export class MtCircularDial extends LitElement {
         align-items: center;
         justify-content: center;
         white-space: nowrap;
+        transition:
+          left var(--mt-motion-dur) var(--mt-motion-ease),
+          top var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dial.dragging .dot,
+      .dial.dragging .marker {
+        transition: none;
       }
       .marker.icon {
         color: var(--dial-color);
-        transition: color 280ms cubic-bezier(0.2, 0, 0, 1);
       }
       .marker.icon ha-icon {
         --mdc-icon-size: 26px;
@@ -551,7 +591,6 @@ export class MtCircularDial extends LitElement {
         font-weight: 400;
         letter-spacing: -0.02em;
         color: var(--dial-color);
-        transition: color 280ms cubic-bezier(0.2, 0, 0, 1);
       }
       .unit {
         font-size: var(--md-sys-typescale-title-large-size, 22px);
@@ -584,8 +623,8 @@ export class MtCircularDial extends LitElement {
         cursor: pointer;
         pointer-events: auto;
         transition:
-          background-color 180ms cubic-bezier(0.2, 0, 0, 1),
-          transform 120ms cubic-bezier(0.2, 0, 0, 1);
+          background-color 180ms var(--mt-motion-ease),
+          transform 120ms var(--mt-motion-ease);
         -webkit-tap-highlight-color: transparent;
       }
       .step ha-icon {

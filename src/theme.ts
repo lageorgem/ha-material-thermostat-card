@@ -48,6 +48,10 @@ export const tokens = css`
     /* State layer opacities per M3 spec. */
     --mt-state-hover: 0.08;
     --mt-state-pressed: 0.12;
+
+    /* Motion — prefer Material You theme motion tokens, fall back to M3 defaults. */
+    --mt-motion-dur: var(--md-sys-motion-duration-medium2, 280ms);
+    --mt-motion-ease: var(--md-sys-motion-easing-emphasized, cubic-bezier(0.2, 0, 0, 1));
   }
 `;
 

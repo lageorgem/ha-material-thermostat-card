@@ -1,6 +1,6 @@
 {
   "name": "material-thermostat-card",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A Material 3 Expressive thermostat card for Home Assistant, with customizable selectors and Nest/Google Home inspired UI.",
   "type": "module",
   "main": "dist/material-thermostat-card.js",
