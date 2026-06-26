@@ -4,6 +4,7 @@ import type { HomeAssistant } from 'custom-card-helpers';
 import type { InputSelectFeatureConfig, OptionOverride } from '../types';
 import { prettyLabel } from '../theme';
 import './display-toggle';
+import './width-field';
 
 /**
  * Editor for the `input_select` feature: entity picker, optional row label,
@@ -87,6 +88,11 @@ export class MtInputSelectEditor extends LitElement {
             @value-changed=${(e: CustomEvent) => this._emit({ display: e.detail.value })}
           ></mt-display-toggle>
         </div>
+
+        <mt-width-field
+          .value=${this.feature.width}
+          @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
+        ></mt-width-field>
 
         ${values.length === 0
           ? html`<p class="hint">Pick an input_select entity to customize its options.</p>`

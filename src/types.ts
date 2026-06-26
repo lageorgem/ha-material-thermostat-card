@@ -34,6 +34,8 @@ export interface EntityItem {
 
 interface BaseSelectorFeature {
   display?: FeatureDisplay;
+  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  width?: number;
 }
 
 export interface ClimateModesFeatureConfig extends BaseSelectorFeature {
@@ -68,12 +70,16 @@ export interface SwitchListFeatureConfig {
   type: 'switch-list';
   label?: string;
   entities: EntityItem[];
+  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  width?: number;
 }
 
 export interface ButtonListFeatureConfig {
   type: 'button-list';
   label?: string;
   items: EntityItem[];
+  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  width?: number;
 }
 
 export interface EntityTileFeatureConfig {
@@ -84,7 +90,7 @@ export interface EntityTileFeatureConfig {
   tap_action?: ActionConfig;
   /** Compact variant: icon + value only (no title), for fitting many per row. */
   compact?: boolean;
-  /** Maximum width in px so multiple tiles can share a row. */
+  /** Width in internal grid units (1 unit = 1 icon). Unset = a sensible default. */
   width?: number;
 }
 

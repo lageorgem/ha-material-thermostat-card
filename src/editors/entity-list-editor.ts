@@ -3,6 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { EntityItem, FeatureConfig } from '../types';
 import './display-toggle';
+import './width-field';
 
 /**
  * Shared editor for features backed by a list of entities: switch group,
@@ -93,6 +94,11 @@ export class MtEntityListEditor extends LitElement {
               ></mt-display-toggle>
             </div>`
           : nothing}
+
+        <mt-width-field
+          .value=${(this.feature as { width?: number }).width}
+          @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
+        ></mt-width-field>
 
         <div class="items">
           ${this._items.map(

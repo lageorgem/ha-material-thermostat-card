@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import { prettyLabel } from '../theme';
 import './display-toggle';
+import './width-field';
 
 type ClimateFeature =
   | ClimateModesFeatureConfig
@@ -90,6 +91,11 @@ export class MtClimateFeatureEditor extends LitElement {
             @value-changed=${(e: CustomEvent) => this._emit({ display: e.detail.value })}
           ></mt-display-toggle>
         </div>
+
+        <mt-width-field
+          .value=${this.feature.width}
+          @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
+        ></mt-width-field>
 
         ${values.length === 0
           ? html`<p class="hint">

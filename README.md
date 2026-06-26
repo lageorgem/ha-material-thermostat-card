@@ -153,13 +153,15 @@ features:
     entity: sensor.living_humidity
     icon: mdi:water-percent
     compact: true
-    width: 80
+    width: 2 # internal grid units (1 unit = one icon)
 ```
 
-`switch-group`, `switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The
-entity tile accepts `name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for
-switches, press for buttons, more-info otherwise), plus `compact: true` (icon + value only, no
-title) and `width` (max width in px) so multiple tiles share a row.
+**Width** — every feature accepts an optional `width` in **internal grid units** (1 unit = one
+icon ≈ 2 sections-grid units). Set it to fit several features on one row; leave it unset for a full
+row (selectors/lists) or a sensible default (tiles). `switch-group`, `switch-list`, and
+`button-list` items accept `{ entity, label?, icon? }`. The entity tile additionally accepts
+`name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for switches, press for
+buttons, more-info otherwise), and `compact: true` (icon + value only, no title).
 
 ## Responsiveness
 

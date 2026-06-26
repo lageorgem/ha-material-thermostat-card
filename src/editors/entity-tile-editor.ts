@@ -15,7 +15,7 @@ const SCHEMA: FormSchemaItem[] = [
   { name: 'compact', selector: { boolean: {} } },
   {
     name: 'width',
-    selector: { number: { min: 60, max: 400, step: 10, mode: 'slider', unit_of_measurement: 'px' } },
+    selector: { number: { min: 1, max: 18, step: 1, mode: 'slider' } },
   },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
@@ -56,7 +56,7 @@ export class MtEntityTileEditor extends LitElement {
       case 'compact':
         return 'Compact (icon + value only)';
       case 'width':
-        return 'Max width';
+        return 'Width (grid units, 1 = one icon)';
       case 'tap_action':
         return 'Tap action';
       default:

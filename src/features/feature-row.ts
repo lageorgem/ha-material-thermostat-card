@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues, type TemplateResul
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureConfig } from '../types';
+import { unitsToPx, TILE_DEFAULT_UNITS, TILE_COMPACT_UNITS } from '../grid';
 import './climate-selector';
 import './input-select';
 import './switch-group';
@@ -20,17 +21,28 @@ export class MtFeatureRow extends LitElement {
   @property({ attribute: false }) feature!: FeatureConfig;
 
   /**
-   * Size the host as a flex item in the card's wrapping feature area: entity
-   * tiles take a bounded width (so several share a row), everything else takes
-   * a full row.
+   * Size the host as a flex item in the card's wrapping feature area. Widths are
+   * expressed in internal grid units (1 unit = 1 icon), never pixels:
+   *  - an explicit `width` (units) → the host is exactly that many units wide,
+   *    so several features can share a row;
+   *  - an entity tile with no width → a sensible default (compact packs tighter,
+   *    a normal tile grows to fill the row);
+   *  - any other feature with no width → a full row.
    * @param changed changed properties
    */
   protected willUpdate(changed: PropertyValues): void {
     if (!changed.has('feature') || !this.feature) return;
     const f = this.feature as FeatureConfig & { compact?: boolean; width?: number };
-    if (f.type === 'entity-tile') {
-      this.style.flex = `1 1 ${f.compact ? '76px' : '150px'}`;
-      this.style.maxWidth = f.width ? `${f.width}px` : f.compact ? '120px' : 'none';
+    const units = typeof f.width === 'number' && f.width > 0 ? f.width : undefined;
+    if (units) {
+      const px = unitsToPx(units);
+      this.style.flex = `1 1 ${px}px`;
+      this.style.maxWidth = `${px}px`;
+    } else if (f.type === 'entity-tile') {
+      const basis = unitsToPx(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
+      this.style.flex = `1 1 ${basis}px`;
+      // Compact tiles stay small (pack many per row); normal tiles grow to fill.
+      this.style.maxWidth = f.compact ? `${basis}px` : 'none';
     } else {
       this.style.flex = '1 1 100%';
       this.style.maxWidth = 'none';

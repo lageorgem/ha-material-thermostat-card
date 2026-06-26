@@ -9,6 +9,17 @@ import {
 } from 'custom-card-helpers';
 import { styleMap, type StyleInfo } from 'lit/directives/style-map.js';
 import { CARD_TYPE, EDITOR_TYPE, CARD_NAME, CARD_DESCRIPTION, CARD_VERSION } from './const';
+import {
+  SECTION_UNIT_PX,
+  INTERNAL_UNIT_PX,
+  MAX_INTERNAL_UNITS,
+  DIAL_INTERNAL_UNITS,
+  SIDE_BY_SIDE_MIN_UNITS,
+  DROPDOWN_UNITS,
+  TILE_UNITS,
+  CARD_PADDING_X,
+  unitsToPx,
+} from './grid';
 import { tokens, climateModeColor, prettyLabel } from './theme';
 import type { FeatureConfig, MaterialThermostatCardConfig, OptionOverride } from './types';
 import './dial/circular-dial';
@@ -31,24 +42,6 @@ console.info(
 });
 
 const SERVICE_DEBOUNCE_MS = 600;
-
-/*
- * Internal grid system.
- *
- * The card lays its content out on an internal grid whose unit is one icon.
- * Per the Home Assistant sections grid (48 units full width):
- *   1 internal unit  =  1 icon  =  2 sections-grid units  (~48px)
- * A half-width card (24 sections-grid units) is therefore 12 internal units —
- * 6 for the circular controls and 6 for a 6-icon list. The wide format spans up
- * to 36 sections-grid units → 18 internal units, hence the cap.
- */
-const SECTION_UNIT_PX = 24; // ~1 sections-grid unit
-const INTERNAL_UNIT_PX = SECTION_UNIT_PX * 2; // 48px — 1 internal unit = 1 icon
-const MAX_INTERNAL_UNITS = 18; // cap (36 sections-grid units, wide format)
-const DIAL_INTERNAL_UNITS = 6; // circular controls = 12 sections-grid units
-const SIDE_BY_SIDE_MIN_UNITS = 12; // ≥ 50% of the grid → controls beside features
-const DROPDOWN_UNITS = 4; // a dropdown row is icon-less; give it a sane width
-const TILE_UNITS = 6; // entity tiles wrap; give their area a sane width
 
 @customElement(CARD_TYPE)
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
@@ -150,28 +143,24 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * Observe the card's inner width so the internal grid can recompute on resize.
-   * Idempotent — safe to call again after a disconnect/reconnect.
+   * Observe the card's width so the internal grid can recompute on resize.
+   * We observe the host (which always exists), not the inner `ha-card` (absent
+   * until both hass and config are set) — the inner content width is the host
+   * width minus the card padding. Idempotent across disconnect/reconnect.
    */
   private _observeWidth(): void {
     if (this._resizeObserver || typeof ResizeObserver === 'undefined') return;
-    const card = this.shadowRoot?.querySelector('ha-card');
-    if (!card) return;
     this._resizeObserver = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (Math.abs(w - this._widthPx) >= 1) this._widthPx = w;
+      const outer = entries[0]?.contentRect.width ?? 0;
+      const inner = Math.max(0, outer - CARD_PADDING_X);
+      if (Math.abs(inner - this._widthPx) >= 1) this._widthPx = inner;
     });
-    this._resizeObserver.observe(card);
-  }
-
-  protected firstUpdated(): void {
-    this._observeWidth();
+    this._resizeObserver.observe(this);
   }
 
   connectedCallback(): void {
     super.connectedCallback();
-    // Re-establish the observer if the card was detached and re-attached.
-    if (this.hasUpdated) this._observeWidth();
+    this._observeWidth();
   }
 
   /**
@@ -192,6 +181,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param f the feature config
    */
   private _featureUnits(f: FeatureConfig): number {
+    // An explicit width (in internal units) wins over the icon-count estimate.
+    if ('width' in f && typeof f.width === 'number' && f.width > 0) return f.width;
     const a = this._stateObj?.attributes;
     switch (f.type) {
       case 'climate-hvac-modes':
@@ -258,8 +249,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const padPx = (dialUnits - DIAL_INTERNAL_UNITS) * SECTION_UNIT_PX;
     return {
       wide: true,
-      dialStyle: { flex: `0 0 ${dialUnits * INTERNAL_UNIT_PX}px`, paddingInline: `${padPx}px` },
-      featureStyle: { flex: `0 0 ${featureUnits * INTERNAL_UNIT_PX}px` },
+      dialStyle: { flex: `0 0 ${unitsToPx(dialUnits)}px`, paddingInline: `${padPx}px` },
+      featureStyle: { flex: `0 0 ${unitsToPx(featureUnits)}px` },
     };
   }
 
@@ -415,6 +406,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   static styles = [
     tokens,
     css`
+      :host {
+        display: block;
+      }
       ha-card {
         padding: 12px 16px 20px;
         border-radius: var(--mt-shape-card);
