@@ -41,6 +41,27 @@ function capsule(x1, y1, x2, y2, w) {
   );
 }
 
+/** A bar with independently round or flat (butt) ends — for sharp L-corners. */
+function bar(x1, y1, x2, y2, w, roundStart, roundEnd) {
+  const r = w / 2;
+  let ux = x2 - x1;
+  let uy = y2 - y1;
+  const len = Math.hypot(ux, uy) || 1;
+  ux /= len;
+  uy /= len;
+  const nx = -uy;
+  const ny = ux;
+  const A = [x1 + nx * r, y1 + ny * r];
+  const B = [x2 + nx * r, y2 + ny * r];
+  const C = [x2 - nx * r, y2 - ny * r];
+  const E = [x1 - nx * r, y1 - ny * r];
+  let d = `M${f(A[0])} ${f(A[1])}L${f(B[0])} ${f(B[1])}`;
+  d += roundEnd ? `A${f(r)} ${f(r)} 0 0 0 ${f(C[0])} ${f(C[1])}` : `L${f(C[0])} ${f(C[1])}`;
+  d += `L${f(E[0])} ${f(E[1])}`;
+  d += roundStart ? `A${f(r)} ${f(r)} 0 0 0 ${f(A[0])} ${f(A[1])}` : `L${f(A[0])} ${f(A[1])}`;
+  return d + 'Z';
+}
+
 /** Annular sector (cone wedge): radii r0<r1, angles a0<a1 (deg, screen). */
 function wedge(cx, cy, r0, r1, a0, a1) {
   const [c0, s0] = dir(a0);
@@ -72,7 +93,10 @@ function vConeAngles(k) {
   return [s, s + V.wedgeW];
 }
 function vCorner() {
-  return capsule(3.7, 3.3, 3.7, 20.9, 1.8) + capsule(3.3, 3.3, 20.2, 3.3, 1.8);
+  // Flat ends meet at the corner (sharp right angle); round caps on the free
+  // ends. The flat top (y 2.4) aligns with the horizontal bar's top edge, and
+  // the flat left (x 2.8) aligns with the vertical bar's left edge.
+  return bar(3.7, 2.4, 3.7, 20.9, 1.8, false, true) + bar(2.8, 3.3, 20.2, 3.3, 1.8, false, true);
 }
 /**
  * Oscillation double-arrow that only spans the swept cones [kmin..kmax], set at
@@ -116,8 +140,8 @@ function vertical(selected, arrow) {
 const H = {
   topY: 9,
   botY: 19.2,
-  topX: [7, 9.5, 12, 14.5, 17],
-  botX: [5, 8.5, 12, 15.5, 19],
+  topX: [6.4, 9.2, 12, 14.8, 17.6],
+  botX: [4.4, 8.2, 12, 15.8, 19.6],
 };
 /** Parallelogram slat: top edge at topY (centre txc), bottom edge at botY (centre bxc). */
 function slat(txc, bxc, hw) {
@@ -130,8 +154,8 @@ function horizontal(selected) {
   let primary = capsule(3, 6.6, 21, 6.6, 2);
   let secondary = '';
   for (let k = 0; k < 5; k++) {
-    if (selected.includes(k)) primary += slat(H.topX[k], H.botX[k], 1.25);
-    else secondary += slat(H.topX[k], H.botX[k], 0.85);
+    if (selected.includes(k)) primary += slat(H.topX[k], H.botX[k], 0.9);
+    else secondary += slat(H.topX[k], H.botX[k], 0.72);
   }
   return { path: primary, secondary };
 }
