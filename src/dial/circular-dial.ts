@@ -27,7 +27,6 @@ const RADIUS = 130; // ring / marker-dot radius
 const ARC_START = 225; // degrees, clockwise from top — bottom-left (= min)
 const SWEEP = 270; // total degrees the range spans
 const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 135 — bottom-right (= max)
-const DRAG_THRESHOLD = 5; // px of movement before a press becomes a drag
 const OVERLAP_DEG = 18; // angular gap under which setpoint icon + current temp merge
 
 /**
@@ -84,10 +83,6 @@ export class MtCircularDial extends LitElement {
   @state() private _dragLow = 0;
   @state() private _dragHigh = 0;
   @state() private _activeHandle: 'low' | 'high' | null = null;
-
-  private _grab = false;
-  private _startX = 0;
-  private _startY = 0;
 
   @query('svg') private _svg!: SVGSVGElement;
 
@@ -187,18 +182,15 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
-   * Begin a press on the ring. Stays in "tap" mode (animated) until the pointer
-   * moves past a threshold, at which point it becomes a 1:1 drag.
+   * Begin a press on the ring. The markers animate toward the pointer (the
+   * same easing as +/- and taps), giving a smooth follow during a drag.
    * @param e pointer event
    */
   private _onPointerDown = (e: PointerEvent): void => {
     if (this.disabled || !this._isRingHit(e.clientX, e.clientY)) return;
     e.preventDefault();
     this._svg.setPointerCapture(e.pointerId);
-    this._grab = true;
-    this._dragging = false;
-    this._startX = e.clientX;
-    this._startY = e.clientY;
+    this._dragging = true;
     const v = this._valueFromPoint(e.clientX, e.clientY);
     if (this.dual) {
       this._dragLow = this._displayLow;
@@ -210,14 +202,11 @@ export class MtCircularDial extends LitElement {
   };
 
   /**
-   * Update the value while pressed; promote to a drag once moved.
+   * Update the value while pressed.
    * @param e pointer event
    */
   private _onPointerMove = (e: PointerEvent): void => {
-    if (!this._grab) return;
-    if (!this._dragging && Math.hypot(e.clientX - this._startX, e.clientY - this._startY) > DRAG_THRESHOLD) {
-      this._dragging = true;
-    }
+    if (!this._dragging) return;
     this._emitFromValue(this._valueFromPoint(e.clientX, e.clientY));
   };
 
@@ -226,9 +215,8 @@ export class MtCircularDial extends LitElement {
    * @param e pointer event
    */
   private _onPointerUp = (e: PointerEvent): void => {
-    if (!this._grab) return;
+    if (!this._dragging) return;
     this._svg.releasePointerCapture(e.pointerId);
-    this._grab = false;
     this._dragging = false;
     if (this.dual) {
       this._emit('value-changed', { low: this._dragLow, high: this._dragHigh });
@@ -349,7 +337,7 @@ export class MtCircularDial extends LitElement {
 
     return html`
       <div
-        class=${classMap({ dial: true, off: isOff, disabled: this.disabled, dragging: this._dragging })}
+        class=${classMap({ dial: true, off: isOff, disabled: this.disabled })}
         style=${`--dial-color: ${color}`}
       >
         <svg
@@ -408,7 +396,10 @@ export class MtCircularDial extends LitElement {
                 ${overlap
                   ? this._labelOrbit(
                       curAngle,
-                      html`<span class="combined">${modeIconEl}${currentLabel}</span>`
+                      html`<span class="num current with-icon"
+                        ><ha-icon class="mode-icon inline" icon=${modeIcon}></ha-icon
+                        >${this._fmtCompact(this.current!)}°</span
+                      >`
                     )
                   : html`
                       ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl)}
@@ -538,9 +529,6 @@ export class MtCircularDial extends LitElement {
       .dial.off .glow {
         opacity: 0.5;
       }
-      .dial.dragging .value {
-        transition: opacity var(--mt-motion-dur) var(--mt-motion-ease);
-      }
 
       /* Markers orbit the center so they ride the arc and stay on the ring. */
       .markers {
@@ -577,27 +565,31 @@ export class MtCircularDial extends LitElement {
         top: 18.75%; /* (160-100)/320 — just inside the ring */
         transition: transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
-      .dial.dragging .orbit,
-      .dial.dragging .o-label {
-        transition: none;
-      }
       .o-label .num {
         font-size: var(--md-sys-typescale-title-medium-size, 16px);
         font-weight: 500;
+        line-height: 1;
         color: var(--mt-on-surface);
         white-space: nowrap;
       }
       .o-label .num.current {
         color: var(--mt-on-surface-variant);
       }
-      .o-label .combined {
-        display: flex;
-        align-items: center;
-        gap: 3px;
+      /* Merged marker: temperature stays anchored at its angle; the mode icon
+         hangs to its left, vertically centered. */
+      .o-label .num.with-icon {
+        position: relative;
       }
       .mode-icon {
         --mdc-icon-size: 20px;
         color: var(--dial-color);
+      }
+      .mode-icon.inline {
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-right: 4px;
       }
 
       .center {
