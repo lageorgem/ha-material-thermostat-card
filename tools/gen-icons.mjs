@@ -33,10 +33,11 @@ function capsule(x1, y1, x2, y2, w) {
   uy /= len;
   const nx = -uy;
   const ny = ux;
+  // sweep flag 0 → caps bulge OUTWARD (a clean pill); flag 1 dents them inward.
   return (
     `M${f(x1 + nx * r)} ${f(y1 + ny * r)}L${f(x2 + nx * r)} ${f(y2 + ny * r)}` +
-    `A${f(r)} ${f(r)} 0 0 1 ${f(x2 - nx * r)} ${f(y2 - ny * r)}` +
-    `L${f(x1 - nx * r)} ${f(y1 - ny * r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 + nx * r)} ${f(y1 + ny * r)}Z`
+    `A${f(r)} ${f(r)} 0 0 0 ${f(x2 - nx * r)} ${f(y2 - ny * r)}` +
+    `L${f(x1 - nx * r)} ${f(y1 - ny * r)}A${f(r)} ${f(r)} 0 0 0 ${f(x1 + nx * r)} ${f(y1 + ny * r)}Z`
   );
 }
 
@@ -64,7 +65,7 @@ function head(tx, ty, dirDeg, L, hw) {
 }
 
 // ----- vertical: corner + 5 cone wedges (index 0 = top .. 4 = bottom) -----
-const V = { O: [4.6, 4.6], r0: 4.3, r1: 13.4, a0: -2, span: 90, gap: 4.6, N: 5 };
+const V = { O: [4.6, 4.6], r0: 4.3, r1: 12.6, a0: -2, span: 90, gap: 4.6, N: 5 };
 V.wedgeW = (V.span - V.gap * (V.N - 1)) / V.N;
 function vConeAngles(k) {
   const s = V.a0 + k * (V.wedgeW + V.gap);
@@ -73,16 +74,26 @@ function vConeAngles(k) {
 function vCorner() {
   return capsule(3.7, 3.3, 3.7, 20.9, 1.8) + capsule(3.3, 3.3, 20.2, 3.3, 1.8);
 }
-function vArrow() {
+/**
+ * Oscillation double-arrow that only spans the swept cones [kmin..kmax], set at
+ * a radius clear of the cone fan (and inset from the ends so the heads don't
+ * touch the corner frame).
+ */
+function vArrow(kmin, kmax) {
   const [cx, cy] = V.O;
-  const R = 15.4;
-  const a0 = 24;
-  const a1 = 96;
-  let d = wedge(cx, cy, R - 0.85, R + 0.85, a0, a1);
+  const R = 15.3;
+  const hl = 2.6;
+  const hw = 2.2;
+  // Span the swept range, but clamp the ends so the heads clear the top bar
+  // (>= 15°) and the left bar (<= 76°).
+  const a0 = Math.max(vConeAngles(kmin)[0] + 3, 15);
+  const a1 = Math.min(vConeAngles(kmax)[1] - 3, 76);
+  let d = wedge(cx, cy, R - 0.8, R + 0.8, a0, a1);
   const p0 = [cx + R * Math.cos(a0 * D), cy + R * Math.sin(a0 * D)];
   const p1 = [cx + R * Math.cos(a1 * D), cy + R * Math.sin(a1 * D)];
-  d += head(p0[0] + Math.sin(a0 * D) * 3.3, p0[1] - Math.cos(a0 * D) * 3.3, a0 - 90, 3.4, 2.7);
-  d += head(p1[0] - Math.sin(a1 * D) * 3.3, p1[1] + Math.cos(a1 * D) * 3.3, a1 + 90, 3.4, 2.7);
+  // start head continues "up" (decreasing-angle tangent); end head continues "down"
+  d += head(p0[0] + Math.cos((a0 - 90) * D) * hl, p0[1] + Math.sin((a0 - 90) * D) * hl, a0 - 90, hl, hw);
+  d += head(p1[0] + Math.cos((a1 + 90) * D) * hl, p1[1] + Math.sin((a1 + 90) * D) * hl, a1 + 90, hl, hw);
   return d;
 }
 function vertical(selected, arrow) {
@@ -94,26 +105,33 @@ function vertical(selected, arrow) {
     if (selected.includes(k)) primary += slice;
     else secondary += slice;
   }
-  if (arrow) primary += vArrow();
+  if (arrow) primary += vArrow(Math.min(...selected), Math.max(...selected));
   return { path: primary, secondary };
 }
 
-// ----- horizontal: vent bar + 5 fanned rays (index 0 = left .. 4 = right) -----
+// ----- horizontal: vent bar + 5 perspective slats (index 0 = left .. 4 = right) -----
+// Each slat is a parallelogram with flat horizontal top/bottom edges, slanted to
+// fan symmetrically (left tilts left, centre vertical, right tilts right) so the
+// row reads as louvres viewed at an angle (3D depth).
 const H = {
-  topY: 8.9,
-  botY: 19,
-  topX: [7.2, 9.6, 12, 14.4, 16.8],
-  botX: [4.6, 8.3, 12, 15.7, 19.4],
+  topY: 9,
+  botY: 19.2,
+  topX: [7, 9.5, 12, 14.5, 17],
+  botX: [5, 8.5, 12, 15.5, 19],
 };
+/** Parallelogram slat: top edge at topY (centre txc), bottom edge at botY (centre bxc). */
+function slat(txc, bxc, hw) {
+  return (
+    `M${f(txc - hw)} ${f(H.topY)}L${f(txc + hw)} ${f(H.topY)}` +
+    `L${f(bxc + hw)} ${f(H.botY)}L${f(bxc - hw)} ${f(H.botY)}Z`
+  );
+}
 function horizontal(selected) {
   let primary = capsule(3, 6.6, 21, 6.6, 2);
   let secondary = '';
   for (let k = 0; k < 5; k++) {
-    if (selected.includes(k)) {
-      primary += capsule(H.topX[k], H.topY, H.botX[k], H.botY, 2.4);
-    } else {
-      secondary += capsule(H.topX[k], H.topY, H.botX[k], H.botY, 1.6);
-    }
+    if (selected.includes(k)) primary += slat(H.topX[k], H.botX[k], 1.25);
+    else secondary += slat(H.topX[k], H.botX[k], 0.85);
   }
   return { path: primary, secondary };
 }
