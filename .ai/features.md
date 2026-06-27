@@ -91,3 +91,14 @@ document-level `mt-dropdown-open` event.
   [`gotchas.md`](gotchas.md).
 - Sub-editors always pass `.hass` down (the `ha-form` number/entity selectors
   need it to render).
+- **Width control** is `mt-width-field`, which renders **`mt-grid-slider`**
+  (`editors/grid-slider.ts`) — a self-contained port of HA's internal
+  `ha-grid-layout-slider` (dotted track + bar handle + floating value tooltip),
+  using native Pointer Events (no hammerjs). We re-implemented it rather than use
+  HA's element because `ha-grid-layout-slider` lives in HA's lazily-loaded card
+  layout-editor modules and isn't reliably registered inside a custom card editor
+  (the recurring "HA components are inert in a custom editor" trap). Source
+  reference: `home-assistant/frontend` →
+  `src/panels/lovelace/editor/card-editor/ha-grid-layout-slider.ts`. The field
+  has a **reset** button to clear width back to auto (unset); when unset the
+  slider shows no handle (tap the track to set one).
