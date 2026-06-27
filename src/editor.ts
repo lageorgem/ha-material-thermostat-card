@@ -33,6 +33,13 @@ const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
   { type: 'entity-tile', label: 'Entity tile' },
 ];
 
+/** The climate selector types and the entity attribute that exposes each. */
+const CLIMATE_FEATURE_ATTR: Partial<Record<FeatureType, string>> = {
+  'climate-hvac-modes': 'hvac_modes',
+  'climate-fan-modes': 'fan_modes',
+  'climate-swing-modes': 'swing_modes',
+};
+
 /**
  * Build a sensible default config for a newly added feature.
  * @param type the feature type
@@ -146,6 +153,22 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   }
 
   /**
+   * The feature types offered in the "Add feature" menu: climate selectors only
+   * when the entity actually exposes them and they aren't already added (each is
+   * unique); custom features (input_select, switch/button lists, tiles) are
+   * always available and repeatable.
+   */
+  private _addableFeatures(): { type: FeatureType; label: string }[] {
+    const attrs = this.hass?.states?.[this._config.entity]?.attributes ?? {};
+    const existing = new Set(this._features.map((f) => f.type));
+    return ADDABLE_FEATURES.filter(({ type }) => {
+      const attr = CLIMATE_FEATURE_ATTR[type];
+      if (!attr) return true; // custom feature → always addable, repeatable
+      return !existing.has(type) && Array.isArray(attrs[attr]) && attrs[attr].length > 0;
+    });
+  }
+
+  /**
    * Persist a new features array.
    * @param features the updated features
    */
@@ -232,7 +255,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           </button>
           ${this._addOpen
             ? html`<div class="add-menu">
-                ${ADDABLE_FEATURES.map(
+                ${this._addableFeatures().map(
                   (f) => html`<button class="add-opt" @click=${() => this._pickFeature(f.type)}>
                     ${f.label}
                   </button>`

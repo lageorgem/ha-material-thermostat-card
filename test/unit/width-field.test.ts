@@ -45,14 +45,27 @@ describe('mt-width-field', () => {
   });
 
   describe('value unset', () => {
-    it('reset disabled, full-width hint shown, slider tooltip-mode "interaction"', async () => {
+    it('reset disabled, default-width hint shown, slider shows the default at 100', async () => {
       const hass = makeHass({});
       const el = await fixture<MtWidthField>(html`<mt-width-field .hass=${hass}></mt-width-field>`);
       expect(resetBtn(el).disabled).to.be.true;
       const hint = el.shadowRoot!.querySelector('.hint');
       expect(hint).to.not.equal(null);
-      expect(hint!.textContent).to.contain('Full width — tap the track to set a percentage.');
-      expect(slider(el).getAttribute('tooltip-mode')).to.equal('interaction');
+      expect(hint!.textContent).to.contain('Default');
+      expect(hint!.textContent).to.contain('full width');
+      const s = slider(el);
+      // the handle shows the default (100%, full) so the default doesn't read as 10%
+      expect((s as any).value).to.equal(100);
+      expect(s.getAttribute('tooltip-mode')).to.equal('always');
+    });
+
+    it('uses the configured `default` for the hint and handle (e.g. tiles at 50)', async () => {
+      const hass = makeHass({});
+      const el = await fixture<MtWidthField>(
+        html`<mt-width-field .hass=${hass} .default=${50}></mt-width-field>`
+      );
+      expect((slider(el) as any).value).to.equal(50);
+      expect(el.shadowRoot!.querySelector('.hint')!.textContent).to.contain('50%');
     });
   });
 

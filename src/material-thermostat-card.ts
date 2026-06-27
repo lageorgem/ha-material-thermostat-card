@@ -43,6 +43,12 @@ console.info(
   description: CARD_DESCRIPTION,
   preview: true,
   documentationURL: 'https://github.com/lageorgem/ha-material-thermostat-card',
+  // Suggest this card for climate entities in the "Suggested cards" picker
+  // (Home Assistant 2026.6+; ignored on older versions).
+  getEntitySuggestion: (_hass: HomeAssistant, entityId: string) =>
+    entityId.split('.')[0] === 'climate'
+      ? { config: { type: `custom:${CARD_TYPE}`, entity: entityId } }
+      : null,
 });
 
 const SERVICE_DEBOUNCE_MS = 600;

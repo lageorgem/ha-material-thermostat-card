@@ -1,7 +1,9 @@
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { EntityTileFeatureConfig } from '../types';
+import { TILE_DEFAULT_PCT } from '../grid';
+import './width-field';
 
 interface FormSchemaItem {
   name: string;
@@ -13,17 +15,12 @@ const SCHEMA: FormSchemaItem[] = [
   { name: 'name', selector: { text: {} } },
   { name: 'icon', selector: { icon: {} } },
   { name: 'compact', selector: { boolean: {} } },
-  {
-    name: 'width',
-    selector: { number: { min: 10, max: 100, step: 10, mode: 'slider' } },
-  },
   { name: 'tap_action', selector: { ui_action: {} } },
 ];
 
 /**
- * Editor for the entity-tile feature: entity, name, icon, and tap action,
- * rendered with a single `ha-form` (using HA's built-in icon and action
- * selectors).
+ * Editor for the entity-tile feature: entity, name, icon, tap action (via a
+ * single `ha-form`), plus the shared width slider (`mt-width-field`).
  */
 @customElement('mt-entity-tile-editor')
 export class MtEntityTileEditor extends LitElement {
@@ -36,7 +33,6 @@ export class MtEntityTileEditor extends LitElement {
       name: this.feature.name,
       icon: this.feature.icon,
       compact: this.feature.compact ?? false,
-      width: this.feature.width,
       tap_action: this.feature.tap_action,
     };
   }
@@ -55,8 +51,6 @@ export class MtEntityTileEditor extends LitElement {
         return 'Icon (optional)';
       case 'compact':
         return 'Compact (icon + value only)';
-      case 'width':
-        return 'Width (% of card)';
       case 'tap_action':
         return 'Tap action';
       default:
@@ -65,39 +59,59 @@ export class MtEntityTileEditor extends LitElement {
   };
 
   /**
-   * Merge form changes into the feature config.
-   * @param e ha-form's value-changed event
+   * Emit a patched feature config.
+   * @param patch fields to merge
    */
-  private _changed(e: CustomEvent): void {
-    const d = e.detail.value;
+  private _emit(patch: Partial<EntityTileFeatureConfig>): void {
     this.dispatchEvent(
       new CustomEvent('feature-changed', {
-        detail: {
-          feature: {
-            type: 'entity-tile',
-            entity: d.entity,
-            name: d.name || undefined,
-            icon: d.icon || undefined,
-            compact: d.compact || undefined,
-            width: d.width || undefined,
-            tap_action: d.tap_action || undefined,
-          } as EntityTileFeatureConfig,
-        },
+        detail: { feature: { ...this.feature, ...patch } },
         bubbles: true,
         composed: true,
       })
     );
   }
 
-  protected render(): TemplateResult {
-    return html`<ha-form
-      .hass=${this.hass}
-      .data=${this._data}
-      .schema=${SCHEMA}
-      .computeLabel=${this._computeLabel}
-      @value-changed=${this._changed}
-    ></ha-form>`;
+  /**
+   * Merge form changes into the feature config.
+   * @param e ha-form's value-changed event
+   */
+  private _changed(e: CustomEvent): void {
+    const d = e.detail.value;
+    this._emit({
+      entity: d.entity,
+      name: d.name || undefined,
+      icon: d.icon || undefined,
+      compact: d.compact || undefined,
+      tap_action: d.tap_action || undefined,
+    });
   }
+
+  protected render(): TemplateResult {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._data}
+        .schema=${SCHEMA}
+        .computeLabel=${this._computeLabel}
+        @value-changed=${this._changed}
+      ></ha-form>
+      <mt-width-field
+        .hass=${this.hass}
+        .value=${this.feature.width}
+        .default=${TILE_DEFAULT_PCT}
+        @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
+      ></mt-width-field>
+    `;
+  }
+
+  static styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+  `;
 }
 
 declare global {

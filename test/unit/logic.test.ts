@@ -5,6 +5,7 @@ import {
   fanIcon,
   swingIcon,
   prettyLabel,
+  orderValues,
 } from '../../src/theme';
 import {
   WIDTH_STEP,
@@ -157,6 +158,29 @@ describe('theme', () => {
     it('single word capitalization', () => {
       expect(prettyLabel('cool')).to.equal('Cool');
       expect(prettyLabel('auto')).to.equal('Auto');
+    });
+  });
+
+  describe('orderValues', () => {
+    it('returns the list unchanged when no order is given', () => {
+      const all = ['a', 'b', 'c'];
+      expect(orderValues(all)).to.deep.equal(['a', 'b', 'c']);
+      // same array reference (early return)
+      expect(orderValues(all)).to.equal(all);
+    });
+
+    it('returns the list unchanged for an empty order', () => {
+      const all = ['a', 'b', 'c'];
+      expect(orderValues(all, [])).to.deep.equal(['a', 'b', 'c']);
+      expect(orderValues(all, [])).to.equal(all);
+    });
+
+    it('moves listed values to the front (in order), rest in natural order', () => {
+      expect(orderValues(['a', 'b', 'c', 'd'], ['c', 'a'])).to.deep.equal(['c', 'a', 'b', 'd']);
+    });
+
+    it('ignores order values not present in the list', () => {
+      expect(orderValues(['a', 'b'], ['x', 'b'])).to.deep.equal(['b', 'a']);
     });
   });
 });

@@ -2,7 +2,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureDisplay, OptionOverride, SelectorItem } from '../types';
-import { HVAC_MODE_ICONS, fanIcon, swingIcon, prettyLabel } from '../theme';
+import { HVAC_MODE_ICONS, fanIcon, swingIcon, prettyLabel, orderValues } from '../theme';
 import './selector-row';
 
 export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing';
@@ -19,6 +19,8 @@ export class MtClimateSelector extends LitElement {
   @property() kind: ClimateSelectorKind = 'hvac';
   @property() display: FeatureDisplay = 'icons';
   @property({ attribute: false }) options?: OptionOverride[];
+  /** Explicit display order of option values (unlisted values follow naturally). */
+  @property({ attribute: false }) order?: string[];
 
   /** The backing climate state object, if present. */
   private get _stateObj() {
@@ -60,7 +62,7 @@ export class MtClimateSelector extends LitElement {
       defaultIcon = (v) => swingIcon(v);
     }
 
-    return values
+    return orderValues(values, this.order)
       .filter((v) => !overrides.get(v)?.hide)
       .map((v) => ({
         value: v,

@@ -50,8 +50,9 @@ gracefully under any Home Assistant theme.
 - 🌡️ Current‑temperature marker, with an optional **"show current as primary"** big number.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
 - 🧩 Climate **HVAC / fan / swing** selectors as an **icon row** or **dropdown**.
-- ✏️ Per‑option **label / icon / hide** overrides — from the visual editor.
+- ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from the visual editor.
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**.
+- 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
 - 📐 **Percentage widths** that fill and wrap correctly at any card size, with a side‑by‑side wide mode.
 - 🌬️ A bundled **`mt:` AC swing icon set**, searchable in the icon picker.
 - 🎨 **Material 3** tokens with graceful Home Assistant theme fallbacks.
@@ -350,7 +351,9 @@ so it looks native under `material-you-theme` and remains usable under any theme
 Every option above is editable from the card's **visual editor**: a base form (entity, name, theme,
 "show current as primary") plus a **drag‑sortable list of features**. Each feature row expands to its
 own editor — per‑option label/icon/hide for selectors, entity pickers for lists, a `width` slider,
-and an icons/dropdown toggle — and an **"Add feature"** menu inserts new rows.
+and an icons/dropdown toggle. **Options and list items are drag‑to‑reorder** too (the order is saved
+to the config), so you control the order icons appear in. The **"Add feature"** menu only offers the
+climate selectors the entity actually exposes, and each climate selector can be added once.
 
 ## Development
 

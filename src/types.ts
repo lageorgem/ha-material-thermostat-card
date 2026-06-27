@@ -38,26 +38,29 @@ interface BaseSelectorFeature {
   width?: number;
 }
 
-export interface ClimateModesFeatureConfig extends BaseSelectorFeature {
+/** Per-option overrides plus an optional explicit display order of values. */
+interface OrderedOptions {
+  options?: OptionOverride[];
+  /** Explicit order of option values; unlisted values follow in their natural order. */
+  order?: string[];
+}
+
+export interface ClimateModesFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'climate-hvac-modes';
-  options?: OptionOverride[];
 }
 
-export interface ClimateFanFeatureConfig extends BaseSelectorFeature {
+export interface ClimateFanFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'climate-fan-modes';
-  options?: OptionOverride[];
 }
 
-export interface ClimateSwingFeatureConfig extends BaseSelectorFeature {
+export interface ClimateSwingFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'climate-swing-modes';
-  options?: OptionOverride[];
 }
 
-export interface InputSelectFeatureConfig extends BaseSelectorFeature {
+export interface InputSelectFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'input-select';
   entity: string;
   label?: string;
-  options?: OptionOverride[];
 }
 
 export interface SwitchGroupFeatureConfig extends BaseSelectorFeature {

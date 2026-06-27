@@ -224,6 +224,59 @@ describe('material-thermostat-card-editor', () => {
     });
   });
 
+  describe('_addableFeatures filtering', () => {
+    const CUSTOM_TYPES: FeatureType[] = [
+      'input-select',
+      'switch-group',
+      'switch-list',
+      'button-list',
+      'entity-tile',
+    ];
+
+    it('entity exposing hvac+fan+swing → all 3 climate types + the 5 custom types', async () => {
+      const el = await mount({ features: [] });
+      const types = (el as any)._addableFeatures().map((f: any) => f.type);
+      expect(types).to.include.members([
+        'climate-hvac-modes',
+        'climate-fan-modes',
+        'climate-swing-modes',
+        ...CUSTOM_TYPES,
+      ]);
+      // all 8 addable feature types present, none filtered out
+      expect(types.length).to.equal(8);
+    });
+
+    it('entity WITHOUT fan_modes/swing_modes → those climate types absent, hvac present', async () => {
+      const el = await mount(
+        { features: [] },
+        makeHass({
+          'climate.test': climateState({ fan_modes: undefined, swing_modes: undefined }),
+        })
+      );
+      const types = (el as any)._addableFeatures().map((f: any) => f.type);
+      expect(types).to.include('climate-hvac-modes');
+      expect(types).to.not.include('climate-fan-modes');
+      expect(types).to.not.include('climate-swing-modes');
+      // custom types still all present
+      expect(types).to.include.members(CUSTOM_TYPES);
+    });
+
+    it('an already-added climate type is filtered out (unique); custom types stay (repeatable)', async () => {
+      const el = await mount({
+        features: [{ type: 'climate-hvac-modes' }, { type: 'input-select', entity: '' }],
+      });
+      const types = (el as any)._addableFeatures().map((f: any) => f.type);
+      // hvac-modes already added → no longer offered
+      expect(types).to.not.include('climate-hvac-modes');
+      // the other climate types are still offered (entity exposes them)
+      expect(types).to.include('climate-fan-modes');
+      expect(types).to.include('climate-swing-modes');
+      // custom input-select already added but still offered (repeatable)
+      expect(types).to.include('input-select');
+      expect(types).to.include.members(CUSTOM_TYPES);
+    });
+  });
+
   it('_removeFeature removes by index and clears _editingIndex', async () => {
     const el = await mount({
       features: [{ type: 'climate-hvac-modes' }, { type: 'climate-fan-modes' }],
@@ -489,6 +542,38 @@ describe('mt-climate-feature-editor', () => {
     expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(4);
   });
 
+  describe('reordering', () => {
+    it('_orderedValues defaults to the natural value order', async () => {
+      const el = await mount(
+        'hvac',
+        { type: 'climate-hvac-modes' },
+        { 'climate.test': climateState({ hvac_modes: ['off', 'cool', 'heat'] }) }
+      );
+      expect((el as any)._orderedValues()).to.deep.equal(['off', 'cool', 'heat']);
+    });
+
+    it('_orderedValues reflects a preset feature.order', async () => {
+      const el = await mount(
+        'hvac',
+        { type: 'climate-hvac-modes', order: ['heat', 'off'] },
+        { 'climate.test': climateState({ hvac_modes: ['off', 'cool', 'heat'] }) }
+      );
+      expect((el as any)._orderedValues()).to.deep.equal(['heat', 'off', 'cool']);
+    });
+
+    it('_moveOption (0 → 2) emits feature-changed with the reordered order list', async () => {
+      const el = await mount(
+        'hvac',
+        { type: 'climate-hvac-modes' },
+        { 'climate.test': climateState({ hvac_modes: ['off', 'cool', 'heat'] }) }
+      );
+      const cap = captureEvents('feature-changed');
+      (el as any)._moveOption({ detail: { oldIndex: 0, newIndex: 2 } });
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.order).to.deep.equal(['cool', 'heat', 'off']);
+    });
+  });
+
   it('_override finds an existing override', async () => {
     const el = await mount('hvac', {
       type: 'climate-hvac-modes',
@@ -681,6 +766,33 @@ describe('mt-input-select-editor', () => {
   it('renders an option row per value', async () => {
     const el = await withOptions();
     expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(3);
+  });
+
+  describe('reordering', () => {
+    it('_orderedValues defaults to the natural option order', async () => {
+      const el = await withOptions();
+      expect((el as any)._orderedValues()).to.deep.equal(['home', 'away', 'sleep']);
+    });
+
+    it('_orderedValues reflects a preset feature.order', async () => {
+      const el = await mount(
+        { type: 'input-select', entity: 'input_select.mode', order: ['sleep', 'home'] },
+        {
+          'input_select.mode': entityState('input_select.mode', 'home', {
+            options: ['home', 'away', 'sleep'],
+          }),
+        }
+      );
+      expect((el as any)._orderedValues()).to.deep.equal(['sleep', 'home', 'away']);
+    });
+
+    it('_moveOption (0 → 2) emits feature-changed with the reordered order list', async () => {
+      const el = await withOptions();
+      const cap = captureEvents('feature-changed');
+      (el as any)._moveOption({ detail: { oldIndex: 0, newIndex: 2 } });
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.order).to.deep.equal(['away', 'sleep', 'home']);
+    });
   });
 
   it('entity-picker change -> feature-changed {entity}', async () => {
@@ -1007,6 +1119,24 @@ describe('mt-entity-list-editor', () => {
     expect((cap4.events[0].detail as any).feature.entities[0].icon).to.equal(undefined);
   });
 
+  it('_moveItem reorders the list (0 → 2 gives [b, c, a])', async () => {
+    const el = await mount({
+      feature: {
+        type: 'switch-group',
+        entities: [{ entity: 'switch.a' }, { entity: 'switch.b' }, { entity: 'switch.c' }],
+      },
+      itemsKey: 'entities',
+    });
+    const cap = captureEvents('feature-changed');
+    (el as any)._moveItem({ detail: { oldIndex: 0, newIndex: 2 } });
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.entities).to.deep.equal([
+      { entity: 'switch.b' },
+      { entity: 'switch.c' },
+      { entity: 'switch.a' },
+    ]);
+  });
+
   it('_removeItem removes by index', async () => {
     const el = await mount({
       feature: { type: 'switch-group', entities: [{ entity: 'a' }, { entity: 'b' }] },
@@ -1040,14 +1170,13 @@ describe('mt-entity-tile-editor', () => {
     );
   }
 
-  it('_data getter reflects the feature with compact default false', async () => {
+  it('_data getter reflects the feature with compact default false (no width in the form)', async () => {
     const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
     expect((el as any)._data).to.deep.equal({
       entity: 'sensor.x',
       name: undefined,
       icon: undefined,
       compact: false,
-      width: undefined,
       tap_action: undefined,
     });
   });
@@ -1059,12 +1188,10 @@ describe('mt-entity-tile-editor', () => {
       name: 'X',
       icon: 'mdi:home',
       compact: true,
-      width: 6,
       tap_action: { action: 'more-info' },
     });
     const d = (el as any)._data;
     expect(d.compact).to.equal(true);
-    expect(d.width).to.equal(6);
     expect(d.tap_action).to.deep.equal({ action: 'more-info' });
   });
 
@@ -1075,30 +1202,29 @@ describe('mt-entity-tile-editor', () => {
     expect(cl({ name: 'name' })).to.contain('Name');
     expect(cl({ name: 'icon' })).to.contain('Icon');
     expect(cl({ name: 'compact' })).to.contain('Compact');
-    expect(cl({ name: 'width' })).to.contain('Width');
     expect(cl({ name: 'tap_action' })).to.equal('Tap action');
     expect(cl({ name: 'mystery' })).to.equal('mystery');
   });
 
-  it('_changed emits a normalized feature (falsy -> undefined)', async () => {
-    const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
+  it('_changed emits a normalized feature (falsy -> undefined), preserving width', async () => {
+    const el = await mount({ type: 'entity-tile', entity: 'sensor.x', width: 50 });
     const cap = captureEvents('feature-changed');
     emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
       entity: 'sensor.y',
       name: '',
       icon: '',
       compact: false,
-      width: 0,
       tap_action: undefined,
     });
     cap.stop();
+    // _changed spreads the existing feature then the form patch (width untouched)
     expect((cap.events[0].detail as any).feature).to.deep.equal({
       type: 'entity-tile',
       entity: 'sensor.y',
       name: undefined,
       icon: undefined,
       compact: undefined,
-      width: undefined,
+      width: 50,
       tap_action: undefined,
     });
   });
@@ -1111,7 +1237,6 @@ describe('mt-entity-tile-editor', () => {
       name: 'Tile',
       icon: 'mdi:lamp',
       compact: true,
-      width: 5,
       tap_action: { action: 'toggle' },
     });
     cap.stop();
@@ -1121,8 +1246,20 @@ describe('mt-entity-tile-editor', () => {
       name: 'Tile',
       icon: 'mdi:lamp',
       compact: true,
-      width: 5,
       tap_action: { action: 'toggle' },
     });
+  });
+
+  it('renders a width field with the tile default (50) and emits width changes', async () => {
+    const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
+    const wf = el.shadowRoot!.querySelector('mt-width-field') as any;
+    expect(wf).to.not.equal(null);
+    expect(wf.default).to.equal(50);
+    const cap = captureEvents('feature-changed');
+    wf.dispatchEvent(
+      new CustomEvent('width-changed', { detail: { value: 30 }, bubbles: true, composed: true })
+    );
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.width).to.equal(30);
   });
 });

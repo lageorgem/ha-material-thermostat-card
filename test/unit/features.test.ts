@@ -348,6 +348,60 @@ describe('mt-climate-selector', () => {
     );
     expect(selectorRow(el)!.getAttribute('display')).to.equal('dropdown');
   });
+
+  describe('order', () => {
+    it('respects an explicit order: listed values first, rest natural', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+          .order=${['heat', 'off']}
+        ></mt-climate-selector>`
+      );
+      // heat, off first, then the remaining hvac_modes in their natural order.
+      expect(rowItems(el).map((i) => i.value)).to.deep.equal([
+        'heat',
+        'off',
+        'cool',
+        'heat_cool',
+        'auto',
+        'dry',
+        'fan_only',
+      ]);
+      // the rendered chips reflect the same order (title = label).
+      expect(chips(el).map((c) => c.title)).to.deep.equal([
+        'Heat',
+        'Off',
+        'Cool',
+        'Heat/Cool',
+        'Auto',
+        'Dry',
+        'Fan Only',
+      ]);
+    });
+
+    it('falls back to the natural hvac_modes order without an order', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+        ></mt-climate-selector>`
+      );
+      expect(rowItems(el).map((i) => i.value)).to.deep.equal([
+        'off',
+        'cool',
+        'heat',
+        'heat_cool',
+        'auto',
+        'dry',
+        'fan_only',
+      ]);
+    });
+  });
 });
 
 describe('mt-input-select', () => {
@@ -457,6 +511,21 @@ describe('mt-input-select', () => {
       ></mt-input-select>`
     );
     expect(selectorRow(el)!.label).to.equal('Scene');
+  });
+
+  it('respects an explicit order: listed values first, rest natural', async () => {
+    const hass = makeHass({
+      'input_select.mode': isState(['morning', 'day', 'night'], 'day'),
+    });
+    const el = await fixture<MtInputSelect>(
+      html`<mt-input-select
+        .hass=${hass}
+        entity="input_select.mode"
+        .order=${['night', 'morning']}
+      ></mt-input-select>`
+    );
+    expect(rowItems(el).map((i) => i.value)).to.deep.equal(['night', 'morning', 'day']);
+    expect(chips(el).map((c) => c.title)).to.deep.equal(['Night', 'Morning', 'Day']);
   });
 });
 

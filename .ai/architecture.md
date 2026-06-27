@@ -23,7 +23,11 @@ shadow DOM; theming flows through inherited CSS custom properties.
    [`icons.md`](icons.md)).
 2. `console.info`s a version banner.
 3. Pushes a descriptor onto `window.customCards` so the card shows in Lovelace's
-   "add card" picker (with `preview: true`).
+   "add card" picker (with `preview: true`). The descriptor also defines
+   **`getEntitySuggestion(hass, entityId)`** (HA 2026.6+) returning
+   `{ config: { type: 'custom:…', entity } }` for `climate.*` entities, so the
+   card is suggested in the per-entity "Suggested cards" (Community section);
+   ignored on older HA.
 4. Defines the `<material-thermostat-card>` and (lazily) the editor element.
 
 `getConfigElement()` dynamically imports `./editor` so the editor code isn't in

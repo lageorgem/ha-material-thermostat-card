@@ -66,6 +66,18 @@ export class MtEntityListEditor extends LitElement {
   }
 
   /**
+   * Reorder items after a drag.
+   * @param e ha-sortable's item-moved event
+   */
+  private _moveItem(e: CustomEvent): void {
+    const { oldIndex, newIndex } = e.detail;
+    const items = [...this._items];
+    const [moved] = items.splice(oldIndex, 1);
+    items.splice(newIndex, 0, moved);
+    this._setItems(items);
+  }
+
+  /**
    * Remove an item.
    * @param index the item index
    */
@@ -101,9 +113,11 @@ export class MtEntityListEditor extends LitElement {
           @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
         ></mt-width-field>
 
-        <div class="items">
-          ${this._items.map(
-            (item, index) => html`<div class="item">
+        <ha-sortable handle-selector=".handle" @item-moved=${this._moveItem}>
+          <div class="items">
+            ${this._items.map(
+              (item, index) => html`<div class="item">
+              <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
               <ha-entity-picker
                 .hass=${this.hass}
                 .value=${item.entity ?? ''}
@@ -127,8 +141,9 @@ export class MtEntityListEditor extends LitElement {
                 <ha-icon icon="mdi:close"></ha-icon>
               </button>
             </div>`
-          )}
-        </div>
+            )}
+          </div>
+        </ha-sortable>
 
         <ha-button @click=${this._addItem}>
           <ha-icon icon="mdi:plus" slot="icon"></ha-icon>
@@ -165,9 +180,18 @@ export class MtEntityListEditor extends LitElement {
     }
     .item {
       display: grid;
-      grid-template-columns: 2fr 1.4fr auto auto;
+      grid-template-columns: auto 2fr 1.4fr auto auto;
       align-items: center;
       gap: 8px;
+    }
+    .handle {
+      cursor: grab;
+      color: var(--secondary-text-color);
+      display: grid;
+      place-items: center;
+    }
+    .handle ha-icon {
+      --mdc-icon-size: 20px;
     }
     ha-icon-picker {
       width: 56px;

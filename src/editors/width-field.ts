@@ -15,6 +15,8 @@ import './grid-slider';
 export class MtWidthField extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ type: Number }) value?: number;
+  /** The width used when unset (shown as the handle position + hint). */
+  @property({ type: Number }) default = MAX_WIDTH_PCT;
 
   /**
    * Re-emit a width value.
@@ -46,6 +48,9 @@ export class MtWidthField extends LitElement {
 
   protected render(): TemplateResult {
     const set = this.value != null;
+    // Unset = the feature's default width — show the handle there so the default
+    // reads correctly (100% for selectors, 50% for tiles), not the slider min.
+    const display = this.value ?? this.default;
     return html`
       <div class="label">Width (% of card)</div>
       <div class="control">
@@ -59,15 +64,19 @@ export class MtWidthField extends LitElement {
           <ha-icon icon="mdi:restore"></ha-icon>
         </button>
         <mt-grid-slider
-          .value=${this.value}
+          .value=${display}
           .min=${MIN_WIDTH_PCT}
           .max=${MAX_WIDTH_PCT}
           .step=${WIDTH_STEP}
-          tooltip-mode=${set ? 'always' : 'interaction'}
+          tooltip-mode="always"
           @value-changed=${this._onChanged}
         ></mt-grid-slider>
       </div>
-      ${set ? nothing : html`<div class="hint">Full width — tap the track to set a percentage.</div>`}
+      ${set
+        ? nothing
+        : html`<div class="hint">
+            Default — ${this.default === MAX_WIDTH_PCT ? 'full width' : `${this.default}%`}.
+          </div>`}
     `;
   }
 

@@ -24,14 +24,21 @@ selector-style types** extend it (`climate-*`, `input-select`, `switch-group`).
 are always icon rows; the tile is always a tile). Don't assume `display` exists
 on every feature.
 
-### Per-option overrides (`OptionOverride`)
+### Per-option overrides (`OptionOverride`) + order
 `{ value, label?, icon?, hide? }` — supported by the three `climate-*` selectors
 and `input-select`. `value` keys to an underlying option; `hide:true` removes it.
+Those features also accept **`order?: string[]`** (an explicit display order of
+option values). The selectors apply it via `orderValues(all, order)` in
+`theme.ts` (listed values first in order, the rest in natural order — robust to
+the entity adding/removing options). The editors persist it by drag-reordering
+the option rows (`ha-sortable` + a `.handle`, `_moveOption` → emit `{ order }`).
 
 ### List items (`EntityItem`)
 `{ entity, label?, icon? }` — `switch-group.entities`, `switch-list.entities`,
 `button-list.items` (note the **`items`** key for button-list, **`entities`** for
-the others — the shared editor takes an `itemsKey` prop to handle this).
+the others — the shared editor takes an `itemsKey` prop to handle this). The
+shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
+`_moveItem` reorders the array — the card renders items in array order).
 
 ### Entity tile specifics (`entity-tile.ts` + `actions.ts`)
 `{ entity, name?, icon?, tap_action?, compact?, width? }`.
@@ -83,6 +90,11 @@ document-level `mt-dropdown-open` event.
 - Features are a drag-sortable list (`ha-sortable`, `handle-selector=".handle"`);
   each row expands to its sub-editor; an "Add feature" menu appends a
   `defaultFeature(type)` and opens it.
+- **Add-menu filtering** (`_addableFeatures()`): climate selectors are offered
+  only when the entity exposes the matching attribute (`CLIMATE_FEATURE_ATTR`:
+  hvac_modes/fan_modes/swing_modes) AND aren't already added (each climate
+  selector is unique). Custom features (input_select, lists, tile) are always
+  offered and repeatable.
 - ⚠️ HA lazily registers its form components — `ensureHaComponents()`
   (`editors/load-ha.ts`) force-loads them in `connectedCallback`, then
   `requestUpdate()`. Pickers/sliders are **inert in a custom card editor** unless

@@ -7,7 +7,7 @@ import type {
   ClimateSwingFeatureConfig,
   OptionOverride,
 } from '../types';
-import { prettyLabel } from '../theme';
+import { prettyLabel, orderValues } from '../theme';
 import './display-toggle';
 import './width-field';
 
@@ -35,6 +35,23 @@ export class MtClimateFeatureEditor extends LitElement {
     if (this.kind === 'hvac') return a.hvac_modes ?? [];
     if (this.kind === 'fan') return a.fan_modes ?? [];
     return a.swing_modes ?? [];
+  }
+
+  /** The option values in their configured display order. */
+  private _orderedValues(): string[] {
+    return orderValues(this._values(), this.feature.order);
+  }
+
+  /**
+   * Reorder the options after a drag and persist the new order.
+   * @param e ha-sortable's item-moved event
+   */
+  private _moveOption(e: CustomEvent): void {
+    const { oldIndex, newIndex } = e.detail;
+    const order = this._orderedValues();
+    const [moved] = order.splice(oldIndex, 1);
+    order.splice(newIndex, 0, moved);
+    this._emit({ order });
   }
 
   /** The existing override for a value, if any. */
@@ -102,9 +119,11 @@ export class MtClimateFeatureEditor extends LitElement {
           ? html`<p class="hint">
               Pick a climate entity that exposes ${this.kind} options to customize them.
             </p>`
-          : html`<div class="options">
-              ${values.map((value) => this._renderOption(value))}
-            </div>`}
+          : html`<ha-sortable handle-selector=".handle" @item-moved=${this._moveOption}>
+              <div class="options">
+                ${this._orderedValues().map((value) => this._renderOption(value))}
+              </div>
+            </ha-sortable>`}
       </div>
     `;
   }
@@ -118,6 +137,7 @@ export class MtClimateFeatureEditor extends LitElement {
     const hidden = !!ov?.hide;
     return html`
       <div class="opt">
+        <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
         <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
         <ha-textfield
           class="opt-label"
@@ -169,9 +189,18 @@ export class MtClimateFeatureEditor extends LitElement {
     }
     .opt {
       display: grid;
-      grid-template-columns: minmax(70px, 1fr) 2fr auto auto;
+      grid-template-columns: auto minmax(60px, 1fr) 2fr auto auto;
       align-items: center;
       gap: 8px;
+    }
+    .handle {
+      cursor: grab;
+      color: var(--secondary-text-color);
+      display: grid;
+      place-items: center;
+    }
+    .handle ha-icon {
+      --mdc-icon-size: 20px;
     }
     .opt-name {
       font-size: 13px;

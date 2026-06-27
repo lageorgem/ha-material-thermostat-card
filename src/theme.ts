@@ -107,6 +107,21 @@ export function swingIcon(value: string): string {
   return 'mdi:swap-vertical';
 }
 
+/**
+ * Order a list of values by an optional explicit order: values listed in `order`
+ * come first (in that order, ignoring any no-longer-present), then the remaining
+ * values in their original order.
+ * @param all the available values (natural order)
+ * @param order the desired explicit order, if any
+ */
+export function orderValues(all: string[], order?: string[]): string[] {
+  if (!order?.length) return all;
+  const available = new Set(all);
+  const ordered = order.filter((v) => available.has(v));
+  const seen = new Set(ordered);
+  return [...ordered, ...all.filter((v) => !seen.has(v))];
+}
+
 /** Turn an entity option value into a human label ("fan_only" -> "Fan Only"). */
 export function prettyLabel(value: string): string {
   if (value === 'heat_cool') return 'Heat/Cool';

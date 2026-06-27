@@ -2,7 +2,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureDisplay, OptionOverride, SelectorItem } from '../types';
-import { prettyLabel } from '../theme';
+import { prettyLabel, orderValues } from '../theme';
 import './selector-row';
 
 /**
@@ -17,6 +17,8 @@ export class MtInputSelect extends LitElement {
   @property() display: FeatureDisplay = 'icons';
   @property() label?: string;
   @property({ attribute: false }) options?: OptionOverride[];
+  /** Explicit display order of option values (unlisted values follow naturally). */
+  @property({ attribute: false }) order?: string[];
 
   private get _stateObj() {
     return this.hass?.states?.[this.entity];
@@ -35,7 +37,7 @@ export class MtInputSelect extends LitElement {
     if (!state) return [];
     const overrides = this._overrideMap();
     const options: string[] = state.attributes.options ?? [];
-    return options
+    return orderValues(options, this.order)
       .filter((v) => !overrides.get(v)?.hide)
       .map((v) => ({
         value: v,

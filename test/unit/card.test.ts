@@ -139,6 +139,32 @@ describe('material-thermostat-card', () => {
     });
   });
 
+  describe('customCards getEntitySuggestion', () => {
+    /** The card's entry on window.customCards (registered at module import). */
+    function entry(): any {
+      return (window as any).customCards.find(
+        (c: any) => c.type === 'material-thermostat-card'
+      );
+    }
+
+    it('registers an entry with a getEntitySuggestion function', () => {
+      expect(entry()).to.not.equal(undefined);
+      expect(entry().getEntitySuggestion).to.be.a('function');
+    });
+
+    it('suggests the card for a climate entity', () => {
+      const hass = makeHass({});
+      expect(entry().getEntitySuggestion(hass, 'climate.living')).to.deep.equal({
+        config: { type: 'custom:material-thermostat-card', entity: 'climate.living' },
+      });
+    });
+
+    it('returns null for a non-climate entity', () => {
+      const hass = makeHass({});
+      expect(entry().getEntitySuggestion(hass, 'light.x')).to.equal(null);
+    });
+  });
+
   describe('render base states', () => {
     it('renders empty before setConfig/hass (no shadow content)', async () => {
       const el = track(

@@ -49,6 +49,7 @@ export class MtFeatureRow extends LitElement {
           kind=${kind}
           display=${feature.display ?? 'icons'}
           .options=${feature.options}
+          .order=${feature.order}
         ></mt-climate-selector>`;
       }
       case 'input-select':
@@ -58,6 +59,7 @@ export class MtFeatureRow extends LitElement {
           display=${feature.display ?? 'icons'}
           .label=${feature.label}
           .options=${feature.options}
+          .order=${feature.order}
         ></mt-input-select>`;
       case 'switch-group':
         return html`<mt-switch-group

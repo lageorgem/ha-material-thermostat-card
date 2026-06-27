@@ -2,7 +2,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { InputSelectFeatureConfig, OptionOverride } from '../types';
-import { prettyLabel } from '../theme';
+import { prettyLabel, orderValues } from '../theme';
 import './display-toggle';
 import './width-field';
 
@@ -19,6 +19,23 @@ export class MtInputSelectEditor extends LitElement {
   /** Options exposed by the bound input_select entity. */
   private _values(): string[] {
     return this.hass?.states?.[this.feature.entity]?.attributes?.options ?? [];
+  }
+
+  /** The option values in their configured display order. */
+  private _orderedValues(): string[] {
+    return orderValues(this._values(), this.feature.order);
+  }
+
+  /**
+   * Reorder the options after a drag and persist the new order.
+   * @param e ha-sortable's item-moved event
+   */
+  private _moveOption(e: CustomEvent): void {
+    const { oldIndex, newIndex } = e.detail;
+    const order = this._orderedValues();
+    const [moved] = order.splice(oldIndex, 1);
+    order.splice(newIndex, 0, moved);
+    this._emit({ order });
   }
 
   private _override(value: string): OptionOverride | undefined {
@@ -97,11 +114,13 @@ export class MtInputSelectEditor extends LitElement {
 
         ${values.length === 0
           ? html`<p class="hint">Pick an input_select entity to customize its options.</p>`
-          : html`<div class="options">
-              ${values.map((value) => {
+          : html`<ha-sortable handle-selector=".handle" @item-moved=${this._moveOption}>
+              <div class="options">
+              ${this._orderedValues().map((value) => {
                 const ov = this._override(value);
                 const hidden = !!ov?.hide;
                 return html`<div class="opt">
+                  <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                   <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
                   <ha-textfield
                     label="Label"
@@ -124,7 +143,8 @@ export class MtInputSelectEditor extends LitElement {
                   </button>
                 </div>`;
               })}
-            </div>`}
+              </div>
+            </ha-sortable>`}
       </div>
     `;
   }
@@ -157,9 +177,18 @@ export class MtInputSelectEditor extends LitElement {
     }
     .opt {
       display: grid;
-      grid-template-columns: minmax(70px, 1fr) 2fr auto auto;
+      grid-template-columns: auto minmax(60px, 1fr) 2fr auto auto;
       align-items: center;
       gap: 8px;
+    }
+    .handle {
+      cursor: grab;
+      color: var(--secondary-text-color);
+      display: grid;
+      place-items: center;
+    }
+    .handle ha-icon {
+      --mdc-icon-size: 20px;
     }
     .opt-name {
       font-size: 13px;
