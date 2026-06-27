@@ -318,9 +318,10 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
-   * Detect a mode-color change and kick off the directional wipe (the new color
-   * is painted underneath; an overlay of the old color is clipped away to the
-   * right, so the new color appears to slide in from the left).
+   * Detect a mode-color change and kick off the left-to-right wipe: the new
+   * color (base segment) slides in from the left exactly like the turn-on
+   * animation, while an overlay of the old color slides out through the right
+   * end of the arc — so the boundary sweeps from old to new.
    * @param changed changed properties
    */
   protected updated(changed: PropertyValues): void {
@@ -340,11 +341,11 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
-   * Animate the mode-color change as a directional wipe along the value arc: the
-   * new color (base segment) grows in from the segment's start while the old
-   * color (overlay segment) shrinks toward the far end — synchronised so a clean
-   * boundary sweeps from old to new. Driven by the Web Animations API so the
-   * keyframes can use the live segment geometry.
+   * Animate the mode-color change as a left-to-right wipe along the value arc.
+   * The new color (base segment) replays the turn-on animation — sliding in
+   * from the arc start — while the old color (overlay segment) keeps its length
+   * and slides out through the right end of the arc. Driven by the Web
+   * Animations API so the keyframes can use the live segment geometry.
    */
   private _runWipe(): void {
     const newSeg = this.renderRoot.querySelector('.value:not(.wipe-value)') as SVGElement | null;
@@ -355,20 +356,25 @@ export class MtCircularDial extends LitElement {
     if (!newSeg || !oldSeg) return done();
     const segLen = parseFloat(newSeg.getAttribute('stroke-dasharray') ?? '0');
     const segStart = -parseFloat(newSeg.getAttribute('stroke-dashoffset') ?? '0'); // segS × 1000
-    const segEnd = segStart + segLen;
     if (segLen <= 0) return done();
     const opts: KeyframeAnimationOptions = { duration: 460, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
-    // New: regrow the segment from its start (the off→on draw, in the new color).
+    // New: the exact turn-on draw — the dash grows from zero at the arc start
+    // while its origin travels to the segment's resting position (slide in from
+    // the left).
     newSeg.animate(
-      [{ strokeDasharray: `0 1000` }, { strokeDasharray: `${segLen} 1000` }],
+      [
+        { strokeDasharray: `0 1000`, strokeDashoffset: `0` },
+        { strokeDasharray: `${segLen} 1000`, strokeDashoffset: `${-segStart}` },
+      ],
       opts
     );
-    // Old (on top): shrink the segment toward its far end, so it slides off the
-    // right and reveals the new color filling in behind it.
+    // Old (painted on top): keep the segment's length and translate its origin
+    // to the path end, so the whole band slides out past frac 1.0 (exits through
+    // the right) and reveals the incoming new color behind it.
     const old = oldSeg.animate(
       [
         { strokeDasharray: `${segLen} 1000`, strokeDashoffset: `${-segStart}` },
-        { strokeDasharray: `0 1000`, strokeDashoffset: `${-segEnd}` },
+        { strokeDasharray: `${segLen} 1000`, strokeDashoffset: `-1000` },
       ],
       { ...opts, fill: 'forwards' }
     );
@@ -622,10 +628,10 @@ export class MtCircularDial extends LitElement {
       .dial.off .glow {
         opacity: 0.5;
       }
-      /* Mode-change wipe: an overlay of the OLD color (ring track + value segment)
-         is laid over the dial — now painted in the NEW color — and recedes along
-         the arc (driven by the Web Animations API in _runWipe), so the old color
-         slides off toward the end while the new is revealed from the start. */
+      /* Mode-change wipe: an overlay of the OLD color value segment is laid over
+         the dial — now painted in the NEW color — and slides out through the
+         right end of the arc (driven by the Web Animations API in _runWipe),
+         while the new color slides in from the left behind it. */
       .wipe-value {
         pointer-events: none;
         transition: none;
