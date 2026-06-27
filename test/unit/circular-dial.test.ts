@@ -1401,6 +1401,37 @@ describe('mt-circular-dial', () => {
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       expect(value.getAttribute('style')).to.contain(`stroke:${climateModeColor('heat')}`);
     });
+
+    // The gray demand only recolors the SEGMENT — the halo / ring / big number
+    // (driven by --dial-color) must stay the mode color (the user's explicit
+    // requirement). And this gray-when-no-sense is single-setpoint ONLY.
+    it('not-heating keeps the halo (--dial-color) at the heat color, only the segment grays', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.min = 10;
+      el.max = 30;
+      el.value = 23;
+      el.current = 24; // heater at 23, room 24 -> not heating
+      await el.updateComplete;
+      const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(seg.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(dial.getAttribute('style')).to.contain(`--dial-color: ${climateModeColor('heat')}`);
+    });
+
+    it('not-cooling keeps the halo (--dial-color) at the cool color, only the segment grays', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 21;
+      el.current = 20; // cooler at 21, room 20 -> not cooling
+      await el.updateComplete;
+      const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(seg.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(dial.getAttribute('style')).to.contain(`--dial-color: ${climateModeColor('cool')}`);
+    });
   });
 
   describe('dual center readout (_renderDualCenter / _showRange)', () => {

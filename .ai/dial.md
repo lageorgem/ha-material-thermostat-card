@@ -64,6 +64,13 @@ when the direction is meaningful (cool needs current > setpoint, heat needs
 current < setpoint), else `IDLE_COLOR` gray (e.g. cool mode but already below the
 setpoint → gray, "not cooling anything").
 
+**Gray-when-no-sense is single-setpoint ONLY, and only the segment grays.** The
+halo, ring, mode icon, and big number all read from `--dial-color`, which is
+`_dialColor`/`_effectiveMode` (mode-derived) and is **never** affected by
+`_demandSensible` — so an inactive heater/cooler still glows its mode color, only
+the arc segment goes gray. Dual (heat_cool) does NOT use this rule at all: it
+shows the gray **range band** between the setpoints instead (see below).
+
 ## Dual (heat_cool): temperature-derived sub-mode
 
 In dual mode the dial does NOT just fill between the two setpoints. It derives
