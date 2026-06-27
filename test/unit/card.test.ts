@@ -209,21 +209,25 @@ describe('material-thermostat-card', () => {
       expect(d.unit).to.equal('°C'); // unit ?? '°C'
     });
 
-    it('falls back to default placement for a feature beyond the packed layout', async () => {
-      // Calling render directly with a layout whose `place` is shorter than the
-      // feature list exercises the `?? { row:1, colStart:1, span: cols }` branch.
-      const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
-      const orig = (el as any)._layout.bind(el);
-      const stub = sinon.stub(el as any, '_layout').callsFake(() => {
-        const l = orig();
-        return { ...l, place: [] }; // empty placement → fallback used
-      });
+    it('renders one mt-feature-row per configured feature, in order', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-hvac-modes' },
+              { type: 'climate-fan-modes' },
+              { type: 'climate-swing-modes' },
+            ],
+          })
+        )
+      );
+      (el as any)._widthPx = 480;
       el.requestUpdate();
       await el.updateComplete;
-      const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
-      expect(row.row).to.equal(1);
-      expect(row.colStart).to.equal(1);
-      stub.restore();
+      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
+      expect(rows.length).to.equal(3);
+      expect((rows[0] as any).feature.type).to.equal('climate-hvac-modes');
+      expect((rows[2] as any).feature.type).to.equal('climate-swing-modes');
     });
   });
 
@@ -361,88 +365,8 @@ describe('material-thermostat-card', () => {
       expect(wrap.style.marginBottom).to.match(/^-\d+px$/);
     });
 
-    it('_featureSpan: explicit width selector clamps and packs', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [{ type: 'climate-hvac-modes', width: 9 } as any],
-          })
-        )
-      );
-      await setWidth(el, 700);
-      // width:9 explicit → span 9 on the dial-side budget
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      expect(rows.length).to.equal(1);
-      expect((rows[0] as any).span).to.equal(9);
-    });
-
-    it('_featureSpan: entity-tile default footprint (6 units)', async () => {
-      const el = track(
-        await mount(
-          baseConfig({ features: [{ type: 'entity-tile', entity: 'sensor.x' } as any] }),
-          { [ENTITY]: climateState(), 'sensor.x': entityState('sensor.x', '42') }
-        )
-      );
-      await setWidth(el, 700);
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      expect((rows[0] as any).span).to.equal(6);
-    });
-
-    it('_featureSpan: compact entity-tile footprint (4 units)', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [{ type: 'entity-tile', entity: 'sensor.x', compact: true } as any],
-          }),
-          { [ENTITY]: climateState(), 'sensor.x': entityState('sensor.x', '42') }
-        )
-      );
-      await setWidth(el, 700);
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      expect((rows[0] as any).span).to.equal(4);
-    });
-
-    it('_featureSpan: flexible selector (no width) → full-row span', async () => {
-      const el = track(
-        await mount(baseConfig({ features: [{ type: 'climate-fan-modes' }] }))
-      );
-      await setWidth(el, 700);
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      // full-width row spans the entire grid (cols)
-      const layout = (el as any)._layout();
-      expect((rows[0] as any).span).to.equal(layout.cols);
-      expect((rows[0] as any).colStart).to.equal(1);
-    });
-
-    it('_packLayout: two width:9 items on one row + a flexible full-row item', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [
-              { type: 'climate-hvac-modes', width: 9 } as any,
-              { type: 'climate-fan-modes', width: 9 } as any,
-              { type: 'climate-swing-modes' } as any, // flexible → its own full row
-            ],
-          })
-        )
-      );
-      // wide budget = floor(800/24) - DIAL_UNITS(12) = 33 - 12 = 21 ≥ 18 so 9+9 share a row
-      await setWidth(el, 800);
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      expect(rows.length).to.equal(3);
-      // first two share row 1, third on row 2
-      expect((rows[0] as any).row).to.equal(1);
-      expect((rows[1] as any).row).to.equal(1);
-      expect((rows[2] as any).row).to.equal(2);
-      // first two are 9 wide and sit side by side
-      expect((rows[0] as any).span).to.equal(9);
-      expect((rows[1] as any).span).to.equal(9);
-      expect((rows[1] as any).colStart).to.equal((rows[0] as any).colStart + 9);
-    });
-
-    it('_packLayout: a lone sized feature is a fraction of the card, not full width', async () => {
-      // Regression: a lone `width: 3` feature must occupy 3 of the card's full
-      // unit width (small), not span the whole row. (Masonry sizing fix.)
+    it('a lone sized feature is a fixed fraction of the card (not stretched)', async () => {
+      // Regression: a lone `width: 3` feature must be small, not fill the row.
       const el = track(
         await mount(
           baseConfig({
@@ -450,16 +374,36 @@ describe('material-thermostat-card', () => {
           })
         )
       );
-      await setWidth(el, 480); // stacked: budget = floor(480/24) = 20 units
+      await setWidth(el, 480); // stacked: budget = round(480/24) = 20 units → 3/20 = 15%
       const layout = (el as any)._layout();
-      expect(layout.cols).to.equal(20);
+      expect(layout.rows.length).to.equal(1);
+      expect(layout.rows[0].justify).to.equal('center');
+      expect(layout.rows[0].items[0].flex).to.equal('0 0 15%');
       const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
-      expect(row.span).to.equal(3);
-      expect(row.span).to.be.lessThan(layout.cols); // not full width
-      expect(row.colStart).to.be.greaterThan(1); // centered
+      expect(row.flex).to.equal('0 0 15%');
     });
 
-    it('_packLayout: a sized row wider than budget flushes onto its own row', async () => {
+    it('two equal sized features share a row and fill it 50/50', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-hvac-modes', width: 8 } as any,
+              { type: 'climate-fan-modes', width: 8 } as any,
+            ],
+          })
+        )
+      );
+      await setWidth(el, 480); // budget 20; 8+8 share one row
+      const layout = (el as any)._layout();
+      expect(layout.rows.length).to.equal(1);
+      expect(layout.rows[0].items.length).to.equal(2);
+      // equal flex-grow weights → 50/50, edge to edge (no fixed-fraction basis)
+      expect(layout.rows[0].items[0].flex).to.equal('8 1 0');
+      expect(layout.rows[0].items[1].flex).to.equal('8 1 0');
+    });
+
+    it('two width:9 features stay on one row (greedy overflow) even past budget', async () => {
       const el = track(
         await mount(
           baseConfig({
@@ -470,10 +414,50 @@ describe('material-thermostat-card', () => {
           })
         )
       );
-      // narrow stacked budget so 9+9 cannot share a row
-      await setWidth(el, 250);
-      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
-      expect((rows[0] as any).row).to.not.equal((rows[1] as any).row);
+      await setWidth(el, 408); // budget = round(408/24) = 17 < 18, but they still pair
+      const layout = (el as any)._layout();
+      expect(layout.rows.length).to.equal(1);
+      expect(layout.rows[0].items.map((i: any) => i.flex)).to.deep.equal(['9 1 0', '9 1 0']);
+    });
+
+    it('a flexible feature takes its own full-width row', async () => {
+      const el = track(await mount(baseConfig({ features: [{ type: 'climate-fan-modes' }] })));
+      await setWidth(el, 700);
+      const layout = (el as any)._layout();
+      expect(layout.rows.length).to.equal(1);
+      expect(layout.rows[0].items[0].flex).to.equal('1 1 auto');
+      expect(layout.rows[0].justify).to.equal(undefined);
+    });
+
+    it('entity-tile uses its default footprint as a lone fraction', async () => {
+      const el = track(
+        await mount(
+          baseConfig({ features: [{ type: 'entity-tile', entity: 'sensor.x' } as any] }),
+          { [ENTITY]: climateState(), 'sensor.x': entityState('sensor.x', '42') }
+        )
+      );
+      await setWidth(el, 480); // budget 20; default tile = 6 → 6/20 = 30%
+      const layout = (el as any)._layout();
+      expect(layout.rows[0].items[0].flex).to.equal('0 0 30%');
+    });
+
+    it('a flexible feature flushes a shared sized row', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-hvac-modes', width: 8 } as any,
+              { type: 'climate-fan-modes', width: 8 } as any,
+              { type: 'climate-swing-modes' } as any, // flexible → its own row
+            ],
+          })
+        )
+      );
+      await setWidth(el, 480);
+      const layout = (el as any)._layout();
+      expect(layout.rows.length).to.equal(2);
+      expect(layout.rows[0].items.length).to.equal(2); // the two width:8 share row 1
+      expect(layout.rows[1].items[0].flex).to.equal('1 1 auto'); // flexible fills row 2
     });
   });
 

@@ -18,25 +18,16 @@ export class MtFeatureRow extends LitElement {
   /** The card's climate entity (used by the climate selectors). */
   @property() entityId!: string;
   @property({ attribute: false }) feature!: FeatureConfig;
-  /** Grid row this feature occupies (computed by the card). */
-  @property({ type: Number }) row = 1;
-  /** 1-based grid column this feature starts at (computed by the card). */
-  @property({ type: Number }) colStart = 1;
-  /** How many grid columns (units) this feature spans (computed by the card). */
-  @property({ type: Number }) span = 1;
+  /** The flex shorthand sizing this feature within its row (computed by the card). */
+  @property() flex = '';
 
   /**
-   * Place the host in the card's feature grid: an explicit row + column start +
-   * span. The card centers each row (via colStart), so several sized features
-   * share a row and narrower rows sit centered without the grid gap forcing a
-   * wrap.
+   * Apply the card-computed flex sizing to the host so it fills (shared rows) or
+   * takes a fixed fraction (lone sized features) of its row.
    * @param changed changed properties
    */
   protected willUpdate(changed: PropertyValues): void {
-    if (changed.has('row') || changed.has('colStart') || changed.has('span')) {
-      this.style.gridRow = String(Math.max(1, this.row));
-      this.style.gridColumn = `${Math.max(1, this.colStart)} / span ${Math.max(1, this.span)}`;
-    }
+    if (changed.has('flex')) this.style.flex = this.flex;
   }
 
   protected render(): TemplateResult | typeof nothing {

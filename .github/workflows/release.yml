@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so we can build the changelog
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -45,6 +47,26 @@ jobs:
           npm ci
           npm run build
 
+      - name: Build changelog notes
+        if: steps.check.outputs.exists == 'false'
+        id: notes
+        run: |
+          VERSION="v${{ steps.v.outputs.version }}"
+          PREV="$(git tag --sort=-v:refname | grep -vx "$VERSION" | head -n1 || true)"
+          {
+            echo "## What's changed"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s (%h)' "${PREV}..HEAD"
+              echo
+              echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${VERSION}"
+            else
+              git log --no-merges --pretty='- %s (%h)'
+            fi
+          } > release-notes.md
+          echo "Generated notes:"
+          cat release-notes.md
+
       - name: Create release
         if: steps.check.outputs.exists == 'false'
         env:
@@ -54,4 +76,4 @@ jobs:
             dist/material-thermostat-card.js \
             --target main \
             --title "v${{ steps.v.outputs.version }}" \
-            --generate-notes
+            --notes-file release-notes.md

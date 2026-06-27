@@ -195,22 +195,27 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * Pack the features into rows within `budget` units, then resolve the grid:
-   * the column count is the **full available width** (`budget`), so each
-   * feature's `width` is a true fraction of the card — a lone `width: 3` feature
-   * is 3 units wide (not a full row), and a `width: 9` in an 18-unit card is 50%.
-   * This is what makes sizing work in masonry (a fixed-width column) as well as
-   * sections. Each row is centered, so items narrower than the grid sit in the
-   * middle while a full-width item (or a row whose widths sum to the grid) spans
-   * edge to edge.
-   * @param budget the available grid width, in units
+   * Pack the features into rows and compute each one's flex sizing. The rule:
+   *  - a **flexible** feature (selector/list, no explicit width) takes its own
+   *    row and fills it;
+   *  - **sized** features pack greedily into a row until it's full, then the row
+   *    fills the card width with each item growing in proportion to its `width`
+   *    (so two `width: 8` items are 50/50 and two `width: 9` are 50/50 — equal,
+   *    edge to edge, regardless of the card's exact pixel width);
+   *  - a **lone** sized feature does NOT stretch — it's `width / budget` of the
+   *    card (a `width: 3` feature stays small), centered.
+   * Greedy-overflow packing (the item that crosses `budget` still joins the row,
+   * then a new row starts) keeps a pair together even when their nominal widths
+   * slightly exceed the measured unit-width — flex then shrinks them to fit.
+   * @param budget the available width, in grid units
    */
-  private _packLayout(budget: number): {
-    cols: number;
-    place: Array<{ row: number; colStart: number; span: number }>;
-  } {
+  private _packRows(budget: number): Array<{
+    justify?: string;
+    items: Array<{ idx: number; flex: string }>;
+  }> {
     const feats = this._config.features ?? [];
-    type Row = { full: boolean; items: Array<{ idx: number; span: number }>; sum: number };
+    type Item = { idx: number; width: number; flexible: boolean };
+    type Row = { items: Item[]; sum: number };
     const rows: Row[] = [];
     let cur: Row | null = null;
     const flush = (): void => {
@@ -220,69 +225,63 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     feats.forEach((f, idx) => {
       const span = this._featureSpan(f, budget);
       if (span == null) {
-        // Flexible feature → its own full-width row.
         flush();
-        rows.push({ full: true, items: [{ idx, span: budget }], sum: budget });
+        rows.push({ items: [{ idx, width: budget, flexible: true }], sum: budget });
       } else {
-        if (cur && cur.sum + span > budget) flush();
-        if (!cur) cur = { full: false, items: [], sum: 0 };
-        cur.items.push({ idx, span });
+        if (cur && cur.sum >= budget) flush(); // current row already full
+        if (!cur) cur = { items: [], sum: 0 };
+        cur.items.push({ idx, width: span, flexible: false });
         cur.sum += span;
       }
     });
     flush();
 
-    // Grid width = the full available width, so widths are fractions of the card.
-    const cols = Math.max(MIN_FEATURE_UNITS, budget);
-
-    const place: Array<{ row: number; colStart: number; span: number }> = [];
-    rows.forEach((r, ri) => {
-      const rowSum = r.full ? cols : r.sum;
-      let colStart = Math.max(0, Math.floor((cols - rowSum) / 2));
-      for (const it of r.items) {
-        const span = r.full ? cols : it.span;
-        place[it.idx] = { row: ri + 1, colStart: colStart + 1, span };
-        colStart += span;
+    return rows.map((r) => {
+      if (r.items.length === 1) {
+        const it = r.items[0];
+        if (it.flexible) return { items: [{ idx: it.idx, flex: '1 1 auto' }] };
+        // Lone sized feature → a fraction of the card, centered (not stretched).
+        const pct = Math.min(100, Math.max(1, Math.round((it.width / Math.max(1, budget)) * 100)));
+        return { justify: 'center', items: [{ idx: it.idx, flex: `0 0 ${pct}%` }] };
       }
+      // Shared row → each item grows in proportion to its width and fills the row.
+      return { items: r.items.map((it) => ({ idx: it.idx, flex: `${it.width} 1 0` })) };
     });
-    return { cols, place };
   }
 
   /**
-   * Resolve the grid layout for the current width: stacked (narrow) or
-   * side-by-side (wide). In the wide format the circular controls stay anchored
-   * in their fixed-width left corner and the feature area expands to fill the
-   * rest of the card; in both formats the feature grid's columns come from the
-   * features themselves so sized items fill (or center) correctly.
+   * Resolve the layout for the current width: stacked (narrow) or side-by-side
+   * (wide). In the wide format the circular controls stay anchored in their
+   * fixed-width left corner and the feature area expands to fill the rest of the
+   * card. Feature rows are flex rows whose items fill in proportion to their
+   * widths (see {@link _packRows}).
    */
   private _layout(): {
     wide: boolean;
     dialStyle: StyleInfo;
     featureStyle: StyleInfo;
-    cols: number;
-    place: Array<{ row: number; colStart: number; span: number }>;
+    rows: Array<{ justify?: string; items: Array<{ idx: number; flex: string }> }>;
   } {
     const feats = this._config.features ?? [];
-    const avail = Math.min(MAX_UNITS, Math.max(1, Math.floor(this._widthPx / UNIT_PX)));
+    const avail = Math.min(MAX_UNITS, Math.max(1, Math.round(this._widthPx / UNIT_PX)));
     const wide = this._widthPx > 0 && feats.length > 0 && avail >= SIDE_BY_SIDE_MIN_UNITS;
-    // Stacked: the feature grid spans the full width. Wide: the dial keeps its
-    // fixed corner footprint and the feature region fills the rest of the card.
+    // Stacked: features span the full width. Wide: the dial keeps its fixed
+    // corner footprint and the feature region fills the rest of the card.
     const budget = wide ? Math.max(MIN_FEATURE_UNITS, avail - DIAL_UNITS) : Math.max(1, avail);
-    const { cols, place } = this._packLayout(budget);
+    const rows = this._packRows(budget);
     if (!wide) {
       // The dial is a square but its ring leaves a ~15% empty band at the bottom
       // (the 270° gap, where the +/- sit). Crop it with a negative margin so the
       // gap from the controls to the feature rows matches the inter-row gap.
       const dialPx = Math.min(this._widthPx, DIAL_MAX_PX);
       const crop = Math.round(DIAL_BOTTOM_GAP * dialPx);
-      return { wide: false, dialStyle: { marginBottom: `-${crop}px` }, featureStyle: {}, cols, place };
+      return { wide: false, dialStyle: { marginBottom: `-${crop}px` }, featureStyle: {}, rows };
     }
     return {
       wide: true,
       dialStyle: { flex: `0 0 ${unitsToPx(DIAL_UNITS)}px` },
       featureStyle: { flex: '1 1 0' },
-      cols,
-      place,
+      rows,
     };
   }
 
@@ -420,24 +419,22 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           </div>
 
           ${this._config.features?.length
-            ? html`<div
-                class="features"
-                style=${styleMap({
-                  ...layout.featureStyle,
-                  gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
-                })}
-              >
-                ${this._config.features.map((feature: FeatureConfig, i: number) => {
-                  const p = layout.place[i] ?? { row: 1, colStart: 1, span: layout.cols };
-                  return html`<mt-feature-row
-                    .hass=${this.hass}
-                    .entityId=${this._config.entity}
-                    .feature=${feature}
-                    .row=${p.row}
-                    .colStart=${p.colStart}
-                    .span=${p.span}
-                  ></mt-feature-row>`;
-                })}
+            ? html`<div class="features" style=${styleMap(layout.featureStyle)}>
+                ${layout.rows.map(
+                  (row) => html`<div
+                    class="frow"
+                    style=${styleMap(row.justify ? { justifyContent: row.justify } : {})}
+                  >
+                    ${row.items.map(
+                      (it) => html`<mt-feature-row
+                        .hass=${this.hass}
+                        .entityId=${this._config.entity}
+                        .feature=${this._config.features![it.idx]}
+                        .flex=${it.flex}
+                      ></mt-feature-row>`
+                    )}
+                  </div>`
+                )}
               </div>`
             : nothing}
         </div>
@@ -518,14 +515,20 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         justify-content: center;
         min-width: 0;
       }
-      /* Feature area is a CSS grid: columns are set inline in grid units, each
-         feature spans its width via grid-column, and the grid gap is handled by
-         the grid itself — so two half-width items sit side by side rather than
-         wrapping the way a flex gap forces. */
+      /* Feature area: a column of flex rows. Within a row, items grow in
+         proportion to their width (flex-grow with a 0 basis), so a shared row
+         fills the card and equal items split it evenly; a lone sized item gets a
+         fixed fraction basis instead (set inline by _packRows). */
       .features {
         box-sizing: border-box;
-        display: grid;
-        align-content: flex-start;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .frow {
+        display: flex;
+        align-items: center;
         gap: 12px;
         min-width: 0;
       }

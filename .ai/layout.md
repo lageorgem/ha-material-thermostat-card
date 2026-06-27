@@ -36,44 +36,46 @@ CARD_PADDING_X        = 32   ha-card horizontal padding (for width math)
   (not centered) so the feature area truly fills the remaining width. Feature
   `budget` = `avail − DIAL_UNITS`.
 
-## Width is a fraction of the card
+## Width sizing — proportional rows, lone items stay small
 
-A feature's `width` is **N units out of the card's full unit width**, resolved by
-CSS grid columns (never a hardcoded pixel value). The card is `budget` units wide
-(≈ `_widthPx / 24`), so `width: 9` ≈ 9×24px and, in an 18-unit card, is 50%; a
-lone `width: 3` is small (3 of `budget`), not a full row. A `9 + 9` row is 50/50.
-This works identically in **masonry** (a fixed-width column) and **sections**.
+Two rules the user explicitly wanted (and which earlier models each got half of):
+
+- **Features that share a row fill it, split in proportion to their widths** —
+  two `width: 8` are 50/50 *edge to edge*, two `width: 9` are 50/50, a `6 + 12`
+  is 1/3 + 2/3. The exact card pixel-width is irrelevant (flex distributes it).
+- **A lone sized feature does NOT stretch** — it's `width / budget` of the card
+  (a `width: 3` stays a small ~3-unit pill), centered.
+
+This is implemented with **per-row flexbox**, not a CSS grid. (History: v0.6.0
+used a CSS grid with `cols = widest sized row` → a lone item always filled;
+v0.8.4 used `cols = budget` → a lone item was a fraction but shared rows left a
+gap / wrapped a unit early. The flex model satisfies both. Don't go back to a
+grid.)
 
 ### `_featureSpan(f, budget)` — units a feature wants
 - explicit `width` → clamp to `[MIN_FEATURE_UNITS, budget]`;
 - `entity-tile` → `TILE_COMPACT_UNITS` / `TILE_DEFAULT_UNITS`;
 - anything else → **`null`** = flexible = its own full-width row.
 
-### `_packLayout(budget)` — rows → grid
-1. Walk features in order, greedily packing sized items into rows until a row
-   would exceed `budget`; a `null` (flexible) feature flushes the current row and
-   takes a full-width row of its own.
-2. **`cols` = `budget`** (the full available width in units). Each feature's
-   `width` is therefore a **fraction of the whole card**: a lone `width: 3`
-   feature spans 3 of `budget` columns (small), a `width: 9` in an 18-unit card is
-   9/18 = 50%, and a `9+9` row fills it. This is what makes sizing work in
-   **masonry** (a fixed-width column) — the earlier "cols = widest sized row" made
-   any lone sized item fill the whole row regardless of its width (the masonry
-   bug). `_featureSpan` clamps each width to `[2, budget]`, so nothing exceeds the
-   grid.
-3. Each row is **centered**: `colStart = floor((cols − rowSum)/2)`. A row whose
-   widths sum to `cols` (or a full-row item) spans edge to edge; narrower rows sit
-   centered.
-4. Returns `{ cols, place[] }` where `place[i] = {row, colStart(1-based), span}`.
+### `_packRows(budget)` — features → flex rows
+1. Walk features in order. A `null` (flexible) feature flushes the current row and
+   takes a row of its own. Sized features pack greedily with **overflow**: the
+   item that crosses `budget` still joins the row, *then* a new row starts. (This
+   keeps a pair together even when the measured unit-width is a unit short — e.g.
+   `9 + 9 = 18` on a 17-unit masonry column — flex then shrinks them to fit.)
+2. Compute each item's flex shorthand:
+   - flexible single item → `flex: 1 1 auto` (fills the row).
+   - lone sized item → `flex: 0 0 ${round(width/budget*100)}%`, row
+     `justify-content: center` (a fixed fraction, centered, not stretched).
+   - shared-row sized items → `flex: ${width} 1 0` (grow weight = width, 0 basis)
+     → the row fills, split by width ratio.
+3. Returns `Array<{ justify?, items: [{ idx, flex }] }>`.
 
-`render()` sets the `.features` grid to `repeat(cols, minmax(0, 1fr))` and passes
-`row/colStart/span` to each `<mt-feature-row>`, whose `willUpdate` sets
-`style.gridRow` and `style.gridColumn = "${colStart} / span ${span}"`.
-
-**Why CSS grid, not flexbox:** a flex `gap` between two `width:50%` items pushes
-the total past 100% and forces a wrap. CSS grid handles the gap within the track
-sizing, so two half-width items genuinely sit side by side. Don't go back to
-flex basis-px for the feature row.
+`render()` renders `.features` (a flex column) → one `.frow` (flex row, optional
+`justify-content`) per row → an `<mt-feature-row .flex=…>` per item.
+`mt-feature-row.willUpdate` applies `this.style.flex`. `avail` uses `Math.round`
+(not floor) to reduce off-by-one wraps. **`flex: N 1 0` serializes to `N 1 0px`
+in the DOM** — assert via `style.flexGrow`/`flexBasis` in tests, not `style.flex`.
 
 ## Icon-row scrolling
 

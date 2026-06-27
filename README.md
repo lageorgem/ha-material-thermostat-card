@@ -293,9 +293,10 @@ Features lay out on a grid sized to the card's measured width, so the same confi
 | Concept | Behavior |
 | --- | --- |
 | **Grid unit** | 1 unit ≈ **24px**. The card is as many units wide as it measures; a full‑width sections view ≈ **48 units**; an icon ≈ **2 units**. |
-| **Width = fraction of the card** | A feature's `width` is N units out of the card's full width — a lone `width: 9` in an 18‑unit card is **50%**, a `width: 3` is small, and two `width: 9` items share a row **50/50**. |
-| **Max feature width** | **36 units** (the region beside the 12‑unit dial) — a feature can fill that region edge to edge. |
-| **Centering** | Rows whose widths don't fill the card are **centered**; a full‑row item (or a row that sums to the card width) spans edge to edge. |
+| **Shared rows fill proportionally** | Features that fit on one row **fill it, split by their widths** — two `width: 8` (or two `width: 9`) are **50/50 edge to edge**, a `6 + 12` is 1/3 + 2/3. The card's exact pixel size doesn't matter. |
+| **A lone narrow feature stays small** | A feature alone on its row is `width / card` of the width (a `width: 3` is a small pill), **centered** — it doesn't stretch to fill. |
+| **Max feature width** | **36 units** (the region beside the 12‑unit dial). |
+| **Works in masonry & sections** | Sizing is measured from the card's actual width, so the same config behaves the same in both view types. |
 | **Icon overflow** | Icon rows keep their icon size and **scroll horizontally** instead of squishing. |
 | **Side‑by‑side (wide)** | At **≥ 24 units** (~50% width) the dial anchors in its fixed **12‑unit left corner** and the feature region **fills the rest**; below that, they **stack** with full‑width features. |
 | **Tiles** | Pack several per row; use `compact` + `width` to fit more across. |
