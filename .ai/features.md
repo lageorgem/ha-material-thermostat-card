@@ -1,0 +1,93 @@
+# Features
+
+A "feature" is one configurable control rendered below/beside the dial. The
+config schema is in `src/types.ts` (the source of truth). `mt-feature-row`
+dispatches a `FeatureConfig` to the right element and applies grid placement.
+
+## The 8 feature types
+
+| `type` | Element | Renders via | Binds to | Selection behavior |
+| --- | --- | --- | --- | --- |
+| `climate-hvac-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_hvac_mode` |
+| `climate-fan-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_fan_mode` |
+| `climate-swing-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_swing_mode` |
+| `input-select` | `mt-input-select` | `selector-row` | an `input_select` | `input_select.select_option` |
+| `switch-group` | `mt-switch-group` | `selector-row` | a list of switchables | **mutually exclusive**: turn others off, then selected on |
+| `switch-list` | `mt-switch-list` | icon chips | a list of switchables | each toggles independently |
+| `button-list` | `mt-button-list` | icon chips | buttons/scenes/scripts | each pressed independently |
+| `entity-tile` | `mt-entity-tile` | rounded tile | one entity | `tap_action`, else natural action |
+
+### Shared config (`BaseSelectorFeature`)
+`display?: 'icons' | 'dropdown'` and `width?: number` — but **only the
+selector-style types** extend it (`climate-*`, `input-select`, `switch-group`).
+`switch-list`/`button-list`/`entity-tile` have **`width` but no `display`** (lists
+are always icon rows; the tile is always a tile). Don't assume `display` exists
+on every feature.
+
+### Per-option overrides (`OptionOverride`)
+`{ value, label?, icon?, hide? }` — supported by the three `climate-*` selectors
+and `input-select`. `value` keys to an underlying option; `hide:true` removes it.
+
+### List items (`EntityItem`)
+`{ entity, label?, icon? }` — `switch-group.entities`, `switch-list.entities`,
+`button-list.items` (note the **`items`** key for button-list, **`entities`** for
+the others — the shared editor takes an `itemsKey` prop to handle this).
+
+### Entity tile specifics (`entity-tile.ts` + `actions.ts`)
+`{ entity, name?, icon?, tap_action?, compact?, width? }`.
+- Default tap (`pressOrToggle`): press for button/input_button/scene/script,
+  toggle for switch/light/fan/input_boolean, more-info otherwise.
+- `tap_action` (standard Lovelace `ActionConfig`) overrides: supports `none`,
+  `more-info`, `toggle`, `url`, `navigate`, `call-service`/`perform-action`,
+  `default`.
+- Degradation by width: `width:1` → icon-only pill; `compact:true` **or**
+  `width ≤ 2` → icon + value (no title); else full tile (icon + title + value).
+
+## Shared selector row (`selector-row.ts`)
+
+Everything selector-like funnels through `mt-selector-row`, which takes
+`SelectorItem[]` (`{ value, label, icon?, active?, disabled? }`) and renders
+either **M3 icon chips** or an **`mt-dropdown`**, emitting `item-selected`
+(`{value}`, bubbles+composed). Each feature element just builds the
+`SelectorItem[]` from HA state and handles `item-selected`.
+
+`mt-dropdown` (`dropdown.ts`) is **self-contained** — built deliberately to avoid
+HA's lazily-loaded `ha-select` (which is inert inside a custom card). It sizes to
+content (`width:max-content`), anchors to whichever edge keeps it on screen
+(`_alignRight`/`_up`), and coordinates "only one open at a time" via a
+document-level `mt-dropdown-open` event.
+
+## Adding a new feature type
+
+1. **`types.ts`** — add a `…FeatureConfig` interface (extend `BaseSelectorFeature`
+   only if it should have `display`); add it to the `FeatureType` union and the
+   `FeatureConfig` union.
+2. **Renderer** — `features/my-thing.ts`, a Lit element. If it's selector-like,
+   build `SelectorItem[]` and delegate to `<mt-selector-row>`; otherwise render
+   directly. `declare global` its tag.
+3. **`feature-row.ts`** — import the element and add a `case` in `render()`
+   passing the needed props.
+4. **Editor** — `editors/my-thing-editor.ts` emitting `feature-changed`
+   (`{ feature }`). Reuse `mt-entity-list-editor` (pass `itemsKey`),
+   `mt-width-field`, `mt-display-toggle` where they fit.
+5. **`editor.ts`** — add to `ADDABLE_FEATURES`, `FEATURE_LABELS`,
+   `defaultFeature()`, and a `case` in `_renderFeatureEditor()`.
+6. **`material-thermostat-card.ts`** — if it has a default footprint, handle it in
+   `_featureSpan()`; if it binds entities, make sure `_trackedEntityIds()` picks
+   them up (it already scans `entity`, `entities[]`, `items[]`).
+7. Document it in the root `README.md` feature table + `types.ts` JSDoc.
+
+## The visual editor (`editor.ts`)
+
+- Base form is an `ha-form` (entity/name/theme/show_current_as_primary).
+- Features are a drag-sortable list (`ha-sortable`, `handle-selector=".handle"`);
+  each row expands to its sub-editor; an "Add feature" menu appends a
+  `defaultFeature(type)` and opens it.
+- ⚠️ HA lazily registers its form components — `ensureHaComponents()`
+  (`editors/load-ha.ts`) force-loads them in `connectedCallback`, then
+  `requestUpdate()`. Pickers/sliders are **inert in a custom card editor** unless
+  you do this, or you build self-contained widgets (we did both:
+  `mt-display-toggle`, `mt-width-field`, `mt-dropdown`). See
+  [`gotchas.md`](gotchas.md).
+- Sub-editors always pass `.hass` down (the `ha-form` number/entity selectors
+  need it to render).
