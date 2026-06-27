@@ -16,28 +16,42 @@ function slider(el: MtWidthField): MtGridSlider {
 
 describe('mt-width-field', () => {
   describe('value set', () => {
-    it('renders mt-grid-slider with that value, tooltip-mode "always", reset enabled, no Auto hint', async () => {
+    it('renders mt-grid-slider with that value, percentage min/max/step, tooltip-mode "always", reset enabled, no hint', async () => {
       const hass = makeHass({});
       const el = await fixture<MtWidthField>(
-        html`<mt-width-field .hass=${hass} .value=${7}></mt-width-field>`
+        html`<mt-width-field .hass=${hass} .value=${70}></mt-width-field>`
       );
       const s = slider(el);
       expect(s).to.not.equal(null);
-      expect(s.value).to.equal(7);
+      expect(s.value).to.equal(70);
+      // percentage-based slider: 10..100 in steps of 10
+      expect(s.min).to.equal(10);
+      expect(s.max).to.equal(100);
+      expect(s.step).to.equal(10);
       expect(s.getAttribute('tooltip-mode')).to.equal('always');
       expect(resetBtn(el).disabled).to.be.false;
       expect(el.shadowRoot!.querySelector('.hint')).to.equal(null);
     });
+
+    it('labels the control "Width (% of card)"', async () => {
+      const hass = makeHass({});
+      const el = await fixture<MtWidthField>(
+        html`<mt-width-field .hass=${hass} .value=${70}></mt-width-field>`
+      );
+      expect(el.shadowRoot!.querySelector('.label')!.textContent!.trim()).to.equal(
+        'Width (% of card)'
+      );
+    });
   });
 
   describe('value unset', () => {
-    it('reset disabled, Auto hint shown, slider tooltip-mode "interaction"', async () => {
+    it('reset disabled, full-width hint shown, slider tooltip-mode "interaction"', async () => {
       const hass = makeHass({});
       const el = await fixture<MtWidthField>(html`<mt-width-field .hass=${hass}></mt-width-field>`);
       expect(resetBtn(el).disabled).to.be.true;
       const hint = el.shadowRoot!.querySelector('.hint');
       expect(hint).to.not.equal(null);
-      expect(hint!.textContent).to.contain('Auto');
+      expect(hint!.textContent).to.contain('Full width — tap the track to set a percentage.');
       expect(slider(el).getAttribute('tooltip-mode')).to.equal('interaction');
     });
   });

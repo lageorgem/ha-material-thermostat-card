@@ -50,31 +50,37 @@ describe('mt-grid-slider', () => {
       expect(styleVar(active, '--max')).to.equal(`${1 - 6 / 6}`);
     });
 
-    it('renders dots and skips dots outside [min,max]', async () => {
-      const el = await fixture<MtGridSlider>(
-        html`<mt-grid-slider .value=${4} .min=${2} .max=${4} .step=${1}></mt-grid-slider>`
-      );
-      // _range = max = 4, dotCount = round(4/1) = 4, i in 0..3
-      // skip when min >= i*step (2 >= i) OR i*step > max (i > 4)
-      // i=0: 2>=0 skip; i=1: 2>=1 skip; i=2: 2>=2 skip; i=3: 2>=3? no, 3>4? no -> kept
-      const dots = el.shadowRoot!.querySelectorAll('.dot');
-      expect(dots.length).to.equal(1);
-    });
-
-    it('skips dots beyond max when range extends past max (i*step > max branch)', async () => {
+    it('renders a dot for every step except the 0% endpoint', async () => {
       const el = await fixture<MtGridSlider>(
         html`<mt-grid-slider
-          .value=${4}
-          .min=${0}
-          .max=${4}
-          .step=${1}
-          .range=${8}
+          .value=${50}
+          .min=${10}
+          .max=${100}
+          .step=${10}
         ></mt-grid-slider>`
       );
-      // _range = 8, dotCount = round(8/1) = 8, i in 0..7
-      // keep when min(0) < i*step AND i*step <= max(4): i in {1,2,3,4} -> 4 dots
+      // _range = max = 100, dotCount = round(100/10) = 10, i in 0..9.
+      // A dot is rendered for every step index except i === 0 (and the loop
+      // stops before i = 10), so dots sit at 10%,20%,…,90% -> 9 dots.
       const dots = el.shadowRoot!.querySelectorAll('.dot');
-      expect(dots.length).to.equal(4);
+      expect(dots.length).to.equal(9);
+    });
+
+    it('renders no dot at the 0% / 100% endpoints', async () => {
+      const el = await fixture<MtGridSlider>(
+        html`<mt-grid-slider
+          .value=${50}
+          .min=${10}
+          .max=${100}
+          .step=${10}
+        ></mt-grid-slider>`
+      );
+      const positions = [...el.shadowRoot!.querySelectorAll('.dot')].map((d) =>
+        styleVar(d, '--value')
+      );
+      // dotCount = 10 -> pct = i/10; endpoints are 0% (i=0, skipped) and 100% (i=10, never reached).
+      expect(positions).to.not.include('0');
+      expect(positions).to.not.include('1');
     });
 
     it('renders the handle when value is defined', async () => {

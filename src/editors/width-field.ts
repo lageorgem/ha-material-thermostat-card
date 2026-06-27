@@ -1,16 +1,15 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-import { MIN_FEATURE_UNITS, MAX_FEATURE_UNITS } from '../grid';
+import { MIN_WIDTH_PCT, MAX_WIDTH_PCT, WIDTH_STEP } from '../grid';
 import './grid-slider';
 
 /**
- * A small editor control for a feature's width, expressed in grid units
- * (1 unit ≈ 24px, min 2). Empty (unset) means "let the card decide" — a full
- * row for selector/list features, a sensible default for tiles. Renders Home
- * Assistant's grid-layout-style slider (via the self-contained `mt-grid-slider`)
- * plus a reset button that clears the width back to auto. Emits `width-changed`
- * with `{ value: number | undefined }`.
+ * A small editor control for a feature's width, expressed as a **percentage of
+ * the card** (10–100, in steps of 10). Empty (unset) means full width. Renders
+ * a grid-layout-style slider (the self-contained `mt-grid-slider`, with dots on
+ * the tens) plus a reset button that clears the width back to auto. Emits
+ * `width-changed` with `{ value: number | undefined }`.
  */
 @customElement('mt-width-field')
 export class MtWidthField extends LitElement {
@@ -19,7 +18,7 @@ export class MtWidthField extends LitElement {
 
   /**
    * Re-emit a width value.
-   * @param value the new width in grid units, or undefined for auto
+   * @param value the new width percentage, or undefined for full width
    */
   private _emit(value: number | undefined): void {
     this.dispatchEvent(
@@ -48,12 +47,12 @@ export class MtWidthField extends LitElement {
   protected render(): TemplateResult {
     const set = this.value != null;
     return html`
-      <div class="label">Width (grid units, ≈24px each, min ${MIN_FEATURE_UNITS})</div>
+      <div class="label">Width (% of card)</div>
       <div class="control">
         <button
           class="reset"
-          aria-label="Reset width to auto"
-          title="Reset to auto"
+          aria-label="Reset width to full"
+          title="Reset to full width"
           ?disabled=${!set}
           @click=${this._reset}
         >
@@ -61,14 +60,14 @@ export class MtWidthField extends LitElement {
         </button>
         <mt-grid-slider
           .value=${this.value}
-          .min=${MIN_FEATURE_UNITS}
-          .max=${MAX_FEATURE_UNITS}
-          .step=${1}
+          .min=${MIN_WIDTH_PCT}
+          .max=${MAX_WIDTH_PCT}
+          .step=${WIDTH_STEP}
           tooltip-mode=${set ? 'always' : 'interaction'}
           @value-changed=${this._onChanged}
         ></mt-grid-slider>
       </div>
-      ${set ? nothing : html`<div class="hint">Auto — tap the track to set a width.</div>`}
+      ${set ? nothing : html`<div class="hint">Full width — tap the track to set a percentage.</div>`}
     `;
   }
 

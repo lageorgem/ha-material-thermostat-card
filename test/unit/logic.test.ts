@@ -7,15 +7,16 @@ import {
   prettyLabel,
 } from '../../src/theme';
 import {
-  UNIT_PX,
-  MIN_FEATURE_UNITS,
-  MAX_UNITS,
-  DIAL_UNITS,
-  MAX_FEATURE_UNITS,
-  TILE_DEFAULT_UNITS,
-  TILE_COMPACT_UNITS,
+  WIDTH_STEP,
+  MIN_WIDTH_PCT,
+  MAX_WIDTH_PCT,
+  GRID_COLUMNS,
+  TILE_DEFAULT_PCT,
+  DIAL_MAX_PX,
+  DIAL_MIN_PX,
+  WIDE_MIN_PX,
   CARD_PADDING_X,
-  unitsToPx,
+  pctToSpan,
 } from '../../src/grid';
 import {
   CARD_VERSION,
@@ -162,20 +163,24 @@ describe('theme', () => {
 
 describe('grid', () => {
   it('constants have exact values', () => {
-    expect(UNIT_PX).to.equal(24);
-    expect(MIN_FEATURE_UNITS).to.equal(2);
-    expect(MAX_UNITS).to.equal(48);
-    expect(DIAL_UNITS).to.equal(12);
-    expect(MAX_FEATURE_UNITS).to.equal(36);
-    expect(TILE_DEFAULT_UNITS).to.equal(6);
-    expect(TILE_COMPACT_UNITS).to.equal(4);
+    expect(WIDTH_STEP).to.equal(10);
+    expect(MIN_WIDTH_PCT).to.equal(10);
+    expect(MAX_WIDTH_PCT).to.equal(100);
+    expect(GRID_COLUMNS).to.equal(10);
+    expect(TILE_DEFAULT_PCT).to.equal(50);
+    expect(DIAL_MAX_PX).to.equal(320);
+    expect(DIAL_MIN_PX).to.equal(240);
+    expect(WIDE_MIN_PX).to.equal(560);
     expect(CARD_PADDING_X).to.equal(32);
   });
-  it('unitsToPx multiplies by 24', () => {
-    expect(unitsToPx(0)).to.equal(0);
-    expect(unitsToPx(1)).to.equal(24);
-    expect(unitsToPx(12)).to.equal(288);
-    expect(unitsToPx(3)).to.equal(3 * 24);
+  it('pctToSpan maps percentage to a 10-column span', () => {
+    expect(pctToSpan(100)).to.equal(10);
+    expect(pctToSpan(50)).to.equal(5);
+    expect(pctToSpan(30)).to.equal(3);
+    expect(pctToSpan(5)).to.equal(1); // clamped to min 1
+    expect(pctToSpan(999)).to.equal(10); // clamped to max 10
+    expect(pctToSpan(44)).to.equal(4); // rounds down
+    expect(pctToSpan(45)).to.equal(5); // rounds to nearest
   });
 });
 

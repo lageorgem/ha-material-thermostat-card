@@ -322,28 +322,130 @@ describe('material-thermostat-card', () => {
       await el.updateComplete;
     }
 
-    it('width < 576 → stacked body', async () => {
+    // --- stacked vs wide decision (px-based rule) ----------------------------
+
+    it('all-100% features on a wide card → stacked (features need full width)', async () => {
+      // A selector defaults to 100% → maxPct === 100 → never wide.
       const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
-      await setWidth(el, 400);
+      await setWidth(el, 800);
       const body = el.shadowRoot!.querySelector('.body');
       expect(body!.classList.contains('stacked')).to.equal(true);
       expect(body!.classList.contains('wide')).to.equal(false);
     });
 
-    it('width >= 576 with features → wide body', async () => {
-      const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
-      await setWidth(el, 700);
+    it('width:50 features on a wide (800px) card → wide body', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 50 } as any] }))
+      );
+      await setWidth(el, 800); // >= WIDE_MIN_PX(560); leftover = 800*0.5 = 400 >= DIAL_MIN_PX(240)
       const body = el.shadowRoot!.querySelector('.body');
       expect(body!.classList.contains('wide')).to.equal(true);
       expect(body!.classList.contains('stacked')).to.equal(false);
     });
 
-    it('width >= 576 but no features → stacked (wide needs features)', async () => {
+    it('width just below WIDE_MIN_PX → stacked even with sub-100% features', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 50 } as any] }))
+      );
+      await setWidth(el, 559); // < WIDE_MIN_PX(560)
+      const body = el.shadowRoot!.querySelector('.body');
+      expect(body!.classList.contains('stacked')).to.equal(true);
+      expect(body!.classList.contains('wide')).to.equal(false);
+    });
+
+    it('maxPct leaving < DIAL_MIN_PX of leftover → stacked', async () => {
+      // width:90 on a 600px card: leftover = 600*0.1 = 60 < DIAL_MIN_PX(240).
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 90 } as any] }))
+      );
+      await setWidth(el, 600);
+      const body = el.shadowRoot!.querySelector('.body');
+      expect(body!.classList.contains('stacked')).to.equal(true);
+      expect(body!.classList.contains('wide')).to.equal(false);
+    });
+
+    it('width >= WIDE_MIN_PX but no features → stacked (wide needs features)', async () => {
       const el = track(await mount(baseConfig()));
-      await setWidth(el, 700);
+      await setWidth(el, 800);
       const body = el.shadowRoot!.querySelector('.body');
       expect(body!.classList.contains('stacked')).to.equal(true);
     });
+
+    // --- _featureWidthPct / _featureSpan ------------------------------------
+
+    it('_featureWidthPct: explicit width is rounded to the nearest ten and clamped', async () => {
+      const el = track(await mount(baseConfig()));
+      const pct = (f: any): number => (el as any)._featureWidthPct(f);
+      expect(pct({ type: 'climate-fan-modes', width: 50 })).to.equal(50);
+      expect(pct({ type: 'climate-fan-modes', width: 44 })).to.equal(40); // round(4.4)*10
+      expect(pct({ type: 'climate-fan-modes', width: 45 })).to.equal(50); // round(4.5)*10
+      expect(pct({ type: 'climate-fan-modes', width: 3 })).to.equal(10); // clamp to MIN_WIDTH_PCT
+      expect(pct({ type: 'climate-fan-modes', width: 200 })).to.equal(100); // clamp to MAX_WIDTH_PCT
+    });
+
+    it('_featureWidthPct: entity-tile defaults to 50, other features default to 100', async () => {
+      const el = track(await mount(baseConfig()));
+      const pct = (f: any): number => (el as any)._featureWidthPct(f);
+      expect(pct({ type: 'entity-tile', entity: 'sensor.x' })).to.equal(50); // TILE_DEFAULT_PCT
+      expect(pct({ type: 'climate-fan-modes' })).to.equal(100); // selector default
+      // width:0 / non-numeric width is ignored → falls through to defaults
+      expect(pct({ type: 'entity-tile', entity: 'sensor.x', width: 0 })).to.equal(50);
+    });
+
+    it('_featureSpan maps a width percentage to a 1..10 column span', async () => {
+      const el = track(await mount(baseConfig()));
+      const span = (f: any): number => (el as any)._featureSpan(f);
+      expect(span({ type: 'climate-fan-modes', width: 100 })).to.equal(10);
+      expect(span({ type: 'climate-fan-modes', width: 50 })).to.equal(5);
+      expect(span({ type: 'climate-fan-modes', width: 30 })).to.equal(3);
+      expect(span({ type: 'climate-fan-modes', width: 3 })).to.equal(1); // pct clamps to 10 → span 1
+      expect(span({ type: 'entity-tile', entity: 'sensor.x' })).to.equal(5); // 50% → span 5
+      expect(span({ type: 'climate-fan-modes' })).to.equal(10); // 100% → span 10
+    });
+
+    // --- _layout outputs ----------------------------------------------------
+
+    it('_layout (stacked): gridCols === 10 and the dial gets a marginBottom crop', async () => {
+      const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
+      await setWidth(el, 400);
+      const layout = (el as any)._layout();
+      expect(layout.wide).to.equal(false);
+      expect(layout.gridCols).to.equal(10); // GRID_COLUMNS
+      expect(layout.featureStyle).to.deep.equal({});
+      expect(layout.dialStyle.marginBottom).to.match(/^-\d+px$/);
+    });
+
+    it('_layout (wide): gridCols === maxPct/10 with the expected flex styles', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 40 } as any] }))
+      );
+      await setWidth(el, 800); // wide: leftover = 800*0.6 = 480 >= DIAL_MIN_PX(240)
+      const layout = (el as any)._layout();
+      expect(layout.wide).to.equal(true);
+      expect(layout.gridCols).to.equal(4); // maxPct(40) / 10
+      expect(layout.featureStyle.flex).to.equal('0 0 40%');
+      expect(layout.dialStyle.flex).to.equal('1 1 auto');
+    });
+
+    it('_layout (wide): gridCols/flex follow the widest feature (maxPct)', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-hvac-modes', width: 30 } as any,
+              { type: 'climate-fan-modes', width: 60 } as any,
+            ],
+          })
+        )
+      );
+      await setWidth(el, 800); // maxPct = 60; leftover = 800*0.4 = 320 >= 240 → wide
+      const layout = (el as any)._layout();
+      expect(layout.wide).to.equal(true);
+      expect(layout.gridCols).to.equal(6); // maxPct(60) / 10
+      expect(layout.featureStyle.flex).to.equal('0 0 60%');
+    });
+
+    // --- render: the .features grid -----------------------------------------
 
     it('renders the .features grid when features exist', async () => {
       const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
@@ -358,6 +460,56 @@ describe('material-thermostat-card', () => {
       expect(el.shadowRoot!.querySelector('.features')).to.equal(null);
     });
 
+    it('.features sets grid-template-columns from gridCols (stacked → 10 cols)', async () => {
+      const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
+      await setWidth(el, 400);
+      const features = el.shadowRoot!.querySelector('.features') as HTMLElement;
+      // the browser normalizes the unitless 0 to 0px when read back from style
+      expect(features.style.gridTemplateColumns).to.equal('repeat(10, minmax(0px, 1fr))');
+    });
+
+    it('.features sets grid-template-columns from gridCols (wide → maxPct/10 cols)', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 50 } as any] }))
+      );
+      await setWidth(el, 800); // wide; maxPct 50 → 5 cols
+      const features = el.shadowRoot!.querySelector('.features') as HTMLElement;
+      expect(features.style.gridTemplateColumns).to.equal('repeat(5, minmax(0px, 1fr))');
+      // wide feature area carries the flex basis too
+      expect(features.style.flex).to.equal('0 0 50%');
+    });
+
+    it('renders one mt-feature-row per feature, in order, each with its computed span', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-hvac-modes', width: 50 } as any, // 50% → span 5
+              { type: 'climate-fan-modes', width: 30 } as any, // 30% → span 3
+              { type: 'climate-swing-modes' } as any, // default 100% → span 10
+            ],
+          })
+        )
+      );
+      await setWidth(el, 480);
+      const rows = el.shadowRoot!.querySelectorAll('mt-feature-row');
+      expect(rows.length).to.equal(3);
+      expect((rows[0] as any).feature.type).to.equal('climate-hvac-modes');
+      expect((rows[1] as any).feature.type).to.equal('climate-fan-modes');
+      expect((rows[2] as any).feature.type).to.equal('climate-swing-modes');
+      // .span equals _featureSpan(feature)
+      expect((rows[0] as any).span).to.equal(5);
+      expect((rows[1] as any).span).to.equal(3);
+      expect((rows[2] as any).span).to.equal(10);
+      // mt-feature-row reflects the span onto its host grid-column
+      await (rows[0] as any).updateComplete;
+      await (rows[1] as any).updateComplete;
+      await (rows[2] as any).updateComplete;
+      expect((rows[0] as HTMLElement).style.gridColumn).to.equal('span 5');
+      expect((rows[1] as HTMLElement).style.gridColumn).to.equal('span 3');
+      expect((rows[2] as HTMLElement).style.gridColumn).to.equal('span 10');
+    });
+
     it('stacked dial gets a negative marginBottom crop', async () => {
       const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
       await setWidth(el, 400);
@@ -365,99 +517,16 @@ describe('material-thermostat-card', () => {
       expect(wrap.style.marginBottom).to.match(/^-\d+px$/);
     });
 
-    it('a lone sized feature is a fixed fraction of the card (not stretched)', async () => {
-      // Regression: a lone `width: 3` feature must be small, not fill the row.
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [{ type: 'climate-swing-modes', display: 'dropdown', width: 3 } as any],
-          })
-        )
-      );
-      await setWidth(el, 480); // stacked: budget = round(480/24) = 20 units → 3/20 = 15%
-      const layout = (el as any)._layout();
-      expect(layout.rows.length).to.equal(1);
-      expect(layout.rows[0].justify).to.equal('center');
-      expect(layout.rows[0].items[0].flex).to.equal('0 0 15%');
-      const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
-      expect(row.flex).to.equal('0 0 15%');
-    });
-
-    it('two equal sized features share a row and fill it 50/50', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [
-              { type: 'climate-hvac-modes', width: 8 } as any,
-              { type: 'climate-fan-modes', width: 8 } as any,
-            ],
-          })
-        )
-      );
-      await setWidth(el, 480); // budget 20; 8+8 share one row
-      const layout = (el as any)._layout();
-      expect(layout.rows.length).to.equal(1);
-      expect(layout.rows[0].items.length).to.equal(2);
-      // equal flex-grow weights → 50/50, edge to edge (no fixed-fraction basis)
-      expect(layout.rows[0].items[0].flex).to.equal('8 1 0');
-      expect(layout.rows[0].items[1].flex).to.equal('8 1 0');
-    });
-
-    it('two width:9 features stay on one row (greedy overflow) even past budget', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [
-              { type: 'climate-hvac-modes', width: 9 } as any,
-              { type: 'climate-fan-modes', width: 9 } as any,
-            ],
-          })
-        )
-      );
-      await setWidth(el, 408); // budget = round(408/24) = 17 < 18, but they still pair
-      const layout = (el as any)._layout();
-      expect(layout.rows.length).to.equal(1);
-      expect(layout.rows[0].items.map((i: any) => i.flex)).to.deep.equal(['9 1 0', '9 1 0']);
-    });
-
-    it('a flexible feature takes its own full-width row', async () => {
-      const el = track(await mount(baseConfig({ features: [{ type: 'climate-fan-modes' }] })));
-      await setWidth(el, 700);
-      const layout = (el as any)._layout();
-      expect(layout.rows.length).to.equal(1);
-      expect(layout.rows[0].items[0].flex).to.equal('1 1 auto');
-      expect(layout.rows[0].justify).to.equal(undefined);
-    });
-
-    it('entity-tile uses its default footprint as a lone fraction', async () => {
+    it('entity-tile defaults to a 50% width (span 5) feature', async () => {
       const el = track(
         await mount(
           baseConfig({ features: [{ type: 'entity-tile', entity: 'sensor.x' } as any] }),
           { [ENTITY]: climateState(), 'sensor.x': entityState('sensor.x', '42') }
         )
       );
-      await setWidth(el, 480); // budget 20; default tile = 6 → 6/20 = 30%
-      const layout = (el as any)._layout();
-      expect(layout.rows[0].items[0].flex).to.equal('0 0 30%');
-    });
-
-    it('a flexible feature flushes a shared sized row', async () => {
-      const el = track(
-        await mount(
-          baseConfig({
-            features: [
-              { type: 'climate-hvac-modes', width: 8 } as any,
-              { type: 'climate-fan-modes', width: 8 } as any,
-              { type: 'climate-swing-modes' } as any, // flexible → its own row
-            ],
-          })
-        )
-      );
       await setWidth(el, 480);
-      const layout = (el as any)._layout();
-      expect(layout.rows.length).to.equal(2);
-      expect(layout.rows[0].items.length).to.equal(2); // the two width:8 share row 1
-      expect(layout.rows[1].items[0].flex).to.equal('1 1 auto'); // flexible fills row 2
+      const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
+      expect(row.span).to.equal(5); // TILE_DEFAULT_PCT(50) → span 5
     });
   });
 

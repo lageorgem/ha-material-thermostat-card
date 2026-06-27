@@ -213,7 +213,9 @@ export class MtGridSlider extends LitElement {
             .fill(0)
             .map((_, i) => {
               const pct = i / dotCount;
-              if (this.min >= i * this.step || i * this.step > this.max) return nothing;
+              // A dot at every step except the two endpoints (0 and the range max);
+              // the loop already stops before the max, so just skip 0.
+              if (i === 0) return nothing;
               return html`<div class="dot" style=${styleMap({ '--value': `${pct}` })}></div>`;
             })}
           ${this.value !== undefined ? html`<div class="handle"></div>` : nothing}

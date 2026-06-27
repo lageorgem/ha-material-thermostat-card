@@ -52,7 +52,7 @@ gracefully under any Home Assistant theme.
 - 🧩 Climate **HVAC / fan / swing** selectors as an **icon row** or **dropdown**.
 - ✏️ Per‑option **label / icon / hide** overrides — from the visual editor.
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**.
-- 📐 **Relative, gap‑safe grid** layout that fills correctly at any card width, with a side‑by‑side wide mode.
+- 📐 **Percentage widths** that fill and wrap correctly at any card size, with a side‑by‑side wide mode.
 - 🌬️ A bundled **`mt:` AC swing icon set**, searchable in the icon picker.
 - 🎨 **Material 3** tokens with graceful Home Assistant theme fallbacks.
 - 🛠️ A **visual editor** for every feature type.
@@ -148,7 +148,7 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | Option | Applies to | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` | `icons` | Render the selector as an icon row or a dropdown |
-| `width` | **all** feature types | number `2`–`36` | full row (selectors/lists) · `6` (tiles, `4` if compact) | **Relative** width in grid units — see [Layout](#layout--responsiveness) |
+| `width` | **all** feature types | number `10`–`100` (step 10) | `100` (selectors/lists) · `50` (tiles) | Width as a **percentage of the card** — see [Layout](#layout--responsiveness) |
 
 ### Climate selectors (HVAC / fan / swing)
 
@@ -261,7 +261,7 @@ on/off). Runs `tap_action` if set, otherwise the entity's natural action.
 | `icon` | string | entity / domain icon | Tile icon |
 | `tap_action` | [action](https://www.home-assistant.io/dashboards/actions/) | natural action | Standard Lovelace action (`toggle`, `more-info`, `navigate`, `call-service`, `url`, `none`, …) |
 | `compact` | boolean | `false` | Icon + value only (no title) — fits more per row |
-| `width` | number | `6` (`4` if compact) | Relative width in grid units |
+| `width` | number `10`–`100` | `50` | Width as a percentage of the card |
 
 **Default tap action** (when `tap_action` is unset): press for `button`/`input_button`/`scene`/`script`,
 toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
@@ -277,32 +277,29 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
   tap_action:
     action: toggle
 
-# Compact tiles — several fit per row
+# Compact tiles — two per row at 50% each
 - type: entity-tile
   entity: sensor.living_humidity
   icon: mdi:water-percent
   compact: true
-  width: 6
+  width: 50
 ```
 
 ## Layout & responsiveness
 
-Features lay out on a grid sized to the card's measured width, so the same config works in both
-**sections** and **masonry** views.
+Feature `width` is a **percentage of the card** (10–100, in steps of 10). The same config works
+in both **sections** and **masonry** views, since sizing is measured from the card's actual width.
 
 | Concept | Behavior |
 | --- | --- |
-| **Grid unit** | 1 unit ≈ **24px**. The card is as many units wide as it measures; a full‑width sections view ≈ **48 units**; an icon ≈ **2 units**. |
-| **Shared rows fill proportionally** | Features that fit on one row **fill it, split by their widths** — two `width: 8` (or two `width: 9`) are **50/50 edge to edge**, a `6 + 12` is 1/3 + 2/3. The card's exact pixel size doesn't matter. |
-| **A lone narrow feature stays small** | A feature alone on its row is `width / card` of the width (a `width: 3` is a small pill), **centered** — it doesn't stretch to fill. |
-| **Max feature width** | **36 units** (the region beside the 12‑unit dial). |
-| **Works in masonry & sections** | Sizing is measured from the card's actual width, so the same config behaves the same in both view types. |
+| **Width = % of the card** | `width: 50` is half the card; unset = full width (`100`). |
+| **Rows fill, and wrap by width** | Features pack left to right; two `width: 50` fill a row **50/50**, and the next feature **wraps** to a new row when it doesn't fit (e.g. `50 + 60` → the `60` drops down). |
+| **A narrow feature stays narrow** | A `width: 30` feature is 30% of the card — it doesn't stretch to fill its row. |
+| **Side‑by‑side (wide)** | On a wide card where every feature is **< 100%**, the feature area takes the **widest feature's %** on the right and the **fixed‑size dial is centered** in the space on the left. Otherwise the card **stacks** (dial on top). Give your features explicit `width < 100` to get the side‑by‑side layout. |
 | **Icon overflow** | Icon rows keep their icon size and **scroll horizontally** instead of squishing. |
-| **Side‑by‑side (wide)** | At **≥ 24 units** (~50% width) the dial anchors in its fixed **12‑unit left corner** and the feature region **fills the rest**; below that, they **stack** with full‑width features. |
-| **Tiles** | Pack several per row; use `compact` + `width` to fit more across. |
 
-The `width` control in the visual editor is a slider (**2–36**). Leave `width` unset for a full row
-(selectors/lists) or a sensible default (tiles).
+The `width` control in the visual editor is a slider (**10–100%**, dots on the tens). Leave it unset
+for full width (selectors/lists) or the 50% default (tiles).
 
 ## AC swing icons (`mt:`)
 

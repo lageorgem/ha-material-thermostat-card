@@ -103,9 +103,9 @@ export class MtSelectorRow extends LitElement {
         border-radius: var(--mt-shape-full);
         /* min-width:0 lets the pill shrink to its container instead of growing
            to its content (the default min-width:auto), so it stays inside the
-           rounded container. Icons keep ~2 grid units (~48px) each on a single
-           row; when they don't all fit, the row scrolls horizontally (clipped to
-           the rounded shape) instead of squishing. */
+           rounded container. Icons keep ~48px each on a single row; when they
+           don't all fit, the row scrolls horizontally (clipped to the rounded
+           shape) instead of squishing. */
         min-width: 0;
         overflow-x: auto;
         overflow-y: hidden;
@@ -115,9 +115,8 @@ export class MtSelectorRow extends LitElement {
         display: none;
       }
       .chip {
-        /* Footprint (44px + 4px gap = 48px) ≈ 2 grid units, so N icons span
-           ≈ 2N units. Grow to fill, capped so icons never over-stretch when
-           there is spare room. */
+        /* Footprint 44px + 4px gap = 48px per icon. Grow to fill, capped so
+           icons never over-stretch when there is spare room. */
         flex: 1 1 44px;
         height: 44px;
         min-width: 44px;

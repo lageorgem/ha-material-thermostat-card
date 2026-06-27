@@ -9,58 +9,56 @@ import type { FeatureConfig } from '../../src/types';
  * Mount an mt-feature-row.
  * @param hass the fake hass
  * @param feature the feature config
- * @param props sizing props (flex) + entityId
+ * @param props sizing props (span) + entityId
  */
 async function mount(
   hass: TestHass,
   feature: FeatureConfig,
   props: {
     entityId?: string;
-    flex?: string;
+    span?: number;
   } = {}
 ): Promise<MtFeatureRow> {
-  const { entityId = 'climate.test', flex = '' } = props;
+  const { entityId = 'climate.test', span } = props;
   return fixture<MtFeatureRow>(
     html`<mt-feature-row
       .hass=${hass}
       entityId=${entityId}
       .feature=${feature}
-      .flex=${flex}
+      .span=${span}
     ></mt-feature-row>`
   );
 }
 
 describe('mt-feature-row', () => {
-  describe('willUpdate flex sizing', () => {
-    it('applies the flex shorthand to the host (grow weight)', async () => {
+  describe('willUpdate column span', () => {
+    it('applies the span to the host grid-column', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
-      const el = await mount(hass, { type: 'climate-hvac-modes' }, { flex: '8 1 0' });
-      expect(el.style.flexGrow).to.equal('8');
-      expect(el.style.flexBasis).to.equal('0px');
+      const el = await mount(hass, { type: 'climate-hvac-modes' }, { span: 5 });
+      expect(el.style.gridColumn).to.equal('span 5');
     });
 
-    it('applies a fixed-fraction flex for a lone sized feature', async () => {
+    it('clamps a span of 0 to span 1', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
-      const el = await mount(hass, { type: 'climate-hvac-modes' }, { flex: '0 0 25%' });
-      expect(el.style.flexGrow).to.equal('0');
-      expect(el.style.flexBasis).to.equal('25%');
+      const el = await mount(hass, { type: 'climate-hvac-modes' }, { span: 0 });
+      expect(el.style.gridColumn).to.equal('span 1');
     });
 
-    it('updates the flex when it changes', async () => {
+    it('updates the span when it changes', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
-      const el = await mount(hass, { type: 'climate-hvac-modes' }, { flex: '1 1 auto' });
-      el.flex = '9 1 0';
+      const el = await mount(hass, { type: 'climate-hvac-modes' }, { span: 3 });
+      el.span = 9;
       await el.updateComplete;
-      expect(el.style.flexGrow).to.equal('9');
+      expect(el.style.gridColumn).to.equal('span 9');
     });
 
-    it('does not re-touch flex when an unrelated property changes', async () => {
+    it('does not re-touch grid-column when an unrelated property changes', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
-      const el = await mount(hass, { type: 'climate-hvac-modes' }, { flex: '5 1 0' });
-      el.style.flex = '';
+      const el = await mount(hass, { type: 'climate-hvac-modes' }, { span: 5 });
+      el.style.gridColumn = '';
       el.entityId = 'climate.other';
       await el.updateComplete;
-      expect(el.style.flex).to.equal('');
+      expect(el.style.gridColumn).to.equal('');
     });
   });
 

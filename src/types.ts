@@ -34,7 +34,7 @@ export interface EntityItem {
 
 interface BaseSelectorFeature {
   display?: FeatureDisplay;
-  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
   width?: number;
 }
 
@@ -70,7 +70,7 @@ export interface SwitchListFeatureConfig {
   type: 'switch-list';
   label?: string;
   entities: EntityItem[];
-  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
   width?: number;
 }
 
@@ -78,7 +78,7 @@ export interface ButtonListFeatureConfig {
   type: 'button-list';
   label?: string;
   items: EntityItem[];
-  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
   width?: number;
 }
 
@@ -90,7 +90,7 @@ export interface EntityTileFeatureConfig {
   tap_action?: ActionConfig;
   /** Compact variant: icon + value only (no title), for fitting many per row. */
   compact?: boolean;
-  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = a sensible default. */
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = 50%. */
   width?: number;
 }
 
