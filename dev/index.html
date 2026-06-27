@@ -78,9 +78,16 @@
 
     <script type="module">
       // --- Minimal stubs for HA components used at card runtime ---
+      // Render into SHADOW DOM, never light-DOM innerHTML — mutating an element's
+      // light DOM during Lit's render corrupts Lit's part markers (it would shift
+      // the card's body class / feature grid placement).
       class HaIcon extends HTMLElement {
         static get observedAttributes() {
           return ['icon'];
+        }
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
         }
         connectedCallback() {
           this.render();
@@ -94,7 +101,7 @@
           this.style.placeItems = 'center';
           this.style.width = size;
           this.style.height = size;
-          this.innerHTML = `<span title="${this.getAttribute('icon') || ''}"
+          this.shadowRoot.innerHTML = `<span title="${this.getAttribute('icon') || ''}"
             style="width:68%;height:68%;border-radius:50%;background:currentColor;opacity:.85"></span>`;
         }
       }

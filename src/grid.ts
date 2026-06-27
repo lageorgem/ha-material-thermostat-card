@@ -11,9 +11,12 @@
  */
 export const UNIT_PX = 24; // one sections-grid unit
 export const MIN_FEATURE_UNITS = 2; // floor for any feature (one icon ≈ 2 units)
-export const MAX_UNITS = 36; // cap (wide format spans up to 36 units)
+export const MAX_UNITS = 48; // cap — a full-width HA sections view is 48 units
 export const DIAL_UNITS = 12; // circular controls footprint
 export const SIDE_BY_SIDE_MIN_UNITS = 24; // ≥ 50% of the grid → controls beside features
+// Widest a single feature can be: the feature region next to the 12-unit dial on
+// a full 48-unit card (48 − 12), i.e. a feature can fill that region edge to edge.
+export const MAX_FEATURE_UNITS = MAX_UNITS - DIAL_UNITS; // 36
 export const TILE_DEFAULT_UNITS = 6; // entity-tile default
 export const TILE_COMPACT_UNITS = 4; // compact entity-tile default
 

@@ -156,33 +156,33 @@ features:
     width: 4 # grid units (≈24px each; an icon ≈ 2 units)
 ```
 
-**Width** — every feature accepts an optional `width` in **grid units** (1 unit = one
-Home Assistant sections-grid unit, ≈24px; an icon ≈ 2 units). Two features sharing a row each take
-half the row's units — on a 12-unit row that's `width: 6` apiece. The minimum is **2 units**; leave
-`width` unset for a full row (selectors/lists) or a sensible default (tiles). `switch-group`,
-`switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The entity tile
-additionally accepts `name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for
-switches, press for buttons, more-info otherwise), and `compact: true` (icon + value only, no
-title).
+**Width** — every feature accepts an optional `width` in **grid units** (a slider in the editor,
+**2–36**). Widths are **relative**: features sharing a row split it in proportion to their widths,
+so two equal-width dropdowns are always 50/50 regardless of the card's pixel size. The widest sized
+row sets the grid; narrower rows are **centered**, and a feature as wide as its area fills it edge to
+edge. Leave `width` unset for a full row (selectors/lists) or a sensible default (tiles).
+`switch-group`, `switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The
+entity tile additionally accepts `name`, `icon`, a standard Lovelace `tap_action` (defaults to
+toggle for switches, press for buttons, more-info otherwise), and `compact: true` (icon + value
+only, no title).
 
 ## Responsiveness
 
 The card lays its content out on a **grid** keyed to the Home Assistant sections grid (48 units
 across a full-width view):
 
-- **1 grid unit = 1 sections-grid unit (~24px); an icon ≈ 2 units.** All feature widths are defined
-  in these units rather than pixels, with a **minimum of 2 units** per feature, and the grid is
-  capped at **36 units** (the wide format). Features are laid out with **CSS grid**, so the gap
-  between two side-by-side items never forces a line break — two `width: 6` features sit perfectly
-  side by side on a 12-unit row.
+- **1 grid unit ≈ 1 sections-grid unit (~24px); an icon ≈ 2 units.** A full-width view is **48
+  units**; a single feature can be up to **36 units** (the region beside the 12-unit dial). Feature
+  widths are **relative fractions**, not fixed pixels, so the same config fills correctly at any
+  card size.
+- **Relative, gap-safe rows.** Features are laid out with **CSS grid**: items sharing a row split it
+  in proportion to their widths (two `width: 9` items → 50/50), the grid gap never forces a wrap,
+  and rows narrower than the widest sized row are **centered**.
 - **Scrollable icon rows.** Each icon claims ≈2 units. When the space per icon drops too low, icons
   keep their size and the row **scrolls horizontally** instead of squishing.
-- **Side-by-side at ≥ 50% width.** At 24 units and up, the circular controls (a fixed 12-unit
-  footprint) and the feature column sit **side by side**; below that they stack with the feature
-  area full width.
-- **No stretching.** In the wide format the circular controls keep their fixed size and the feature
-  column is sized to the packed features, with the whole block centered so it never over-extends on
-  large cards.
+- **Side-by-side at ≥ 50% width.** At 24 units and up, the circular controls stay anchored in their
+  fixed 12-unit **left corner** and the feature region **fills the rest of the card**; below that
+  they stack with the feature area full width.
 - Entity tiles pack several per row; use `compact` + `width` to fit more across.
 
 ## AC swing icons (`mt:` icon set)

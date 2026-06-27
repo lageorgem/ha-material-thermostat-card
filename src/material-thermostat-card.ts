@@ -175,68 +175,103 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * How many grid units a feature should span, in a grid `cols` units wide.
-   *  - an explicit `width` wins (clamped to `[2, cols]`);
+   * The span a feature wants, in grid units, capped at `budget`:
+   *  - an explicit `width` wins (clamped to `[2, budget]`);
    *  - an entity tile defaults to a compact/normal footprint;
-   *  - any other feature (selectors, lists) defaults to a full row.
+   *  - any other feature (selectors, lists) is flexible → `null` (a full row).
    * @param f the feature config
-   * @param cols the width of the feature grid, in units
+   * @param budget the available grid width, in units
    */
-  private _featureDemand(f: FeatureConfig, cols: number): number {
-    const clamp = (n: number): number => Math.max(MIN_FEATURE_UNITS, Math.min(cols, Math.round(n)));
+  private _featureSpan(f: FeatureConfig, budget: number): number | null {
+    const clamp = (n: number): number =>
+      Math.max(MIN_FEATURE_UNITS, Math.min(budget, Math.round(n)));
     if ('width' in f && typeof f.width === 'number' && f.width > 0) return clamp(f.width);
-    if (f.type === 'entity-tile') {
-      return clamp(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
-    }
-    // Selectors and lists with no explicit width take a full row.
-    return cols;
+    if (f.type === 'entity-tile') return clamp(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
+    return null; // flexible: spans the full row
   }
 
   /**
-   * Greedily pack the feature rows into a grid at most `maxCols` units wide and
-   * return the widest row used — i.e. the smallest feature-grid width that holds
-   * the configured features (so the wide layout can size and center the column).
-   * @param maxCols the maximum grid width, in units
+   * Pack the features into rows within `budget` units, then resolve the grid:
+   * the column count is the widest *explicit* (sized) row — so sized items are
+   * a true fraction of the grid and fill it (a 9 + 9 row resolves to 6-unit
+   * columns × 18, i.e. 50/50) regardless of the card's exact pixel width. Each
+   * row is centered, so items narrower than the grid sit in the middle while a
+   * full-width item (or a row that sums to the grid) spans edge to edge.
+   * @param budget the available grid width, in units
    */
-  private _packedFeatureUnits(maxCols: number): number {
-    let widest = 0;
-    let cur = 0;
-    for (const f of this._config.features ?? []) {
-      const w = this._featureDemand(f, maxCols);
-      if (cur > 0 && cur + w > maxCols) {
-        widest = Math.max(widest, cur);
-        cur = w;
+  private _packLayout(budget: number): {
+    cols: number;
+    place: Array<{ row: number; colStart: number; span: number }>;
+  } {
+    const feats = this._config.features ?? [];
+    type Row = { full: boolean; items: Array<{ idx: number; span: number }>; sum: number };
+    const rows: Row[] = [];
+    let cur: Row | null = null;
+    const flush = (): void => {
+      if (cur && cur.items.length) rows.push(cur);
+      cur = null;
+    };
+    feats.forEach((f, idx) => {
+      const span = this._featureSpan(f, budget);
+      if (span == null) {
+        // Flexible feature → its own full-width row.
+        flush();
+        rows.push({ full: true, items: [{ idx, span: budget }], sum: budget });
       } else {
-        cur += w;
+        if (cur && cur.sum + span > budget) flush();
+        if (!cur) cur = { full: false, items: [], sum: 0 };
+        cur.items.push({ idx, span });
+        cur.sum += span;
       }
-    }
-    return Math.max(widest, cur, MIN_FEATURE_UNITS);
+    });
+    flush();
+
+    // Grid width = widest sized row (flexible rows just fill it).
+    let cols = MIN_FEATURE_UNITS;
+    for (const r of rows) if (!r.full) cols = Math.max(cols, r.sum);
+    cols = Math.max(MIN_FEATURE_UNITS, Math.min(budget, cols));
+
+    const place: Array<{ row: number; colStart: number; span: number }> = [];
+    rows.forEach((r, ri) => {
+      const rowSum = r.full ? cols : r.sum;
+      let colStart = Math.max(0, Math.floor((cols - rowSum) / 2));
+      for (const it of r.items) {
+        const span = r.full ? cols : it.span;
+        place[it.idx] = { row: ri + 1, colStart: colStart + 1, span };
+        colStart += span;
+      }
+    });
+    return { cols, place };
   }
 
   /**
    * Resolve the grid layout for the current width: stacked (narrow) or
-   * side-by-side (wide), plus the number of grid columns (units) the feature
-   * area spans. In the wide format the circular controls keep a fixed footprint
-   * and the feature column is sized to the packed features, with the whole block
-   * centered so neither side over-stretches.
+   * side-by-side (wide). In the wide format the circular controls stay anchored
+   * in their fixed-width left corner and the feature area expands to fill the
+   * rest of the card; in both formats the feature grid's columns come from the
+   * features themselves so sized items fill (or center) correctly.
    */
-  private _layout(): { wide: boolean; dialStyle: StyleInfo; featureStyle: StyleInfo; cols: number } {
+  private _layout(): {
+    wide: boolean;
+    dialStyle: StyleInfo;
+    featureStyle: StyleInfo;
+    cols: number;
+    place: Array<{ row: number; colStart: number; span: number }>;
+  } {
     const feats = this._config.features ?? [];
     const avail = Math.min(MAX_UNITS, Math.max(1, Math.floor(this._widthPx / UNIT_PX)));
     const wide = this._widthPx > 0 && feats.length > 0 && avail >= SIDE_BY_SIDE_MIN_UNITS;
-    if (!wide) {
-      // Stacked: the feature grid spans the full content width.
-      return { wide: false, dialStyle: {}, featureStyle: {}, cols: Math.max(MIN_FEATURE_UNITS, avail) };
-    }
-    // Wide: the dial keeps its fixed footprint; the feature column is sized to
-    // the packed features (1 unit reserved for the gap between the two columns).
-    const remaining = Math.max(MIN_FEATURE_UNITS, avail - DIAL_UNITS - 1);
-    const featureUnits = this._packedFeatureUnits(remaining);
+    // Stacked: the feature grid spans the full width. Wide: the dial keeps its
+    // fixed corner footprint and the feature region fills the rest of the card.
+    const budget = wide ? Math.max(MIN_FEATURE_UNITS, avail - DIAL_UNITS) : Math.max(1, avail);
+    const { cols, place } = this._packLayout(budget);
+    if (!wide) return { wide: false, dialStyle: {}, featureStyle: {}, cols, place };
     return {
       wide: true,
       dialStyle: { flex: `0 0 ${unitsToPx(DIAL_UNITS)}px` },
-      featureStyle: { flex: `0 0 ${unitsToPx(featureUnits)}px` },
-      cols: featureUnits,
+      featureStyle: { flex: '1 1 0' },
+      cols,
+      place,
     };
   }
 
@@ -381,14 +416,17 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
                   gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
                 })}
               >
-                ${this._config.features.map(
-                  (feature: FeatureConfig) => html`<mt-feature-row
+                ${this._config.features.map((feature: FeatureConfig, i: number) => {
+                  const p = layout.place[i] ?? { row: 1, colStart: 1, span: layout.cols };
+                  return html`<mt-feature-row
                     .hass=${this.hass}
                     .entityId=${this._config.entity}
                     .feature=${feature}
-                    .span=${this._featureDemand(feature, layout.cols)}
-                  ></mt-feature-row>`
-                )}
+                    .row=${p.row}
+                    .colStart=${p.colStart}
+                    .span=${p.span}
+                  ></mt-feature-row>`;
+                })}
               </div>`
             : nothing}
         </div>
@@ -452,13 +490,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         flex-direction: column;
         gap: 16px;
       }
-      /* Side-by-side (wide): dial and feature columns, centered as a block so
-         neither over-stretches; column widths are set inline in grid units. */
+      /* Side-by-side (wide): the dial stays anchored in its fixed-width left
+         corner and the feature region (flex:1) fills the rest of the card. */
       .body.wide {
         flex-direction: row;
         align-items: center;
-        justify-content: center;
-        gap: 24px;
+        justify-content: flex-start;
+        gap: 16px;
       }
       .dial-wrap {
         box-sizing: border-box;

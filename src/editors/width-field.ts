@@ -1,12 +1,14 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-import { MIN_FEATURE_UNITS, MAX_UNITS } from '../grid';
+import { MIN_FEATURE_UNITS, MAX_FEATURE_UNITS } from '../grid';
 
 const SCHEMA = [
   {
     name: 'width',
-    selector: { number: { min: MIN_FEATURE_UNITS, max: MAX_UNITS, step: 1, mode: 'box' } },
+    selector: {
+      number: { min: MIN_FEATURE_UNITS, max: MAX_FEATURE_UNITS, step: 1, mode: 'slider' },
+    },
   },
 ];
 

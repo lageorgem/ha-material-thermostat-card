@@ -275,7 +275,8 @@ export class MtCircularDial extends LitElement {
    * Compact temperature for a marker (no trailing ".0").
    * @param value the temperature
    */
-  private _fmtCompact(value: number): string {
+  private _fmtCompact(value: number | undefined): string {
+    if (value == null || Number.isNaN(value)) return '—';
     return Number.isInteger(value) ? String(value) : value.toFixed(1);
   }
 

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>layout test</title>
+    <style>
+      :root {
+        --md-sys-color-primary: #e3b341;
+        --md-sys-color-on-primary: #2a2410;
+        --md-sys-color-surface: #14131a;
+        --md-sys-color-surface-container: #2b2620;
+        --md-sys-color-surface-container-high: #2b2933;
+        --md-sys-color-on-surface: #e6e1e9;
+        --md-sys-color-on-surface-variant: #cac4d0;
+        --md-sys-color-outline-variant: #49454f;
+        --md-sys-shape-corner-extra-large: 28px;
+        --md-sys-typescale-display-large-size: 64px;
+        --ha-card-background: #1c1b22;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0e0d12;
+        color: #e6e1e9;
+        font-family: 'Roboto', system-ui, sans-serif;
+      }
+      ha-card {
+        display: block;
+        background: var(--ha-card-background);
+        color: var(--md-sys-color-on-surface);
+      }
+      .case {
+        margin-bottom: 28px;
+      }
+      .label {
+        font: 13px/1.6 monospace;
+        color: #e3b341;
+        margin-bottom: 6px;
+      }
+      /* red guides at the card edges so leftover gaps are obvious */
+      .frame {
+        border: 1px dashed #ff5252;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      // NOTE: render into SHADOW DOM, never light-DOM innerHTML — mutating an
+      // element's light DOM during Lit's render corrupts Lit's part markers.
+      class HaIcon extends HTMLElement {
+        static get observedAttributes() {
+          return ['icon'];
+        }
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.render();
+        }
+        attributeChangedCallback() {
+          this.render();
+        }
+        render() {
+          const size = getComputedStyle(this).getPropertyValue('--mdc-icon-size') || '24px';
+          this.style.display = 'inline-grid';
+          this.style.placeItems = 'center';
+          this.style.width = size;
+          this.style.height = size;
+          this.shadowRoot.innerHTML = `<span title="${this.getAttribute('icon') || ''}"
+            style="width:68%;height:68%;border-radius:50%;background:currentColor;opacity:.85"></span>`;
+        }
+      }
+      if (!customElements.get('ha-icon')) customElements.define('ha-icon', HaIcon);
+
+      const states = {
+        'climate.living_room': {
+          entity_id: 'climate.living_room',
+          state: 'cool',
+          attributes: {
+            friendly_name: 'Living AC',
+            hvac_action: 'cooling',
+            hvac_modes: ['off', 'auto', 'cool', 'heat', 'dry', 'fan_only'],
+            fan_modes: ['auto', 'low', 'medium', 'high'],
+            swing_modes: ['off', 'vertical', 'horizontal', 'both'],
+            fan_mode: 'low',
+            swing_mode: 'vertical',
+            current_temperature: 27.9,
+            temperature: 16,
+            min_temp: 16,
+            max_temp: 30,
+            target_temp_step: 0.5,
+          },
+        },
+      };
+      const hass = {
+        states,
+        config: { unit_system: { temperature: '°C' } },
+        themes: {},
+        callService() {},
+      };
+
+      await import('../dist/material-thermostat-card.js');
+
+      const UNIT = 24,
+        PAD = 32;
+      const px = (units) => units * UNIT + PAD;
+
+      // [label, widthUnits, features]
+      const cases = [
+        [
+          'Issue 1 — stacked, card 18u, two dropdowns w9 (expect 50/50 fill, no right gap)',
+          18,
+          [
+            { type: 'climate-hvac-modes' },
+            { type: 'climate-fan-modes', display: 'dropdown', width: 9 },
+            { type: 'climate-swing-modes', display: 'dropdown', width: 9 },
+          ],
+        ],
+        [
+          'Issue 2 — wide, card 24u (dial 12 + region 12), two dropdowns w6 (expect fill the 12u region)',
+          24,
+          [
+            { type: 'climate-hvac-modes' },
+            { type: 'climate-fan-modes', display: 'dropdown', width: 6 },
+            { type: 'climate-swing-modes', display: 'dropdown', width: 6 },
+          ],
+        ],
+        [
+          'Issue 4 — wide, card 48u, swing w36 fills (12+36=48); narrow (fan w9) centered',
+          48,
+          [
+            { type: 'climate-hvac-modes' },
+            { type: 'climate-fan-modes', display: 'dropdown', width: 9 },
+            { type: 'climate-swing-modes', display: 'dropdown', width: 36 },
+          ],
+        ],
+      ];
+
+      const root = document.getElementById('root');
+      for (const [label, units, features] of cases) {
+        const wrap = document.createElement('div');
+        wrap.className = 'case';
+        const lab = document.createElement('div');
+        lab.className = 'label';
+        lab.textContent = `${label}  [${units}u = ${px(units)}px]`;
+        wrap.appendChild(lab);
+        const frame = document.createElement('div');
+        frame.className = 'frame';
+        frame.style.width = px(units) + 'px';
+        const card = document.createElement('material-thermostat-card');
+        card.setConfig({
+          type: 'custom:material-thermostat-card',
+          entity: 'climate.living_room',
+          name: 'Living AC',
+          features,
+        });
+        frame.appendChild(card);
+        wrap.appendChild(frame);
+        root.appendChild(wrap);
+        card.hass = hass;
+      }
+    </script>
+  </body>
+</html>
