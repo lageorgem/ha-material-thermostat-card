@@ -333,11 +333,16 @@ A single status line that tells you whether the room **feels comfortable** and, 
 forecasts **how long until it will** — optionally also **how long until the target temperature is
 reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can be added **only once**.
 
-It uses the right metric for what the climate is doing: the **heat index** when cooling (an AC's job
-is to fight heat + humidity) and the **apparent temperature** when heating (humidity‑aware cold
-comfort). The forecast fits recent history (since the climate last turned on) to a Newton's‑law
-cooling/heating curve, so estimates **slow as the room nears its plateau** and it can honestly say a
-target **won't be reached**.
+Comfort is **calculated, not configured.** It uses the building‑science standard — the **ASHRAE 55 /
+ISO 7730 PMV model** (Fanger's Predicted Mean Vote): comfortable means −0.5 < PMV < +0.5 (≈ 80% of
+people satisfied). PMV folds temperature, humidity, clothing, and activity into one number, and the
+clothing assumption is inferred from what the system is doing — **summer dress (0.5 clo) when cooling,
+winter dress (1.0 clo) when heating** — reproducing ASHRAE's two comfort zones. An ASHRAE absolute‑
+humidity cap (0.012 humidity ratio) flags a muggy room even when the temperature is fine.
+
+The forecast fits recent history (since the climate last turned on) to a Newton's‑law cooling/heating
+curve, so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
+reached**.
 
 Example lines:
 
@@ -347,8 +352,6 @@ Example lines:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `comfort_min` | number | `20` | Bottom of the comfortable feels‑like band (°) |
-| `comfort_max` | number | `26` | Top of the comfortable feels‑like band (°) |
 | `show_target_eta` | boolean | `false` | Also show the time until the target temperature is reached |
 | `lookback_hours` | number | `12` | How far back to read history for the forecast |
 | `width` | number `10`–`100` | `100` | Width as a percentage of the card |
@@ -359,8 +362,6 @@ feels_like:
   humidity: sensor.living_room_humidity
 features:
   - type: comfort
-    comfort_min: 20
-    comfort_max: 26
     show_target_eta: true
 ```
 

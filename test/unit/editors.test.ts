@@ -1407,11 +1407,9 @@ describe('mt-comfort-editor', () => {
     );
   }
 
-  it('_data fills defaults for the band and lookback', async () => {
+  it('_data fills the lookback default', async () => {
     const el = await mount({ type: 'comfort' });
     expect((el as any)._data).to.deep.equal({
-      comfort_min: 20,
-      comfort_max: 26,
       show_target_eta: false,
       lookback_hours: 12,
     });
@@ -1420,14 +1418,10 @@ describe('mt-comfort-editor', () => {
   it('_data reflects set values', async () => {
     const el = await mount({
       type: 'comfort',
-      comfort_min: 19,
-      comfort_max: 25,
       show_target_eta: true,
       lookback_hours: 24,
     });
     expect((el as any)._data).to.deep.equal({
-      comfort_min: 19,
-      comfort_max: 25,
       show_target_eta: true,
       lookback_hours: 24,
     });
@@ -1435,8 +1429,6 @@ describe('mt-comfort-editor', () => {
 
   it('_computeLabel covers each field', async () => {
     const cl = (await mount({ type: 'comfort' }) as any)._computeLabel;
-    expect(cl({ name: 'comfort_min' })).to.contain('Comfortable from');
-    expect(cl({ name: 'comfort_max' })).to.contain('Comfortable up to');
     expect(cl({ name: 'show_target_eta' })).to.contain('target temperature');
     expect(cl({ name: 'lookback_hours' })).to.contain('lookback');
     expect(cl({ name: 'mystery' })).to.equal('mystery');
@@ -1453,8 +1445,6 @@ describe('mt-comfort-editor', () => {
     const el = await mount({ type: 'comfort', width: 40 });
     const cap = captureEvents('feature-changed');
     emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
-      comfort_min: 18,
-      comfort_max: 27,
       show_target_eta: false,
       lookback_hours: 8,
     });
@@ -1462,8 +1452,6 @@ describe('mt-comfort-editor', () => {
     expect((cap.events[0].detail as any).feature).to.deep.equal({
       type: 'comfort',
       width: 40,
-      comfort_min: 18,
-      comfort_max: 27,
       show_target_eta: undefined,
       lookback_hours: 8,
     });

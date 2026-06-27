@@ -37,10 +37,10 @@ describe('mt-comfort', () => {
   async function mount(opts: MountOpts = {}): Promise<MtComfort> {
     const states: Record<string, any> = {
       [CLIMATE]: climateState(
-        { current_temperature: Number(opts.tempNow ?? 22), temperature: 21 },
+        { current_temperature: Number(opts.tempNow ?? 25), temperature: 21 },
         opts.climateStateStr ?? 'cool'
       ),
-      [T_SENSOR]: entityState(T_SENSOR, opts.tempNow ?? '22'),
+      [T_SENSOR]: entityState(T_SENSOR, opts.tempNow ?? '25'),
       [H_SENSOR]: entityState(H_SENSOR, opts.rhNow ?? '50'),
     };
     const callWS = sinon.stub().resolves(opts.history ?? {});
@@ -67,12 +67,12 @@ describe('mt-comfort', () => {
   }
 
   it('shows "Room feels comfortable" immediately (no history needed)', async () => {
-    const el = await mount({ tempNow: '22', rhNow: '50' });
+    const el = await mount({ tempNow: '25', rhNow: '50' });
     expect(line(el)).to.equal('Room feels comfortable');
   });
 
   it('is hidden when the climate is off', async () => {
-    const el = await mount({ climateStateStr: 'off', tempNow: '22' });
+    const el = await mount({ climateStateStr: 'off', tempNow: '25' });
     expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
   });
 
@@ -87,13 +87,12 @@ describe('mt-comfort', () => {
   });
 
   it('forecasts time until comfortable from cooling history', async () => {
-    // Room cooling 36→27°C at 30% RH (heat index ≈ air temp), currently 32°C.
+    // Room cooling 36→27°C at 30% RH, currently 32°C → PMV well above +0.5.
     const temps: number[] = [];
     for (let i = 0; i < 16; i++) temps.push(24 + 12 * Math.exp(-0.05 * i * 2));
     const el = await mount({
       tempNow: '32',
       rhNow: '30',
-      feature: { comfort_min: 20, comfort_max: 26 },
       history: {
         [CLIMATE]: pts(Array(16).fill('cool'), baseSec),
         [T_SENSOR]: pts(temps, baseSec),
@@ -107,27 +106,27 @@ describe('mt-comfort', () => {
     const temps: number[] = [];
     for (let i = 0; i < 16; i++) temps.push(20 + 5 * Math.exp(-0.05 * i * 2)); // → 20
     const el = await mount({
-      tempNow: '24',
-      rhNow: '40',
-      feature: { comfort_min: 20, comfort_max: 26, show_target_eta: true },
+      tempNow: '25',
+      rhNow: '45',
+      feature: { show_target_eta: true },
       history: {
         [CLIMATE]: pts(Array(16).fill('cool'), baseSec),
         [T_SENSOR]: pts(temps, baseSec),
-        [H_SENSOR]: pts(Array(16).fill(40), baseSec),
+        [H_SENSOR]: pts(Array(16).fill(45), baseSec),
       },
     });
-    // climate target is 21 (from climateState helper); 24°C now, comfortable.
+    // climate target is 21 (from climateState helper); 25°C now, comfortable.
     expect(line(el)).to.match(/^Room feels comfortable, .*target temperature/);
   });
 
   it('dispatches feature-visibility and cleans up its timer on disconnect', async () => {
     const events: boolean[] = [];
-    const el = await mount({ tempNow: '22' });
+    const el = await mount({ tempNow: '25' });
     el.addEventListener('feature-visibility', (e) => events.push((e as CustomEvent).detail.visible));
     el.hass = makeHass(
       {
-        [CLIMATE]: climateState({ current_temperature: 22 }, 'cool'),
-        [T_SENSOR]: entityState(T_SENSOR, '22'),
+        [CLIMATE]: climateState({ current_temperature: 25 }, 'cool'),
+        [T_SENSOR]: entityState(T_SENSOR, '25'),
         [H_SENSOR]: entityState(H_SENSOR, '50'),
       },
       { callWS: sinon.stub().resolves({}) }

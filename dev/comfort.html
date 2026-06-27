@@ -137,7 +137,7 @@
           feels_like: { temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true },
           features: [
             { type: 'climate-hvac-modes' },
-            { type: 'comfort', comfort_min: 20, comfort_max: 26, show_target_eta: true },
+            { type: 'comfort', show_target_eta: true },
           ],
         });
         wrap.appendChild(card);
@@ -159,7 +159,7 @@
       makeCard('Comfortable + target ETA', {
         mode: 'cool',
         action: 'cooling',
-        curTemp: 24,
+        curTemp: 25,
         curHum: 45,
         target: 21,
         tempHist: expPts(20.5, 26, 0.05),

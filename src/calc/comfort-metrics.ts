@@ -1,15 +1,21 @@
 /**
- * Human‑comfort temperature metrics derived from a dry‑bulb temperature and a
- * relative humidity. All functions take/return °C and a 0–100 humidity percent.
+ * Humidity / "feels‑like" helpers derived from a dry‑bulb temperature and a
+ * relative humidity. Temperatures are °C, humidity is a 0–100 percent.
  *
- * We have no wind sensor, so there is no wind‑chill term:
- *  - {@link heatIndexC} (NOAA Rothfusz) models how hot it *feels* when warm/humid
- *    and gracefully reduces to ≈ air temperature in cool/dry conditions — this is
- *    the "feels‑like" used for the dial and the cooling‑comfort decision.
- *  - {@link apparentTempC} (Australian BOM apparent temperature, still air) is
- *    humidity‑aware across the whole range and is used as the heating‑comfort
- *    metric, where the heat index is not meaningful.
+ *  - {@link heatIndexC} (NOAA Rothfusz) is the dial's "feels‑like" number — how
+ *    hot it *feels* when warm/humid, reducing to ≈ air temperature when cool/dry
+ *    (no wind sensor ⇒ no wind‑chill term).
+ *  - {@link svpPa} / {@link humidityRatio} feed the PMV comfort model (`pmv.ts`)
+ *    and the ASHRAE‑55 absolute‑humidity cap ({@link HUMIDITY_RATIO_MAX}).
  */
+
+/** Standard sea‑level atmospheric pressure (Pa). */
+const ATM_PRESSURE = 101325;
+/**
+ * ASHRAE 55 upper humidity limit as a humidity ratio (kg water / kg dry air);
+ * above this a space is "too humid" even when the temperature is comfortable.
+ */
+export const HUMIDITY_RATIO_MAX = 0.012;
 
 /** °C → °F. */
 function cToF(c: number): number {
@@ -60,16 +66,22 @@ export function heatIndexC(tempC: number, rh: number): number {
 }
 
 /**
- * Australian BOM apparent temperature in still air (no wind term): how cold/warm
- * it *feels* accounting for humidity. Used as the heating‑comfort metric.
+ * Saturation water‑vapour pressure (Pa) over liquid water at a temperature,
+ * using the same expression as the ISO 7730 PMV program.
+ * @param tempC temperature in °C
+ */
+export function svpPa(tempC: number): number {
+  return 1000 * Math.exp(16.6536 - 4030.183 / (tempC + 235));
+}
+
+/**
+ * Humidity ratio (kg water vapour / kg dry air) at sea level.
  * @param tempC dry‑bulb temperature in °C
  * @param rh relative humidity, 0–100
  */
-export function apparentTempC(tempC: number, rh: number): number {
-  const R = Math.max(0, Math.min(100, rh));
-  // Water‑vapour pressure (hPa).
-  const e = (R / 100) * 6.105 * Math.exp((17.27 * tempC) / (237.7 + tempC));
-  return tempC + 0.33 * e - 4.0;
+export function humidityRatio(tempC: number, rh: number): number {
+  const pw = (Math.max(0, Math.min(100, rh)) / 100) * svpPa(tempC);
+  return (0.62198 * pw) / (ATM_PRESSURE - pw);
 }
 
 /**

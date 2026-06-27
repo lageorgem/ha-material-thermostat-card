@@ -100,17 +100,14 @@ export interface EntityTileFeatureConfig {
 
 /**
  * The "comfort & time-to-comfortable" feature. Added at most once. Uses the
- * card-level {@link FeelsLikeConfig} sensors to judge comfort (heat index when
- * cooling, apparent temperature when heating) and forecasts, from history since
- * the climate turned on, how long until the room feels comfortable — and,
- * optionally, until the target temperature is reached.
+ * card-level {@link FeelsLikeConfig} sensors to judge comfort scientifically via
+ * the ASHRAE 55 / ISO 7730 PMV model (clothing inferred from heating vs cooling)
+ * and forecasts, from history since the climate turned on, how long until the
+ * room feels comfortable — and, optionally, until the target temperature is
+ * reached. Comfort is calculated, not configured.
  */
 export interface ComfortFeatureConfig {
   type: 'comfort';
-  /** Comfortable band lower bound in °C (default 20). */
-  comfort_min?: number;
-  /** Comfortable band upper bound in °C (default 26). */
-  comfort_max?: number;
   /** Also show the time until the target temperature is reached. */
   show_target_eta?: boolean;
   /** History lookback window in hours (default 12). */

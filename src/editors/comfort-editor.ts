@@ -10,14 +10,6 @@ interface FormSchemaItem {
 }
 
 const SCHEMA: FormSchemaItem[] = [
-  {
-    name: 'comfort_min',
-    selector: { number: { min: 0, max: 40, step: 0.5, mode: 'box', unit_of_measurement: '°' } },
-  },
-  {
-    name: 'comfort_max',
-    selector: { number: { min: 0, max: 50, step: 0.5, mode: 'box', unit_of_measurement: '°' } },
-  },
   { name: 'show_target_eta', selector: { boolean: {} } },
   {
     name: 'lookback_hours',
@@ -25,12 +17,13 @@ const SCHEMA: FormSchemaItem[] = [
   },
 ];
 
-const DEFAULTS = { comfort_min: 20, comfort_max: 26, lookback_hours: 12 };
+const DEFAULTS = { lookback_hours: 12 };
 
 /**
- * Editor for the comfort feature: the comfortable band, the optional target ETA,
- * and the history lookback window — plus the shared width slider. Warns when the
- * card's feels-like sensors aren't configured (the feature needs them).
+ * Editor for the comfort feature: the optional target ETA and the history
+ * lookback window — plus the shared width slider. Comfort itself is calculated
+ * (ASHRAE 55 PMV), not configured. Warns when the card's feels-like sensors
+ * aren't configured (the feature needs them).
  */
 @customElement('mt-comfort-editor')
 export class MtComfortEditor extends LitElement {
@@ -41,8 +34,6 @@ export class MtComfortEditor extends LitElement {
 
   private get _data() {
     return {
-      comfort_min: this.feature.comfort_min ?? DEFAULTS.comfort_min,
-      comfort_max: this.feature.comfort_max ?? DEFAULTS.comfort_max,
       show_target_eta: this.feature.show_target_eta ?? false,
       lookback_hours: this.feature.lookback_hours ?? DEFAULTS.lookback_hours,
     };
@@ -54,10 +45,6 @@ export class MtComfortEditor extends LitElement {
    */
   private _computeLabel = (s: FormSchemaItem): string => {
     switch (s.name) {
-      case 'comfort_min':
-        return 'Comfortable from (feels-like °)';
-      case 'comfort_max':
-        return 'Comfortable up to (feels-like °)';
       case 'show_target_eta':
         return 'Also show time until target temperature';
       case 'lookback_hours':
@@ -88,8 +75,6 @@ export class MtComfortEditor extends LitElement {
   private _changed(e: CustomEvent): void {
     const d = e.detail.value;
     this._emit({
-      comfort_min: d.comfort_min,
-      comfort_max: d.comfort_max,
       show_target_eta: d.show_target_eta || undefined,
       lookback_hours: d.lookback_hours,
     });

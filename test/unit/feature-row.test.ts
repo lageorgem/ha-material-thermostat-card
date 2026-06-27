@@ -155,8 +155,8 @@ describe('mt-feature-row', () => {
 
     it('comfort row un-hides once the feature reports it is visible', async () => {
       const hass = makeHass({
-        'climate.test': climateState({ current_temperature: 22 }, 'cool'),
-        'sensor.t': entityState('sensor.t', '22'),
+        'climate.test': climateState({ current_temperature: 25 }, 'cool'),
+        'sensor.t': entityState('sensor.t', '25'),
         'sensor.h': entityState('sensor.h', '50'),
       });
       const el = await fixture<MtFeatureRow>(

@@ -159,10 +159,14 @@ a plain `{detail}` object has no `stopPropagation`.
 - **Keep logic in `calc/`.** `analyzeComfort` and the forecast math are pure and
   unit-tested without Lit/hass (`calc.test.ts`). The Lit component just parses
   `hass`, calls them, and renders. Extend/test the `calc/` modules, not the widget.
-- **Metric depends on mode:** heat index (`heatIndexC`) when cooling, apparent
-  temperature (`apparentTempC`) when heating — chosen from `hvac_action` then
-  `state` in `pickSide()`. Heat index is meaningless in cool conditions, hence the
-  split.
+- **Comfort is the PMV model, calculated not configured.** `calc/pmv.ts` is the
+  verbatim ISO 7730 Annex D / ASHRAE 55 Fanger algorithm (validated against the
+  standard's table); comfortable = −0.5 < PMV < +0.5 plus an absolute‑humidity cap
+  (`HUMIDITY_RATIO_MAX` 0.012). Clothing is inferred from the mode (`cloForClimate`:
+  cooling 0.5, heating 1.0, else 0.7) — that's what makes 25°C comfortable when
+  cooling but 22°C when heating (ASHRAE's two zones). The heat index (`heatIndexC`)
+  is now **only** the dial's "feels‑like" number, not the comfort decision. Don't
+  reintroduce comfort_min/max — the user explicitly wanted it scientific.
 
 ## Misc env
 

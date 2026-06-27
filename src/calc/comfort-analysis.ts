@@ -1,13 +1,17 @@
 /**
  * Pure comfort analysis: turns parsed sensor readings + recent history into the
  * status line shown by the comfort feature. Kept free of Lit/hass so it can be
- * unit‑tested directly.
+ * unit-tested directly.
  *
- * Comfort metric depends on what the climate is doing: cooling (AC) uses the
- * heat index (upper bound), heating uses the apparent temperature (lower bound),
- * since the heat index is not meaningful in cool conditions.
+ * Comfort is judged scientifically with Fanger's PMV model (ASHRAE 55 / ISO
+ * 7730): comfortable when −0.5 < PMV < +0.5, with an additional absolute-humidity
+ * cap (ASHRAE's 0.012 humidity ratio). PMV is one scalar covering hot *and* cold,
+ * so the "time until comfortable" forecast simply fits the PMV series toward the
+ * ±0.5 boundary (or the humidity-ratio series toward the cap when only humidity
+ * is out of range).
  */
-import { heatIndexC, apparentTempC } from './comfort-metrics';
+import { humidityRatio, HUMIDITY_RATIO_MAX } from './comfort-metrics';
+import { pmv, cloForClimate, PMV_COMFORT_LIMIT } from './pmv';
 import { newtonFit, etaToThreshold } from './forecast';
 import { formatDuration } from './duration';
 import { mergeOnLeft } from './history';
@@ -32,12 +36,9 @@ export interface ComfortInput {
   tempSeries: TS[];
   /** Humidity history since the climate turned on (minutes / %). */
   rhSeries: TS[];
-  /** Comfortable heat‑index/apparent‑temp band (°C). */
-  comfortMin: number;
-  comfortMax: number;
   /** Resolved target temperature (°C), or null when none / already in band. */
   target: number | null;
-  /** Whether to append the target‑temperature ETA clause. */
+  /** Whether to append the target-temperature ETA clause. */
   showTargetEta: boolean;
   /** Temperature unit symbol for messages, e.g. '°C'. */
   unit: string;
@@ -57,27 +58,6 @@ const HIDDEN: ComfortResult = { visible: false, comfortable: false };
 
 /** Below this gap the target is treated as already reached (no ETA clause). */
 const TARGET_REACHED_EPS = 0.25;
-
-/**
- * Decide which side of comfort is violated, if any, honoring the active mode.
- * @param i the comfort input
- * @param hi the current heat index
- * @param at the current apparent temperature
- */
-function pickSide(i: ComfortInput, hi: number, at: number): 'hot' | 'cold' | null {
-  const tooHot = hi > i.comfortMax;
-  const tooCold = at < i.comfortMin;
-  const heating = i.action === 'heating' || (!i.action && i.mode === 'heat');
-  const cooling =
-    i.action === 'cooling' ||
-    (!i.action && (i.mode === 'cool' || i.mode === 'dry' || i.mode === 'fan_only'));
-  if (heating) return tooCold ? 'cold' : null;
-  if (cooling) return tooHot ? 'hot' : null;
-  // heat_cool / auto (or no decisive mode): whichever bound is breached.
-  if (tooHot) return 'hot';
-  if (tooCold) return 'cold';
-  return null;
-}
 
 /**
  * Build the optional "…until target temperature is reached" / "won't go
@@ -112,25 +92,37 @@ function targetClause(i: ComfortInput): string | undefined {
 export function analyzeComfort(i: ComfortInput): ComfortResult {
   if (!isFinite(i.tempNow) || !isFinite(i.rhNow)) return HIDDEN;
 
-  const hi = heatIndexC(i.tempNow, i.rhNow);
-  const at = apparentTempC(i.tempNow, i.rhNow);
-  const side = pickSide(i, hi, at);
+  const clo = cloForClimate(i.mode, i.action);
+  const pmvNow = pmv(i.tempNow, i.rhNow, { clo });
+  const wNow = humidityRatio(i.tempNow, i.rhNow);
   const target = targetClause(i);
 
+  const tooWarm = pmvNow > PMV_COMFORT_LIMIT;
+  const tooCold = pmvNow < -PMV_COMFORT_LIMIT;
+  const tooHumid = wNow > HUMIDITY_RATIO_MAX;
+
   // Comfortable: a direct reading, shown immediately (target clause optional).
-  if (side === null) {
+  if (!tooWarm && !tooCold && !tooHumid) {
     const line = target ? `Room feels comfortable, ${target}` : 'Room feels comfortable';
     return { visible: true, comfortable: true, line };
   }
 
-  // Uncomfortable: needs a confident forecast of when it'll be comfortable.
-  const metricFn = side === 'hot' ? heatIndexC : apparentTempC;
-  const threshold = side === 'hot' ? i.comfortMax : i.comfortMin;
-  const metricNow = side === 'hot' ? hi : at;
-  const series = mergeOnLeft(i.tempSeries, i.rhSeries).map((p) => ({
-    t: p.t,
-    v: metricFn(p.l, p.r),
-  }));
+  // Uncomfortable: forecast the binding axis toward its comfort boundary. Warmth
+  // / cold are temperature-driven (PMV series); a humidity-only excess forecasts
+  // the humidity ratio toward the cap.
+  const merged = mergeOnLeft(i.tempSeries, i.rhSeries);
+  let series: TS[];
+  let metricNow: number;
+  let threshold: number;
+  if (tooWarm || tooCold) {
+    series = merged.map((p) => ({ t: p.t, v: pmv(p.l, p.r, { clo }) }));
+    metricNow = pmvNow;
+    threshold = tooWarm ? PMV_COMFORT_LIMIT : -PMV_COMFORT_LIMIT;
+  } else {
+    series = merged.map((p) => ({ t: p.t, v: humidityRatio(p.l, p.r) }));
+    metricNow = wNow;
+    threshold = HUMIDITY_RATIO_MAX;
+  }
 
   const fit = newtonFit(series);
   if (!fit) return HIDDEN;

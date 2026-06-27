@@ -9,16 +9,14 @@ import { analyzeComfort, type ComfortResult, type TS } from '../calc/comfort-ana
 /** How often the history forecast is refreshed. */
 const REFRESH_MS = 60_000;
 const DEFAULT_LOOKBACK_HOURS = 12;
-const DEFAULT_COMFORT_MIN = 20;
-const DEFAULT_COMFORT_MAX = 26;
 
 /**
  * The "comfort & time-to-comfortable" feature row. Judges comfort from the
- * shared feels-like sensors (heat index when cooling, apparent temperature when
- * heating) and forecasts, from recorder history since the climate turned on, how
- * long until the room feels comfortable — and optionally until the target is
- * reached. Shows nothing (and asks its row to collapse) when the climate is off,
- * the sensors are unset, or there isn't yet enough history to forecast.
+ * shared feels-like sensors via the ASHRAE 55 / ISO 7730 PMV model and forecasts,
+ * from recorder history since the climate turned on, how long until the room
+ * feels comfortable — and optionally until the target is reached. Shows nothing
+ * (and asks its row to collapse) when the climate is off, the sensors are unset,
+ * or there isn't yet enough history to forecast.
  */
 @customElement('mt-comfort')
 export class MtComfort extends LitElement {
@@ -127,8 +125,6 @@ export class MtComfort extends LitElement {
         rhNow: this._rhNow(),
         tempSeries: this._cache?.tempSeries ?? [],
         rhSeries: this._cache?.rhSeries ?? [],
-        comfortMin: this.feature.comfort_min ?? DEFAULT_COMFORT_MIN,
-        comfortMax: this.feature.comfort_max ?? DEFAULT_COMFORT_MAX,
         target: this._target(tempNow),
         showTargetEta: this.feature.show_target_eta ?? false,
         unit: this.hass.config?.unit_system?.temperature ?? '°C',

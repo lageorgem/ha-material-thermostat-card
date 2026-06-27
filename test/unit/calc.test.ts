@@ -1,5 +1,12 @@
 import { expect } from '@open-wc/testing';
-import { heatIndexC, apparentTempC, feelsLikeC } from '../../src/calc/comfort-metrics';
+import {
+  heatIndexC,
+  feelsLikeC,
+  svpPa,
+  humidityRatio,
+  HUMIDITY_RATIO_MAX,
+} from '../../src/calc/comfort-metrics';
+import { pmv, cloForClimate, PMV_COMFORT_LIMIT } from '../../src/calc/pmv';
 import {
   linregress,
   newtonFit,
@@ -56,19 +63,78 @@ describe('calc/comfort-metrics', () => {
     });
   });
 
-  describe('apparentTempC', () => {
-    it('lowers the felt temperature in dry still air', () => {
-      // 20°C/50% ≈ 19.8°C apparent (humidity small, -4 still-air offset).
-      expect(apparentTempC(20, 50)).to.be.closeTo(19.8, 0.6);
+  it('feelsLikeC is the heat index', () => {
+    expect(feelsLikeC(31, 65)).to.equal(heatIndexC(31, 65));
+  });
+
+  describe('svpPa / humidityRatio', () => {
+    it('saturation vapour pressure matches known values', () => {
+      expect(svpPa(22)).to.be.closeTo(2645, 30); // ≈ 2.64 kPa at 22°C
+      expect(svpPa(0)).to.be.closeTo(611, 30); // ≈ 0.61 kPa at 0°C
     });
 
-    it('rises with humidity (less evaporative cooling)', () => {
-      expect(apparentTempC(20, 90)).to.be.greaterThan(apparentTempC(20, 30));
+    it('humidity ratio rises with humidity and crosses the ASHRAE cap', () => {
+      expect(humidityRatio(24, 30)).to.be.lessThan(humidityRatio(24, 80));
+      // 26°C / 60% ≈ 0.0126 kg/kg → above the 0.012 comfort cap.
+      expect(humidityRatio(26, 60)).to.be.greaterThan(HUMIDITY_RATIO_MAX);
+      // 22°C / 40% is comfortably dry.
+      expect(humidityRatio(22, 40)).to.be.lessThan(HUMIDITY_RATIO_MAX);
+    });
+  });
+});
+
+describe('calc/pmv', () => {
+  // ISO 7730:2005 Annex D validation table (met = 1.2). Accuracy is ±0.1 PMV.
+  const ROWS = [
+    { ta: 22.0, tr: 22.0, vel: 0.1, rh: 60, clo: 0.5, pmv: -0.75 },
+    { ta: 27.0, tr: 27.0, vel: 0.1, rh: 60, clo: 0.5, pmv: 0.77 },
+    { ta: 27.0, tr: 27.0, vel: 0.3, rh: 60, clo: 0.5, pmv: 0.44 },
+    { ta: 23.5, tr: 25.5, vel: 0.1, rh: 60, clo: 0.5, pmv: -0.01 },
+    { ta: 23.5, tr: 25.5, vel: 0.3, rh: 60, clo: 0.5, pmv: -0.55 },
+    { ta: 19.0, tr: 19.0, vel: 0.1, rh: 40, clo: 1.0, pmv: -0.6 },
+    { ta: 23.5, tr: 23.5, vel: 0.1, rh: 40, clo: 1.0, pmv: 0.5 },
+    { ta: 23.5, tr: 23.5, vel: 0.3, rh: 40, clo: 1.0, pmv: 0.12 },
+    { ta: 23.0, tr: 21.0, vel: 0.1, rh: 40, clo: 1.0, pmv: 0.05 },
+    { ta: 23.0, tr: 21.0, vel: 0.3, rh: 40, clo: 1.0, pmv: -0.16 },
+  ];
+
+  // Our port is the verbatim ISO 7730 Annex D algorithm. The standard states the
+  // table's own accuracy is ~0.1 PMV; the reference values here are transcribed
+  // from the standard, so we assert ±0.15 (in practice most match within ~0.05).
+  ROWS.forEach((r, idx) => {
+    it(`matches ISO 7730 Annex D row ${idx + 1} (PMV ${r.pmv})`, () => {
+      const got = pmv(r.ta, r.rh, { tr: r.tr, vel: r.vel, met: 1.2, clo: r.clo });
+      expect(got).to.be.closeTo(r.pmv, 0.15);
     });
   });
 
-  it('feelsLikeC is the heat index', () => {
-    expect(feelsLikeC(31, 65)).to.equal(heatIndexC(31, 65));
+  it('neutral temperature (PMV≈0) lands where ASHRAE 55 expects per clothing', () => {
+    // Summer dress (0.5 clo) ⇒ neutral ~24.5–25.5°C; winter dress (1.0 clo) ⇒ ~22°C.
+    expect(pmv(25, 50, { clo: 0.5, met: 1.1 })).to.be.closeTo(0, 0.5);
+    expect(pmv(22, 50, { clo: 1.0, met: 1.1 })).to.be.closeTo(0, 0.5);
+  });
+
+  it('is monotonically increasing in temperature', () => {
+    const cold = pmv(18, 50, { clo: 0.6 });
+    const warm = pmv(26, 50, { clo: 0.6 });
+    expect(cold).to.be.lessThan(-PMV_COMFORT_LIMIT);
+    expect(warm).to.be.greaterThan(cold);
+  });
+
+  it('defaults tr to the air temperature and applies default met/vel/clo', () => {
+    expect(pmv(24, 50)).to.equal(pmv(24, 50, { tr: 24 }));
+  });
+
+  describe('cloForClimate', () => {
+    it('infers clothing from the active mode/action', () => {
+      expect(cloForClimate('heat', 'heating')).to.equal(1.0);
+      expect(cloForClimate('cool', 'cooling')).to.equal(0.5);
+      expect(cloForClimate('heat')).to.equal(1.0);
+      expect(cloForClimate('cool')).to.equal(0.5);
+      expect(cloForClimate('dry')).to.equal(0.5);
+      expect(cloForClimate('heat_cool')).to.equal(0.7);
+      expect(cloForClimate('auto', 'idle')).to.equal(0.7);
+    });
   });
 });
 
@@ -281,24 +347,22 @@ describe('calc/history', () => {
 });
 
 describe('calc/comfort-analysis', () => {
-  /** Constant-humidity series helper at the given times. */
-  function rhFlat(rh: number, n = 16, step = 2): Sample[] {
-    return Array.from({ length: n }, (_, i) => ({ t: i * step, v: rh }));
+  /** Constant-value series helper at the given times. */
+  function flat(v: number, n = 16, step = 2): Sample[] {
+    return Array.from({ length: n }, (_, i) => ({ t: i * step, v }));
   }
-  /** Temperature exponential-approach series. */
-  function tempExp(A: number, v0: number, k: number, n = 16, step = 2): Sample[] {
+  /** Exponential-approach series. */
+  function exp(A: number, v0: number, k: number, n = 16, step = 2): Sample[] {
     return genExp(A, v0, k, n, step);
   }
 
   const base: ComfortInput = {
     mode: 'cool',
     action: 'cooling',
-    tempNow: 22,
+    tempNow: 25,
     rhNow: 50,
     tempSeries: [],
     rhSeries: [],
-    comfortMin: 20,
-    comfortMax: 26,
     target: null,
     showTargetEta: false,
     unit: '°C',
@@ -309,43 +373,61 @@ describe('calc/comfort-analysis', () => {
     expect(analyzeComfort({ ...base, rhNow: NaN }).visible).to.equal(false);
   });
 
-  it('reports comfortable immediately, no history needed', () => {
-    const r = analyzeComfort({ ...base, tempNow: 22, rhNow: 50 });
+  it('reports comfortable immediately, no history needed (cooling ~25°C)', () => {
+    const r = analyzeComfort({ ...base, tempNow: 25, rhNow: 50 });
     expect(r).to.deep.include({ visible: true, comfortable: true, line: 'Room feels comfortable' });
   });
 
-  it('hides when uncomfortable but there is not enough history to forecast', () => {
-    const r = analyzeComfort({ ...base, tempNow: 33, rhNow: 60 });
-    expect(r.visible).to.equal(false);
+  it('flags a cold room as not comfortable (PMV < −0.5)', () => {
+    // 19°C in summer clothing (cooling ⇒ 0.5 clo) is too cold per PMV.
+    expect(analyzeComfort({ ...base, tempNow: 19, rhNow: 45 }).comfortable).to.equal(false);
   });
 
-  it('cooling: forecasts time until comfortable', () => {
+  it('hides when uncomfortable but there is not enough history to forecast', () => {
+    expect(analyzeComfort({ ...base, tempNow: 33, rhNow: 50 }).visible).to.equal(false);
+  });
+
+  it('cooling: forecasts time until comfortable (PMV → +0.5)', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 33,
       rhNow: 50,
-      tempSeries: tempExp(24, 33, 0.06),
-      rhSeries: rhFlat(50),
+      tempSeries: exp(24, 33, 0.06),
+      rhSeries: flat(50),
     });
     expect(r.visible).to.equal(true);
     expect(r.comfortable).to.equal(false);
     expect(r.line).to.match(/until room feels comfortable$/);
   });
 
-  it('heating: uses apparent temperature and forecasts upward', () => {
+  it('heating: forecasts upward toward comfort (PMV → −0.5, 1.0 clo)', () => {
     const r = analyzeComfort({
       ...base,
       mode: 'heat',
       action: 'heating',
       tempNow: 14,
       rhNow: 40,
-      comfortMin: 20,
-      comfortMax: 26,
-      tempSeries: tempExp(24, 14, 0.06), // warming toward 24
-      rhSeries: rhFlat(40),
+      tempSeries: exp(23, 14, 0.06), // warming toward 23
+      rhSeries: flat(40),
     });
     expect(r.visible).to.equal(true);
     expect(r.comfortable).to.equal(false);
+    expect(r.line).to.match(/until room feels comfortable$/);
+  });
+
+  it('too humid (PMV ok) forecasts the humidity ratio toward the cap', () => {
+    // 23°C is comfortable by PMV, but 80%→ humidity ratio is above 0.012.
+    const r = analyzeComfort({
+      ...base,
+      mode: 'heat_cool',
+      action: 'idle',
+      tempNow: 23,
+      rhNow: 80,
+      tempSeries: flat(23),
+      rhSeries: exp(50, 85, 0.06), // drying out toward 50%
+    });
+    expect(r.comfortable).to.equal(false);
+    expect(r.visible).to.equal(true);
     expect(r.line).to.match(/until room feels comfortable$/);
   });
 
@@ -356,8 +438,8 @@ describe('calc/comfort-analysis', () => {
       rhNow: 45,
       target: 21,
       showTargetEta: true,
-      tempSeries: tempExp(20, 25, 0.05), // heading to 20, passes 21
-      rhSeries: rhFlat(45),
+      tempSeries: exp(20, 25, 0.05), // heading to 20, passes 21
+      rhSeries: flat(45),
     });
     expect(r.comfortable).to.equal(true);
     expect(r.line).to.match(/^Room feels comfortable, .*until target temperature is reached$/);
@@ -370,26 +452,26 @@ describe('calc/comfort-analysis', () => {
       rhNow: 45,
       target: 21,
       showTargetEta: true,
-      tempSeries: tempExp(24, 28, 0.08), // plateaus at ~24, never reaches 21
-      rhSeries: rhFlat(45),
+      tempSeries: exp(24, 28, 0.08), // plateaus at ~24, never reaches 21
+      rhSeries: flat(45),
     });
     expect(r.comfortable).to.equal(true);
     expect(r.line).to.match(/^Room feels comfortable, temperature won't go below 2[34]°C$/);
   });
 
   it("heating + target unreachable → won't go above the plateau", () => {
-    // Comfortable now (apparent temp in band) but the heater plateaus at ~22°C
-    // and the target setpoint is 25°C → "won't go above 22°C".
+    // Comfortable now (PMV in band at 22°C / 1.0 clo) but the heater plateaus at
+    // ~22°C and the target setpoint is 25°C → "won't go above 22°C".
     const r = analyzeComfort({
       ...base,
       mode: 'heat',
       action: 'heating',
-      tempNow: 21,
+      tempNow: 22,
       rhNow: 40,
       target: 25,
       showTargetEta: true,
-      tempSeries: tempExp(22, 20, 0.08), // plateaus at ~22, never reaches 25
-      rhSeries: rhFlat(40),
+      tempSeries: exp(22, 20, 0.08), // plateaus at ~22, never reaches 25
+      rhSeries: flat(40),
     });
     expect(r.comfortable).to.equal(true);
     expect(r.line).to.match(/^Room feels comfortable, temperature won't go above 2[12]°C$/);
@@ -398,8 +480,8 @@ describe('calc/comfort-analysis', () => {
   it('omits the target clause when its data is insufficient (row still shown)', () => {
     const r = analyzeComfort({
       ...base,
-      tempNow: 22,
-      rhNow: 50,
+      tempNow: 25,
+      rhNow: 45,
       target: 19,
       showTargetEta: true,
       tempSeries: [], // no history → no target forecast
@@ -411,12 +493,12 @@ describe('calc/comfort-analysis', () => {
   it('omits the target clause when already at the target', () => {
     const r = analyzeComfort({
       ...base,
-      tempNow: 21.1,
-      rhNow: 50,
-      target: 21,
+      tempNow: 25.1,
+      rhNow: 45,
+      target: 25,
       showTargetEta: true,
-      tempSeries: tempExp(20, 25, 0.05),
-      rhSeries: rhFlat(50),
+      tempSeries: exp(24, 28, 0.05),
+      rhSeries: flat(45),
     });
     expect(r.line).to.equal('Room feels comfortable');
   });
@@ -428,8 +510,8 @@ describe('calc/comfort-analysis', () => {
       rhNow: 45,
       target: 30, // want warmer, but the room is cooling toward 24
       showTargetEta: true,
-      tempSeries: tempExp(24, 28, 0.08),
-      rhSeries: rhFlat(45),
+      tempSeries: exp(24, 28, 0.08),
+      rhSeries: flat(45),
     });
     expect(r.line).to.equal('Room feels comfortable');
   });
@@ -441,33 +523,14 @@ describe('calc/comfort-analysis', () => {
       rhNow: 50,
       target: 25,
       showTargetEta: true,
-      tempSeries: tempExp(24, 33, 0.06),
-      rhSeries: rhFlat(50),
+      tempSeries: exp(24, 33, 0.06),
+      rhSeries: flat(50),
     });
-    expect(r.line).to.match(
-      /until room feels comfortable\. .*until target temperature is reached$/
-    );
+    expect(r.line).to.match(/until room feels comfortable\. .*until target temperature is reached$/);
   });
 
-  describe('pickSide via mode/action', () => {
-    it('heat_cool picks the breached bound', () => {
-      const hot = analyzeComfort({
-        ...base,
-        mode: 'heat_cool',
-        action: 'idle',
-        tempNow: 33,
-        rhNow: 50,
-        tempSeries: tempExp(24, 33, 0.06),
-        rhSeries: rhFlat(50),
-      });
-      expect(hot.comfortable).to.equal(false);
-      expect(hot.visible).to.equal(true);
-    });
-
-    it('a running mode whose bound is not breached reads as comfortable', () => {
-      // Cooling but the room is on the cold side → cooling can't fix it → comfortable.
-      const r = analyzeComfort({ ...base, mode: 'cool', action: 'cooling', tempNow: 15, rhNow: 40 });
-      expect(r.comfortable).to.equal(true);
-    });
+  it('heat_cool mid-range reads comfortable (0.7 clo)', () => {
+    const r = analyzeComfort({ ...base, mode: 'heat_cool', action: 'idle', tempNow: 23, rhNow: 45 });
+    expect(r.comfortable).to.equal(true);
   });
 });
