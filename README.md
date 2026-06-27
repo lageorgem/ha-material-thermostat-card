@@ -125,6 +125,15 @@ the bottom, where the `+/−` live).
 
 The dial, halo, and big number are **colored by the active HVAC action** (falling back to the mode),
 and the colored segment between the **current** temperature and the **target** visualizes the gap.
+The fill only takes the mode color when it's actually doing something — e.g. in **cool** mode it's
+gray (not blue) when the room is already below the setpoint.
+
+For **`heat_cool`**, the active sub‑mode is derived from the current temperature: it fills **blue**
+from the high setpoint up to the current temp when **cooling** (current above the range), **orange**
+from the low setpoint down when **heating**, and shows a gray band between the two setpoints. The
+center shows the **Heat/Cool range** for 5 seconds after a setpoint change, then collapses to the
+active mode (e.g. "Cooling") and the single setpoint it's targeting.
+
 Changes are **optimistic** (the UI updates immediately) and the `climate.set_temperature` call is
 debounced so dragging doesn't spam the backend. Color changes **cross‑fade**, and the temperature
 segment **slides in/out** on power changes and when switching between modes.

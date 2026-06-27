@@ -1,8 +1,12 @@
 import { fixture, html, expect, aTimeout, nextFrame } from '@open-wc/testing';
+import sinon from 'sinon';
 import { oncePromise, captureEvents } from '../helpers';
 import '../../src/dial/circular-dial';
 import type { MtCircularDial } from '../../src/dial/circular-dial';
 import { climateModeColor } from '../../src/theme';
+
+/** The neutral gray used for an idle range / a demand that makes no sense. */
+const IDLE_COLOR = 'var(--mt-on-surface-variant)';
 
 /** Geometry constants mirrored from src/dial/circular-dial.ts. */
 const VIEW = 320;
@@ -1132,6 +1136,465 @@ describe('mt-circular-dial', () => {
       const svg = el.shadowRoot!.querySelector('svg')!;
       expect(svg.getAttribute('tabindex')).to.equal('-1');
       expect(svg.getAttribute('aria-valuenow')).to.equal('24');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // heat_cool (dual) + demand-direction behavior
+  // ---------------------------------------------------------------------------
+
+  describe('_dualActive getter (dual demand direction)', () => {
+    it("is 'cool' when current is above the high setpoint", async () => {
+      const el = await mount();
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal('cool');
+    });
+
+    it("is 'heat' when current is below the low setpoint", async () => {
+      const el = await mount();
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 14;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal('heat');
+    });
+
+    it('is null when current is within the range', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal(null);
+    });
+
+    it('is null when current is undefined', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = undefined;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal(null);
+    });
+
+    it('is null when not in dual mode (even if current would be out of range)', async () => {
+      const el = await mount();
+      el.dual = false;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal(null);
+    });
+  });
+
+  describe('_demandSensible getter (single-mode demand direction)', () => {
+    it("cool: true when current is above the setpoint, false when below/equal", async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.value = 22;
+      el.current = 26;
+      await el.updateComplete;
+      expect((el as any)._demandSensible).to.be.true;
+      el.current = 20;
+      await el.updateComplete;
+      expect((el as any)._demandSensible).to.be.false;
+    });
+
+    it('heat: true when current is below the setpoint, false when above/equal', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.value = 22;
+      el.current = 20;
+      await el.updateComplete;
+      expect((el as any)._demandSensible).to.be.true;
+      el.current = 26;
+      await el.updateComplete;
+      expect((el as any)._demandSensible).to.be.false;
+    });
+
+    it('auto/dry/fan_only always sensible (keep their own color)', async () => {
+      const el = await mount();
+      el.value = 22;
+      el.current = 20;
+      for (const mode of ['auto', 'dry', 'fan_only']) {
+        el.mode = mode;
+        await el.updateComplete;
+        expect((el as any)._demandSensible, mode).to.be.true;
+        // direction the other way too
+        el.current = 26;
+        await el.updateComplete;
+        expect((el as any)._demandSensible, mode).to.be.true;
+        el.current = 20;
+        await el.updateComplete;
+      }
+    });
+
+    it('false when current is null/undefined', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.value = 22;
+      el.current = undefined;
+      await el.updateComplete;
+      expect((el as any)._demandSensible).to.be.false;
+    });
+  });
+
+  describe('_effectiveMode / _dialColor (dual)', () => {
+    it('dual cooling uses the cool color', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // above high -> cooling
+      await el.updateComplete;
+      expect((el as any)._effectiveMode).to.equal('cool');
+      expect((el as any)._dialColor).to.equal(climateModeColor('cool'));
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.getAttribute('style')).to.contain(climateModeColor('cool'));
+    });
+
+    it('dual heating uses the heat color', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 14; // below low -> heating
+      await el.updateComplete;
+      expect((el as any)._effectiveMode).to.equal('heat');
+      expect((el as any)._dialColor).to.equal(climateModeColor('heat'));
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.getAttribute('style')).to.contain(climateModeColor('heat'));
+    });
+
+    it('dual idle (in range) uses the heat_cool color', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21; // in range -> idle
+      await el.updateComplete;
+      expect((el as any)._effectiveMode).to.equal('heat_cool');
+      expect((el as any)._dialColor).to.equal(climateModeColor('heat_cool'));
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.getAttribute('style')).to.contain(climateModeColor('heat_cool'));
+    });
+  });
+
+  describe('dual segment rendering', () => {
+    it('idle (current in range): exactly one .value path, the gray range band', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      const values = sr.querySelectorAll('.value');
+      expect(values.length).to.equal(1);
+      expect(values[0].classList.contains('idle')).to.be.true;
+      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
+      // no mid-wipe overlay in dual
+      expect(sr.querySelector('.wipe-value')).to.equal(null);
+      // the lone band is the gray range
+      expect((values[0] as SVGElement).getAttribute('style')).to.contain(IDLE_COLOR);
+    });
+
+    it('cooling (current above high): a gray range band + a cool demand band', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      const values = sr.querySelectorAll('.value');
+      expect(values.length).to.equal(2);
+      // exactly one is the idle (gray range) band
+      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
+      const demand = Array.from(values).find((p) => !p.classList.contains('idle'))!;
+      expect(demand).to.not.equal(undefined);
+      expect((demand as SVGElement).getAttribute('style')).to.contain(climateModeColor('cool'));
+      expect(sr.querySelector('.wipe-value')).to.equal(null);
+    });
+
+    it('heating (current below low): a gray range band + a heat demand band', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 14;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      const values = sr.querySelectorAll('.value');
+      expect(values.length).to.equal(2);
+      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
+      const demand = Array.from(values).find((p) => !p.classList.contains('idle'))!;
+      expect(demand).to.not.equal(undefined);
+      expect((demand as SVGElement).getAttribute('style')).to.contain(climateModeColor('heat'));
+      expect(sr.querySelector('.wipe-value')).to.equal(null);
+    });
+  });
+
+  describe('single-mode gray demand (direction makes no sense)', () => {
+    it("cool: not cooling (current below setpoint) -> the .value stroke is the idle gray", async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 22;
+      el.current = 20; // not above setpoint -> not sensible
+      await el.updateComplete;
+      const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      const style = value.getAttribute('style')!;
+      expect(style).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(style).to.not.contain(climateModeColor('cool'));
+    });
+
+    it('cool: cooling (current above setpoint) -> the .value stroke is the cool color', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 22;
+      el.current = 26; // above setpoint -> sensible
+      await el.updateComplete;
+      const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      expect(value.getAttribute('style')).to.contain(`stroke:${climateModeColor('cool')}`);
+    });
+
+    it('heat: not heating (current above setpoint) -> the .value stroke is the idle gray', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.min = 10;
+      el.max = 30;
+      el.value = 22;
+      el.current = 26; // not below setpoint -> not sensible
+      await el.updateComplete;
+      const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      const style = value.getAttribute('style')!;
+      expect(style).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(style).to.not.contain(climateModeColor('heat'));
+    });
+
+    it('heat: heating (current below setpoint) -> the .value stroke is the heat color', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.min = 10;
+      el.max = 30;
+      el.value = 22;
+      el.current = 20; // below setpoint -> sensible
+      await el.updateComplete;
+      const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
+      expect(value.getAttribute('style')).to.contain(`stroke:${climateModeColor('heat')}`);
+    });
+  });
+
+  describe('dual center readout (_renderDualCenter / _showRange)', () => {
+    it('fresh mount cooling collapses to "Cooling" + the high setpoint only', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.modeLabel = 'Heat/Cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      // collapsed: a single value-text, no dual range, no dash
+      const texts = sr.querySelectorAll('.center .value-text');
+      expect(texts.length).to.equal(1);
+      expect(texts[0].textContent!.trim()).to.equal('24.0'); // the high setpoint
+      expect(sr.querySelector('.temp.dual')).to.equal(null);
+      expect(sr.querySelector('.dash')).to.equal(null);
+    });
+
+    it('fresh mount heating collapses to "Heating" + the low setpoint only', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.modeLabel = 'Heat/Cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 14; // heating
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Heating');
+      const texts = sr.querySelectorAll('.center .value-text');
+      expect(texts.length).to.equal(1);
+      expect(texts[0].textContent!.trim()).to.equal('18.0'); // the low setpoint
+      expect(sr.querySelector('.temp.dual')).to.equal(null);
+      expect(sr.querySelector('.dash')).to.equal(null);
+    });
+
+    it('idle (current in range) shows the range: modeLabel + low – high with a dash', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.modeLabel = 'Heat/Cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21; // idle
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Heat/Cool');
+      const dual = sr.querySelector('.temp.dual');
+      expect(dual).to.not.equal(null);
+      const texts = dual!.querySelectorAll('.value-text');
+      expect(texts.length).to.equal(2);
+      expect(texts[0].textContent!.trim()).to.equal('18.0');
+      expect(texts[1].textContent!.trim()).to.equal('24.0');
+      expect(dual!.querySelector('.dash')!.textContent!.trim()).to.equal('–');
+    });
+
+    it('dragging with an active sub-mode shows the range (not collapsed)', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.modeLabel = 'Heat/Cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> would collapse if not dragging
+      await el.updateComplete;
+      // sanity: collapsed before dragging
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.equal(null);
+
+      (el as any)._dragging = true;
+      (el as any)._dragLow = 18;
+      (el as any)._dragHigh = 24;
+      el.requestUpdate();
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      expect(sr.querySelector('.temp.dual')).to.not.equal(null);
+      expect(sr.querySelector('.dash')).to.not.equal(null);
+    });
+  });
+
+  describe('5s range timer (_bumpRangeDisplay / _showRangeTimer / updated)', () => {
+    let clock: sinon.SinonFakeTimers | undefined;
+
+    afterEach(() => {
+      clock?.restore();
+      clock = undefined;
+    });
+
+    /** Install fake timers AFTER the element is mounted/settled so Lit's
+     * microtask-driven `updateComplete` keeps flowing (only fake set/clearTimeout). */
+    function fakeTimers(): void {
+      clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    }
+
+    it('initial setpoint set does NOT trigger the range timer', async () => {
+      const el = await mount();
+      fakeTimers();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling
+      await el.updateComplete;
+      // first set -> _prevLow/_prevHigh guard skips the bump
+      expect((el as any)._showRangeTimer).to.be.false;
+      // and the readout is collapsed (no range)
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.equal(null);
+    });
+
+    it('changing a setpoint shows the range, then collapses after 5s', async () => {
+      const el = await mount();
+      fakeTimers();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> collapsed
+      await el.updateComplete;
+      expect((el as any)._showRangeTimer).to.be.false;
+      expect(el.shadowRoot!.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+
+      // change a setpoint -> bump the timer + show the range. The bump happens in
+      // updated() (this cycle), scheduling a follow-up render, so settle twice.
+      el.highValue = 25;
+      await el.updateComplete;
+      expect((el as any)._showRangeTimer).to.be.true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.not.equal(null);
+
+      // after 5s -> collapse back to the active sub-mode (timer callback sets the
+      // state and schedules another update).
+      clock!.tick(5000);
+      await el.updateComplete;
+      expect((el as any)._showRangeTimer).to.be.false;
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+    });
+  });
+
+  describe('disconnectedCallback clears the range timer', () => {
+    let clock: sinon.SinonFakeTimers | undefined;
+
+    afterEach(() => {
+      clock?.restore();
+      clock = undefined;
+    });
+
+    it('clearing the timer on removal does not throw when time advances past 5s', async () => {
+      const el = await mount();
+      clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const clearSpy = sinon.spy(window, 'clearTimeout');
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28;
+      await el.updateComplete;
+      // bump the timer
+      el.highValue = 25;
+      await el.updateComplete;
+      expect((el as any)._showRangeTimer).to.be.true;
+
+      el.remove(); // triggers disconnectedCallback -> clearTimeout(this._rangeTimer)
+      expect(clearSpy.called).to.be.true;
+      // advancing past the deadline must not fire/throw (timer was cleared)
+      expect(() => clock!.tick(6000)).to.not.throw();
+      clearSpy.restore();
+    });
+  });
+
+  describe('updated() skips the wipe for dual mode', () => {
+    it('switching a dual dial mode between colored values creates no .wipe-value overlay', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21;
+      await el.updateComplete;
+
+      el.mode = 'cool';
+      await el.updateComplete;
+      await nextFrame();
+      expect((el as any)._wipeFrom).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.wipe-value')).to.equal(null);
     });
   });
 });

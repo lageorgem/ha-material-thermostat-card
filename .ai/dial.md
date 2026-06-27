@@ -57,8 +57,36 @@ with different large-arc flags makes the arc balloon/bend; avoid it entirely):
 - When there's no segment (off mode), opacity is 0. A zero-length dash + round
   linecap would otherwise leave a stray dot.
 
-`segS/segE` are fractions: `segS = min(frac(value), frac(current))`,
-`segE = max(...)` for single mode; `frac(low)…frac(high)` for dual.
+`segS/segE` are fractions. **Single mode** renders ONE persistent `.value` path
+(so it animates on turn-on/off + during the wipe) from `min(frac(value),
+frac(current))` to `max(...)`, colored by `_demandSensible` — the demand color
+when the direction is meaningful (cool needs current > setpoint, heat needs
+current < setpoint), else `IDLE_COLOR` gray (e.g. cool mode but already below the
+setpoint → gray, "not cooling anything").
+
+## Dual (heat_cool): temperature-derived sub-mode
+
+In dual mode the dial does NOT just fill between the two setpoints. It derives
+the **active sub-mode from the current temperature** (`_dualActive`):
+`current > displayHigh` → `'cool'`, `current < displayLow` → `'heat'`, else
+`null` (idle, in range). Then it renders **two** bands (each a `.value` path):
+
+- a muted **gray "range" band** between the setpoints (`.value.idle`, opacity
+  0.5) — always present, so the range is never empty.
+- a **colored demand band** from the active setpoint to the current temp: cooling
+  → `[high, current]` in the cool color; heating → `[current, low]` in heat;
+  idle → none.
+
+`_effectiveMode`/`_dialColor` follow the sub-mode (cool/heat/heat_cool), so the
+halo + big number recolor too. The mode **wipe is skipped for dual** (colors
+change via the CSS `stroke` transition, not the slide).
+
+**Center readout** (`_renderDualCenter` gated by `_showRange`): shows the
+"Heat/Cool" **range** (low – high) while dragging, for **5s after a setpoint
+changes** (`_bumpRangeDisplay` 5s timer, armed in `updated()` — guarded by
+`_prevLow/_prevHigh` so the initial set doesn't arm it), or while idle. Otherwise
+it **collapses** to the active sub-mode label ("Cooling"/"Heating") + the single
+setpoint being targeted (high while cooling, low while heating).
 
 ## Interaction
 
