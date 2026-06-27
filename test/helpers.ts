@@ -38,6 +38,8 @@ export function makeHass(
       calls.push({ domain, service, data, target });
       return Promise.resolve();
     },
+    // Default: no history. Tests that exercise the comfort feature override this.
+    callWS: () => Promise.resolve({}),
     __calls: calls,
   } as unknown as TestHass;
   return Object.assign(hass, overrides) as TestHass;

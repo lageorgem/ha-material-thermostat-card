@@ -60,12 +60,21 @@ src/
     switch-list.ts             independent toggles (icon row)
     button-list.ts             independent presses (icon row)
     entity-tile.ts             rounded tile (icon + value), tap_action via actions.ts
+    comfort.ts                 mt-comfort: ASYNC status line (history forecast); add-once feature
+
+  calc/                        PURE, framework-free logic (heavily unit-tested in calc.test.ts)
+    comfort-metrics.ts         heatIndexC (NOAA), apparentTempC (BOM), feelsLikeC
+    forecast.ts                linregress, newtonFit (Newton's-law fit), etaToThreshold, reachable
+    history.ts                 fetchHistory (callWS), lastTurnedOnMs, numericSeries, mergeOnLeft
+    comfort-analysis.ts        analyzeComfort(): metrics + forecast → the status line (no Lit/hass)
+    duration.ts                formatDuration(minutes) → "15 minutes" / "2h 10m" / "about 5 hours"
 
   editors/
     climate-feature-editor.ts  per-option label/icon/hide overrides for climate selectors
     input-select-editor.ts     input_select editor
     entity-list-editor.ts      SHARED editor for switch-group/switch-list/button-list (itemsKey prop)
     entity-tile-editor.ts      entity-tile editor
+    comfort-editor.ts          comfort feature editor (band, target ETA, lookback) + feels-like warning
     width-field.ts             mt-width-field: ha-form number slider (2..36) emitting width-changed
     display-toggle.ts          mt-display-toggle: icons|dropdown segmented control
     load-ha.ts                 ensureHaComponents(): force-load HA's lazily-registered form widgets
@@ -85,7 +94,14 @@ material-thermostat-card                 (ha-card, header, .body[.stacked|.wide]
          mt-switch-list       (icon chips directly)
          mt-button-list       (icon chips directly)
          mt-entity-tile       (rounded tile)
+         mt-comfort           (status line; async history fetch; self-collapses when nothing to show)
 ```
+
+The card also reads two optional **feels‑like** sensors (`config.feels_like`): it
+computes the heat index for the dial's current temperature (`_displayCurrent()`)
+and threads the sensor ids to `mt-comfort`. `mt-comfort` is the **only async**
+element — it pulls recorder history via `hass.callWS` on a 60s interval and runs
+the **pure** `calc/` forecasting; everything else is synchronous over `hass.states`.
 
 ## Data flow
 

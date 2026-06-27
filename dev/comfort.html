@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comfort feature — dev harness</title>
+    <style>
+      :root {
+        --md-sys-color-primary: #2b6cf6;
+        --md-sys-color-on-primary: #ffffff;
+        --md-sys-color-surface: #14131a;
+        --md-sys-color-surface-container: #211f29;
+        --md-sys-color-on-surface: #e6e1e9;
+        --md-sys-color-on-surface-variant: #cac4d0;
+        --ha-card-background: #1c1b22;
+        --state-climate-cool-color: #2b9af9;
+        --state-climate-heat-color: #ff8100;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 24px;
+        box-sizing: border-box;
+        background: #0e0d12;
+        color: #e6e1e9;
+        font-family: 'Roboto', system-ui, sans-serif;
+      }
+      ha-card {
+        display: block;
+        background: var(--ha-card-background);
+        color: var(--md-sys-color-on-surface);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }
+      .card {
+        width: 360px;
+      }
+      .lbl {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      class HaIcon extends HTMLElement {
+        static get observedAttributes() {
+          return ['icon'];
+        }
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.render();
+        }
+        attributeChangedCallback() {
+          this.render();
+        }
+        render() {
+          const size = getComputedStyle(this).getPropertyValue('--mdc-icon-size') || '24px';
+          this.style.display = 'inline-grid';
+          this.style.placeItems = 'center';
+          this.style.width = size;
+          this.style.height = size;
+          this.shadowRoot.innerHTML = `<span title="${this.getAttribute('icon') || ''}"
+            style="width:68%;height:68%;border-radius:50%;background:currentColor;opacity:.85"></span>`;
+        }
+      }
+      if (!customElements.get('ha-icon')) customElements.define('ha-icon', HaIcon);
+
+      await import('../dist/material-thermostat-card.js');
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const baseSec = nowSec - 30 * 60;
+      /** 16 compact history points from an exponential approach curve. */
+      function expPts(A, v0, k) {
+        return Array.from({ length: 16 }, (_, i) => ({
+          s: String(A + (v0 - A) * Math.exp(-k * i * 2)),
+          lu: baseSec + i * 120,
+        }));
+      }
+      const flat = (v) => Array.from({ length: 16 }, (_, i) => ({ s: String(v), lu: baseSec + i * 120 }));
+      const cool16 = flat('cool');
+
+      /** Build a card + mock hass for one scenario. */
+      function makeCard(label, opts) {
+        const states = {
+          'climate.ac': {
+            entity_id: 'climate.ac',
+            state: opts.mode,
+            attributes: {
+              friendly_name: label,
+              hvac_modes: ['off', 'cool', 'heat', 'auto'],
+              hvac_action: opts.action,
+              current_temperature: opts.curTemp,
+              temperature: opts.target,
+              min_temp: 16,
+              max_temp: 30,
+              target_temp_step: 0.5,
+            },
+          },
+          'sensor.t': { entity_id: 'sensor.t', state: String(opts.curTemp), attributes: {} },
+          'sensor.h': { entity_id: 'sensor.h', state: String(opts.curHum), attributes: {} },
+        };
+        const hass = {
+          states,
+          config: { unit_system: { temperature: '°C' } },
+          themes: {},
+          callService() {},
+          callWS() {
+            return Promise.resolve({
+              'climate.ac': cool16,
+              'sensor.t': opts.tempHist,
+              'sensor.h': flat(opts.curHum),
+            });
+          },
+        };
+
+        const wrap = document.createElement('div');
+        wrap.className = 'card';
+        const lbl = document.createElement('div');
+        lbl.className = 'lbl';
+        lbl.textContent = label;
+        wrap.appendChild(lbl);
+
+        const card = document.createElement('material-thermostat-card');
+        card.setConfig({
+          type: 'custom:material-thermostat-card',
+          entity: 'climate.ac',
+          name: label,
+          feels_like: { temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true },
+          features: [
+            { type: 'climate-hvac-modes' },
+            { type: 'comfort', comfort_min: 20, comfort_max: 26, show_target_eta: true },
+          ],
+        });
+        wrap.appendChild(card);
+        document.body.appendChild(wrap);
+        card.hass = hass;
+      }
+
+      // A) Cooling, hot now → "X until comfortable. won't go below 24°C" (target 22 below plateau).
+      makeCard('Cooling — warming down', {
+        mode: 'cool',
+        action: 'cooling',
+        curTemp: 32,
+        curHum: 40,
+        target: 22,
+        tempHist: expPts(24, 36, 0.05),
+      });
+
+      // B) Comfortable now + target reachable → "Room feels comfortable, Y until target".
+      makeCard('Comfortable + target ETA', {
+        mode: 'cool',
+        action: 'cooling',
+        curTemp: 24,
+        curHum: 45,
+        target: 21,
+        tempHist: expPts(20.5, 26, 0.05),
+      });
+
+      // C) Heating, cold now → "X until comfortable" (apparent-temp metric).
+      makeCard('Heating — warming up', {
+        mode: 'heat',
+        action: 'heating',
+        curTemp: 15,
+        curHum: 40,
+        target: 23,
+        tempHist: expPts(24, 14, 0.05),
+      });
+    </script>
+  </body>
+</html>

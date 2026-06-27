@@ -136,6 +136,34 @@ outer SortableJS because they live in the sub-editor's shadow DOM; only the even
 leaks.) Tests that call these handlers directly must pass a real `CustomEvent` —
 a plain `{detail}` object has no `stopPropagation`.
 
+## Comfort feature: async history, forecasting, self-collapse
+
+- **History via `callWS`.** `mt-comfort` is the only async element. It calls
+  `hass.callWS({ type: 'history/history_during_period', start_time, end_time,
+  entity_ids, minimal_response: true, no_attributes: true })`. The response is
+  **compact**: per-entity arrays of `{ s: state, lu: last_updated, lc: last_changed }`
+  (epoch **seconds**, sometimes only `lc`). `fetchHistory` tolerates both compact
+  and verbose key spellings. Needs HA's **recorder**; on error it shows nothing
+  (never a guess).
+- **`Date.now()` / `new Date()` are fine here** — that ban is only for Workflow
+  scripts, not card runtime or the web-test-runner browser tests.
+- **Don't show inaccurate data.** The row hides (renders `nothing`) until there's a
+  confident `newtonFit` (≥ `MIN_SAMPLES`, ≥ `MIN_SPAN_MIN`, converging k > 0,
+  r² ≥ `MIN_FIT_R2`) — and also when the climate is off or sensors are unset.
+  "Comfortable now" is a direct reading and shows immediately (no history).
+- **Self-collapse via an event, not just `display:none`.** A hidden `mt-comfort`
+  still occupies a grid cell (its `mt-feature-row` host), leaving a stray gap. So
+  `mt-comfort` dispatches `feature-visibility {visible}` and `mt-feature-row`
+  toggles its **own** `[hidden]` attribute (`:host([hidden]){display:none}`). The
+  row starts hidden for `comfort` until told otherwise.
+- **Keep logic in `calc/`.** `analyzeComfort` and the forecast math are pure and
+  unit-tested without Lit/hass (`calc.test.ts`). The Lit component just parses
+  `hass`, calls them, and renders. Extend/test the `calc/` modules, not the widget.
+- **Metric depends on mode:** heat index (`heatIndexC`) when cooling, apparent
+  temperature (`apparentTempC`) when heating — chosen from `hvac_action` then
+  `state` in `pickSide()`. Heat index is meaningless in cool conditions, hence the
+  split.
+
 ## Misc env
 
 - `rsvg-convert` is installed for rasterizing icon SVGs; ImageMagick `montage` is

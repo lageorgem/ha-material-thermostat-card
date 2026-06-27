@@ -4,7 +4,7 @@ A "feature" is one configurable control rendered below/beside the dial. The
 config schema is in `src/types.ts` (the source of truth). `mt-feature-row`
 dispatches a `FeatureConfig` to the right element and applies grid placement.
 
-## The 8 feature types
+## The 9 feature types
 
 | `type` | Element | Renders via | Binds to | Selection behavior |
 | --- | --- | --- | --- | --- |
@@ -16,6 +16,7 @@ dispatches a `FeatureConfig` to the right element and applies grid placement.
 | `switch-list` | `mt-switch-list` | icon chips | a list of switchables | each toggles independently |
 | `button-list` | `mt-button-list` | icon chips | buttons/scenes/scripts | each pressed independently |
 | `entity-tile` | `mt-entity-tile` | rounded tile | one entity | `tap_action`, else natural action |
+| `comfort` | `mt-comfort` | status line | the card's feels‑like sensors | read‑only; forecasts from history (**add once**) |
 
 ### Shared config (`BaseSelectorFeature`)
 `display?: 'icons' | 'dropdown'` and `width?: number` — but **only the
@@ -49,6 +50,30 @@ shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
   `default`.
 - Degradation by width: `width:1` → icon-only pill; `compact:true` **or**
   `width ≤ 2` → icon + value (no title); else full tile (icon + title + value).
+
+### Feels‑like + the comfort feature (`calc/`, `features/comfort.ts`)
+Card‑level `feels_like: { temperature?, humidity?, show_as_current? }` (in
+`types.ts`) names a temperature + humidity sensor. The card computes the **heat
+index** (`calc/comfort-metrics.heatIndexC`, NOAA Rothfusz) via `_displayCurrent()`
+and, when `show_as_current`, passes it as the dial's `current`. Those two sensors
+are threaded through `mt-feature-row` (`feelsLikeTemp`/`feelsLikeHumidity`) to the
+**`comfort`** feature — it has **no own pickers** (shares the card‑level sensors).
+
+`mt-comfort` is the card's only **async** element. On a 60s interval (+ on
+sensor/entity change) it fetches recorder history via
+`hass.callWS({ type: 'history/history_during_period', minimal_response, no_attributes })`
+(`calc/history.ts`), slices to "since the climate last turned on"
+(`lastTurnedOnMs`), builds heat‑index (cooling) / apparent‑temperature (heating)
+series, and forecasts with **Newton's law of cooling** (`calc/forecast.ts`:
+`newtonFit` regresses dv/dt‑vs‑value → `{k, asymptote}`; `etaToThreshold` is the
+closed‑form ETA, `null` when the target is beyond the plateau). `analyzeComfort`
+(`calc/comfort-analysis.ts`, **pure** — all logic is unit‑tested without Lit/hass)
+returns the status line. **The row is hidden** (renders `nothing`, and asks
+`mt-feature-row` to collapse via a `feature-visibility` event → host `[hidden]`)
+when: the climate is off/unavailable, sensors are unset/non‑numeric, or it's
+uncomfortable but there isn't a confident forecast yet. "Comfortable now" needs no
+history and shows immediately; ETAs follow the first fetch. The `calc/` modules are
+the source of truth — extend/test those, keep the component thin.
 
 ## Shared selector row (`selector-row.ts`)
 
@@ -94,7 +119,8 @@ document-level `mt-dropdown-open` event.
   only when the entity exposes the matching attribute (`CLIMATE_FEATURE_ATTR`:
   hvac_modes/fan_modes/swing_modes) AND aren't already added (each climate
   selector is unique). Custom features (input_select, lists, tile) are always
-  offered and repeatable.
+  offered and repeatable — **except** types in `SINGLETON_FEATURES` (currently
+  `comfort`), which are add‑once: offered only while not already present.
 - ⚠️ HA lazily registers its form components — `ensureHaComponents()`
   (`editors/load-ha.ts`) force-loads them in `connectedCallback`, then
   `requestUpdate()`. Pickers/sliders are **inert in a custom card editor** unless

@@ -11,7 +11,8 @@ export type FeatureType =
   | 'switch-group'
   | 'switch-list'
   | 'button-list'
-  | 'entity-tile';
+  | 'entity-tile'
+  | 'comfort';
 
 /**
  * Per-option override for the built-in climate selectors and for input_select.
@@ -97,6 +98,27 @@ export interface EntityTileFeatureConfig {
   width?: number;
 }
 
+/**
+ * The "comfort & time-to-comfortable" feature. Added at most once. Uses the
+ * card-level {@link FeelsLikeConfig} sensors to judge comfort (heat index when
+ * cooling, apparent temperature when heating) and forecasts, from history since
+ * the climate turned on, how long until the room feels comfortable — and,
+ * optionally, until the target temperature is reached.
+ */
+export interface ComfortFeatureConfig {
+  type: 'comfort';
+  /** Comfortable band lower bound in °C (default 20). */
+  comfort_min?: number;
+  /** Comfortable band upper bound in °C (default 26). */
+  comfort_max?: number;
+  /** Also show the time until the target temperature is reached. */
+  show_target_eta?: boolean;
+  /** History lookback window in hours (default 12). */
+  lookback_hours?: number;
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
+  width?: number;
+}
+
 export type FeatureConfig =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
@@ -105,7 +127,22 @@ export type FeatureConfig =
   | SwitchGroupFeatureConfig
   | SwitchListFeatureConfig
   | ButtonListFeatureConfig
-  | EntityTileFeatureConfig;
+  | EntityTileFeatureConfig
+  | ComfortFeatureConfig;
+
+/**
+ * Card-level "feels-like" sensors. The two sensors feed both the optional dial
+ * replacement (`show_as_current`) and the comfort feature's heat-index/apparent-
+ * temperature calculations.
+ */
+export interface FeelsLikeConfig {
+  /** Temperature sensor entity id. */
+  temperature?: string;
+  /** Humidity sensor entity id (%). */
+  humidity?: string;
+  /** Replace the dial's current temperature with the computed feels-like value. */
+  show_as_current?: boolean;
+}
 
 export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   type: string;
@@ -114,6 +151,8 @@ export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   theme?: string;
   /** Show the current room temperature as the large primary number. */
   show_current_as_primary?: boolean;
+  /** "Feels-like" temperature/humidity sensors (shared by the comfort feature). */
+  feels_like?: FeelsLikeConfig;
   features?: FeatureConfig[];
 }
 

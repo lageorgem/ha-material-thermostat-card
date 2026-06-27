@@ -7,6 +7,7 @@ import './editors/climate-feature-editor';
 import './editors/input-select-editor';
 import './editors/entity-list-editor';
 import './editors/entity-tile-editor';
+import './editors/comfort-editor';
 import { ensureHaComponents } from './editors/load-ha';
 
 interface FormSchemaItem {
@@ -21,11 +22,19 @@ const BASE_SCHEMA: FormSchemaItem[] = [
   { name: 'show_current_as_primary', selector: { boolean: {} } },
 ];
 
+/** "Feels like" sensors + dial-replacement toggle (card-level). */
+const FEELS_LIKE_SCHEMA: FormSchemaItem[] = [
+  { name: 'temperature', selector: { entity: { domain: 'sensor' } } },
+  { name: 'humidity', selector: { entity: { domain: 'sensor' } } },
+  { name: 'show_as_current', selector: { boolean: {} } },
+];
+
 /** Feature types that can be added from the editor. */
 const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes' },
   { type: 'climate-fan-modes', label: 'Climate fan modes' },
   { type: 'climate-swing-modes', label: 'Climate swing modes' },
+  { type: 'comfort', label: 'Comfort & time to comfortable' },
   { type: 'input-select', label: 'Input select' },
   { type: 'switch-group', label: 'Switch group' },
   { type: 'switch-list', label: 'Switch list' },
@@ -39,6 +48,9 @@ const CLIMATE_FEATURE_ATTR: Partial<Record<FeatureType, string>> = {
   'climate-fan-modes': 'fan_modes',
   'climate-swing-modes': 'swing_modes',
 };
+
+/** Custom feature types that may be added at most once. */
+const SINGLETON_FEATURES = new Set<FeatureType>(['comfort']);
 
 /**
  * Build a sensible default config for a newly added feature.
@@ -55,6 +67,8 @@ function defaultFeature(type: FeatureType): FeatureConfig {
       return { type, items: [] };
     case 'entity-tile':
       return { type, entity: '' };
+    case 'comfort':
+      return { type, show_target_eta: false };
     default:
       return { type } as FeatureConfig;
   }
@@ -64,6 +78,7 @@ const FEATURE_LABELS: Record<FeatureType, string> = {
   'climate-hvac-modes': 'Climate HVAC modes',
   'climate-fan-modes': 'Climate fan modes',
   'climate-swing-modes': 'Climate swing modes',
+  comfort: 'Comfort & time to comfortable',
   'input-select': 'Input select',
   'switch-group': 'Switch group',
   'switch-list': 'Switch list',
@@ -103,6 +118,16 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     };
   }
 
+  /** Data object handed to the feels-like ha-form. */
+  private get _feelsLikeData() {
+    const fl = this._config.feels_like ?? {};
+    return {
+      temperature: fl.temperature,
+      humidity: fl.humidity,
+      show_as_current: fl.show_as_current ?? false,
+    };
+  }
+
   /**
    * Emit a new configuration to Lovelace.
    * @param config the updated config
@@ -126,6 +151,12 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         return 'Theme';
       case 'show_current_as_primary':
         return 'Show current temperature as primary information';
+      case 'temperature':
+        return 'Temperature sensor';
+      case 'humidity':
+        return 'Humidity sensor';
+      case 'show_as_current':
+        return 'Show feels-like as the current temperature';
       default:
         return s.name;
     }
@@ -147,6 +178,21 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     this._emit(config);
   }
 
+  /**
+   * Merge changes from the feels-like form into the nested config object.
+   * @param e ha-form's value-changed event
+   */
+  private _feelsLikeChanged(e: CustomEvent): void {
+    const data = e.detail.value;
+    const feels_like = {
+      temperature: data.temperature || undefined,
+      humidity: data.humidity || undefined,
+      show_as_current: data.show_as_current || undefined,
+    };
+    const empty = !feels_like.temperature && !feels_like.humidity && !feels_like.show_as_current;
+    this._emit({ ...this._config, feels_like: empty ? undefined : feels_like });
+  }
+
   /** The configured features. */
   private get _features(): FeatureConfig[] {
     return this._config.features ?? [];
@@ -162,6 +208,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     const attrs = this.hass?.states?.[this._config.entity]?.attributes ?? {};
     const existing = new Set(this._features.map((f) => f.type));
     return ADDABLE_FEATURES.filter(({ type }) => {
+      if (SINGLETON_FEATURES.has(type)) return !existing.has(type); // add-once custom feature
       const attr = CLIMATE_FEATURE_ATTR[type];
       if (!attr) return true; // custom feature → always addable, repeatable
       return !existing.has(type) && Array.isArray(attrs[attr]) && attrs[attr].length > 0;
@@ -232,6 +279,17 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           .schema=${BASE_SCHEMA}
           .computeLabel=${this._computeLabel}
           @value-changed=${this._baseChanged}
+        ></ha-form>
+
+        <div class="features-header">
+          <span>Feels-like temperature</span>
+        </div>
+        <ha-form
+          .hass=${this.hass}
+          .data=${this._feelsLikeData}
+          .schema=${FEELS_LIKE_SCHEMA}
+          .computeLabel=${this._computeLabel}
+          @value-changed=${this._feelsLikeChanged}
         ></ha-form>
 
         <div class="features-header">
@@ -367,6 +425,16 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           .feature=${feature}
           @feature-changed=${onChange}
         ></mt-entity-tile-editor>`;
+        break;
+      case 'comfort':
+        inner = html`<mt-comfort-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          .feelsLikeConfigured=${!!(
+            this._config.feels_like?.temperature && this._config.feels_like?.humidity
+          )}
+          @feature-changed=${onChange}
+        ></mt-comfort-editor>`;
         break;
       default:
         inner = html`<p class="hint">No editor available.</p>`;

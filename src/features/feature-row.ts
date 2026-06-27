@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureConfig } from '../types';
 import './climate-selector';
@@ -8,6 +8,7 @@ import './switch-group';
 import './switch-list';
 import './button-list';
 import './entity-tile';
+import './comfort';
 
 /**
  * Dispatches a single feature config to its renderer.
@@ -20,16 +21,32 @@ export class MtFeatureRow extends LitElement {
   @property({ attribute: false }) feature!: FeatureConfig;
   /** Column span within the card's feature grid (1–10, computed by the card). */
   @property({ type: Number }) span = 10;
+  /** Shared feels-like sensors (consumed by the comfort feature). */
+  @property({ attribute: false }) feelsLikeTemp?: string;
+  @property({ attribute: false }) feelsLikeHumidity?: string;
+
+  /** Whether the comfort feature currently has something to show. */
+  @state() private _comfortVisible = false;
 
   /**
    * Size the host to its column span. The card's feature grid auto-flows these,
    * wrapping to a new row when a feature's span doesn't fit in the remaining
-   * columns.
+   * columns. The comfort row collapses (host hidden) until it has trustworthy
+   * data to show.
    * @param changed changed properties
    */
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has('span')) this.style.gridColumn = `span ${Math.max(1, this.span)}`;
+    this.toggleAttribute('hidden', this.feature?.type === 'comfort' && !this._comfortVisible);
   }
+
+  /**
+   * Track the comfort feature's self-reported visibility so the row can collapse.
+   * @param e the comfort feature's feature-visibility event
+   */
+  private _onComfortVisibility = (e: CustomEvent): void => {
+    this._comfortVisible = !!e.detail.visible;
+  };
 
   protected render(): TemplateResult | typeof nothing {
     const feature = this.feature;
@@ -82,6 +99,15 @@ export class MtFeatureRow extends LitElement {
         ></mt-button-list>`;
       case 'entity-tile':
         return html`<mt-entity-tile .hass=${this.hass} .config=${feature}></mt-entity-tile>`;
+      case 'comfort':
+        return html`<mt-comfort
+          .hass=${this.hass}
+          entityId=${this.entityId}
+          .feature=${feature}
+          .tempSensor=${this.feelsLikeTemp}
+          .humiditySensor=${this.feelsLikeHumidity}
+          @feature-visibility=${this._onComfortVisibility}
+        ></mt-comfort>`;
       default:
         return nothing;
     }
@@ -93,6 +119,9 @@ export class MtFeatureRow extends LitElement {
       /* allow shrinking below content so a wide icon list wraps/scrolls inside
          its column instead of overflowing the card */
       min-width: 0;
+    }
+    :host([hidden]) {
+      display: none;
     }
   `;
 }

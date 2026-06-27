@@ -27,6 +27,7 @@ gracefully under any Home Assistant theme.
 - [Quick start](#quick-start)
 - [Card options](#card-options)
 - [The dial](#the-dial)
+- [Feels‑like temperature](#feels-like-temperature)
 - [Features](#features)
   - [Common feature options](#common-feature-options)
   - [Climate selectors](#climate-selectors-hvac--fan--swing)
@@ -36,6 +37,7 @@ gracefully under any Home Assistant theme.
   - [`switch-list`](#switch-list)
   - [`button-list`](#button-list)
   - [`entity-tile`](#entity-tile)
+  - [`comfort`](#comfort)
 - [Layout & responsiveness](#layout--responsiveness)
 - [AC swing icons (`mt:`)](#ac-swing-icons-mt)
 - [Theming](#theming)
@@ -48,6 +50,8 @@ gracefully under any Home Assistant theme.
 - 🎯 **Draggable circular dial** (custom SVG) — drag, tap, `+/−`, or keyboard; themed by HVAC mode/action.
 - 🔀 **Dual setpoint** for `heat_cool` (two handles).
 - 🌡️ Current‑temperature marker, with an optional **"show current as primary"** big number.
+- 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
+- ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
 - 🧩 Climate **HVAC / fan / swing** selectors as an **icon row** or **dropdown**.
 - ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from the visual editor.
@@ -107,6 +111,7 @@ visually, or write the YAML directly.
 | `name` | string | entity name | Card title |
 | `theme` | string | — | A Home Assistant theme to apply to this card |
 | `show_current_as_primary` | boolean | `false` | Show the **current** temperature as the large number (instead of the target) |
+| `feels_like` | object | — | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature) |
 | `features` | list | `[]` | Controls rendered below / beside the dial — see [Features](#features) |
 
 ## The dial
@@ -138,6 +143,32 @@ Changes are **optimistic** (the UI updates immediately) and the `climate.set_tem
 debounced so dragging doesn't spam the backend. Color changes **cross‑fade**, and the temperature
 segment **slides in/out** on power changes and when switching between modes.
 
+## Feels‑like temperature
+
+Many climate entities only report dry‑bulb temperature, which ignores how humid air *feels*. Point
+the card at a **temperature** and a **humidity** sensor and it computes the **heat index** ("feels
+like"), and — with `show_as_current` — shows that in place of the climate entity's current
+temperature on the dial. These same two sensors power the [`comfort`](#comfort) feature.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `temperature` | string | — | A temperature `sensor.*` |
+| `humidity` | string | — | A relative‑humidity `sensor.*` (%) |
+| `show_as_current` | boolean | `false` | Show the computed feels‑like value as the dial's current temperature |
+
+```yaml
+type: custom:material-thermostat-card
+entity: climate.living_room
+feels_like:
+  temperature: sensor.living_room_temperature
+  humidity: sensor.living_room_humidity
+  show_as_current: true
+```
+
+> The heat index reduces to ≈ the air temperature in cool, dry conditions; there's no wind‑chill term
+> (no indoor wind sensor). If a sensor is missing or non‑numeric, the card falls back to the climate
+> entity's own `current_temperature`.
+
 ## Features
 
 Add any number of rows under `features:`. Each entry has a `type` and type‑specific options.
@@ -152,6 +183,7 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | `switch-list` | a list of switches | each toggles **independently** (several can be on) |
 | `button-list` | buttons / scenes / scripts | each **pressed** independently |
 | `entity-tile` | one sensor / switch / button | a rounded tile that runs a tap action |
+| `comfort` | the feels‑like sensors | a status line: comfort + time‑to‑comfortable / time‑to‑target (**add once**) |
 
 ### Common feature options
 
@@ -294,6 +326,48 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
   compact: true
   width: 50
 ```
+
+### `comfort`
+
+A single status line that tells you whether the room **feels comfortable** and, when it doesn't,
+forecasts **how long until it will** — optionally also **how long until the target temperature is
+reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can be added **only once**.
+
+It uses the right metric for what the climate is doing: the **heat index** when cooling (an AC's job
+is to fight heat + humidity) and the **apparent temperature** when heating (humidity‑aware cold
+comfort). The forecast fits recent history (since the climate last turned on) to a Newton's‑law
+cooling/heating curve, so estimates **slow as the room nears its plateau** and it can honestly say a
+target **won't be reached**.
+
+Example lines:
+
+- `15 minutes until room feels comfortable. 3 hours until target temperature is reached`
+- `Room feels comfortable, 1 hour until target temperature is reached`
+- `Room feels comfortable, temperature won't go below 24°C`
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `comfort_min` | number | `20` | Bottom of the comfortable feels‑like band (°) |
+| `comfort_max` | number | `26` | Top of the comfortable feels‑like band (°) |
+| `show_target_eta` | boolean | `false` | Also show the time until the target temperature is reached |
+| `lookback_hours` | number | `12` | How far back to read history for the forecast |
+| `width` | number `10`–`100` | `100` | Width as a percentage of the card |
+
+```yaml
+feels_like:
+  temperature: sensor.living_room_temperature
+  humidity: sensor.living_room_humidity
+features:
+  - type: comfort
+    comfort_min: 20
+    comfort_max: 26
+    show_target_eta: true
+```
+
+> The row is **deliberately hidden** when there isn't enough trustworthy history to forecast, when
+> the climate is **off**, or when the feels‑like sensors aren't set — it never shows a guess. The
+> "comfortable now" verdict appears immediately (it needs no history); the ETAs follow once enough
+> history is available. Requires Home Assistant's **recorder** to be keeping history for the sensors.
 
 ## Layout & responsiveness
 

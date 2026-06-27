@@ -3,6 +3,7 @@ import sinon from 'sinon';
 import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import { makeHass, climateState, entityState } from '../helpers';
+import { feelsLikeC } from '../../src/calc/comfort-metrics';
 import type { MaterialThermostatCardConfig } from '../../src/types';
 
 // The benign "ResizeObserver loop completed with undelivered notifications"
@@ -865,6 +866,77 @@ describe('material-thermostat-card', () => {
       await el.updateComplete;
       // inner width = host width - CARD_PADDING_X (32)
       expect((el as any)._widthPx).to.be.greaterThan(0);
+    });
+  });
+
+  describe('feels-like current temperature', () => {
+    const T = 'sensor.room_temp';
+    const H = 'sensor.room_hum';
+
+    /** Mount with the feels-like sensors present. */
+    async function mountFeels(
+      feels_like: MaterialThermostatCardConfig['feels_like'],
+      tempState = '30',
+      humState = '60'
+    ): Promise<MaterialThermostatCard> {
+      return track(
+        await mount(baseConfig({ feels_like }), {
+          [ENTITY]: climateState({ current_temperature: 24 }),
+          [T]: entityState(T, tempState),
+          [H]: entityState(H, humState),
+        })
+      );
+    }
+
+    it('replaces the dial current with the computed feels-like when enabled', async () => {
+      const el = await mountFeels({ temperature: T, humidity: H, show_as_current: true });
+      expect(dial(el).current).to.be.closeTo(feelsLikeC(30, 60), 1e-6);
+    });
+
+    it('uses the climate current_temperature when show_as_current is off', async () => {
+      const el = await mountFeels({ temperature: T, humidity: H, show_as_current: false });
+      expect(dial(el).current).to.equal(24);
+    });
+
+    it('falls back to current_temperature when a sensor is non-numeric', async () => {
+      const el = await mountFeels(
+        { temperature: T, humidity: H, show_as_current: true },
+        'unavailable'
+      );
+      expect(dial(el).current).to.equal(24);
+    });
+
+    it('falls back when sensors are not set', async () => {
+      const el = track(await mount(baseConfig({ feels_like: { show_as_current: true } })));
+      expect(dial(el).current).to.equal(24); // climateState default current_temperature
+    });
+
+    it('tracks the feels-like sensors for re-render', async () => {
+      const el = await mountFeels({ temperature: T, humidity: H, show_as_current: true });
+      const ids = (el as any)._trackedEntityIds();
+      expect(ids).to.include.members([ENTITY, T, H]);
+    });
+
+    it('passes the sensors down to each feature row', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            feels_like: { temperature: T, humidity: H },
+            features: [{ type: 'climate-hvac-modes' }],
+          }),
+          {
+            [ENTITY]: climateState(),
+            [T]: entityState(T, '25'),
+            [H]: entityState(H, '50'),
+          }
+        )
+      );
+      (el as any)._widthPx = 480;
+      el.requestUpdate();
+      await el.updateComplete;
+      const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
+      expect(row.feelsLikeTemp).to.equal(T);
+      expect(row.feelsLikeHumidity).to.equal(H);
     });
   });
 });

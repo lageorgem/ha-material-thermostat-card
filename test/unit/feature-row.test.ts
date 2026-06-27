@@ -1,5 +1,5 @@
-import { fixture, html, expect } from '@open-wc/testing';
-import { makeHass, climateState } from '../helpers';
+import { fixture, html, expect, aTimeout } from '@open-wc/testing';
+import { makeHass, climateState, entityState } from '../helpers';
 import type { TestHass } from '../helpers';
 import '../../src/features/feature-row';
 import type { MtFeatureRow } from '../../src/features/feature-row';
@@ -115,6 +115,62 @@ describe('mt-feature-row', () => {
       const hass = makeHass({ 'sensor.x': { entity_id: 'sensor.x', state: '1', attributes: {} } });
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x' });
       expect(el.shadowRoot!.querySelector('mt-entity-tile')).to.not.equal(null);
+    });
+
+    it('comfort -> mt-comfort, threading the shared feels-like sensors', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ current_temperature: 22 }, 'cool'),
+        'sensor.t': entityState('sensor.t', '22'),
+        'sensor.h': entityState('sensor.h', '50'),
+      });
+      const el = await fixture<MtFeatureRow>(
+        html`<mt-feature-row
+          .hass=${hass}
+          entityId="climate.test"
+          .feature=${{ type: 'comfort' } as FeatureConfig}
+          .feelsLikeTemp=${'sensor.t'}
+          .feelsLikeHumidity=${'sensor.h'}
+        ></mt-feature-row>`
+      );
+      const child = el.shadowRoot!.querySelector('mt-comfort') as any;
+      expect(child).to.not.equal(null);
+      expect(child.tempSensor).to.equal('sensor.t');
+      expect(child.humiditySensor).to.equal('sensor.h');
+    });
+
+    it('comfort row collapses (host hidden) until it has something to show', async () => {
+      // No sensors → comfort hides → the row host carries the hidden attribute.
+      const hass = makeHass({ 'climate.test': climateState({}, 'off') });
+      const el = await fixture<MtFeatureRow>(
+        html`<mt-feature-row
+          .hass=${hass}
+          entityId="climate.test"
+          .feature=${{ type: 'comfort' } as FeatureConfig}
+        ></mt-feature-row>`
+      );
+      await aTimeout(10);
+      await el.updateComplete;
+      expect(el.hasAttribute('hidden')).to.equal(true);
+    });
+
+    it('comfort row un-hides once the feature reports it is visible', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ current_temperature: 22 }, 'cool'),
+        'sensor.t': entityState('sensor.t', '22'),
+        'sensor.h': entityState('sensor.h', '50'),
+      });
+      const el = await fixture<MtFeatureRow>(
+        html`<mt-feature-row
+          .hass=${hass}
+          entityId="climate.test"
+          .feature=${{ type: 'comfort' } as FeatureConfig}
+          .feelsLikeTemp=${'sensor.t'}
+          .feelsLikeHumidity=${'sensor.h'}
+        ></mt-feature-row>`
+      );
+      await aTimeout(10);
+      await el.updateComplete;
+      expect(el.hasAttribute('hidden')).to.equal(false);
     });
 
     it('unknown/invalid type -> renders nothing', async () => {

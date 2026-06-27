@@ -8,12 +8,14 @@ import '../../src/editors/climate-feature-editor';
 import '../../src/editors/input-select-editor';
 import '../../src/editors/entity-list-editor';
 import '../../src/editors/entity-tile-editor';
+import '../../src/editors/comfort-editor';
 
 import type { MaterialThermostatCardEditor } from '../../src/editor';
 import type { MtClimateFeatureEditor } from '../../src/editors/climate-feature-editor';
 import type { MtInputSelectEditor } from '../../src/editors/input-select-editor';
 import type { MtEntityListEditor } from '../../src/editors/entity-list-editor';
 import type { MtEntityTileEditor } from '../../src/editors/entity-tile-editor';
+import type { MtComfortEditor } from '../../src/editors/comfort-editor';
 import type {
   FeatureType,
   InputSelectFeatureConfig,
@@ -170,6 +172,63 @@ describe('material-thermostat-card-editor', () => {
     expect((el2 as any)._baseData.show_current_as_primary).to.equal(true);
   });
 
+  describe('feels-like section', () => {
+    /** The second ha-form in the editor is the feels-like form. */
+    function feelsForm(el: MaterialThermostatCardEditor): Element {
+      return el.shadowRoot!.querySelectorAll('ha-form')[1];
+    }
+
+    it('renders a feels-like form populated from config', async () => {
+      const el = await mount({
+        feels_like: { temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true },
+      });
+      expect((el as any)._feelsLikeData).to.deep.equal({
+        temperature: 'sensor.t',
+        humidity: 'sensor.h',
+        show_as_current: true,
+      });
+      expect(feelsForm(el)).to.not.equal(undefined);
+    });
+
+    it('_feelsLikeData defaults show_as_current to false', async () => {
+      const el = await mount();
+      expect((el as any)._feelsLikeData.show_as_current).to.equal(false);
+    });
+
+    it('_computeLabel covers the feels-like fields', async () => {
+      const cl = (await mount() as any)._computeLabel;
+      expect(cl({ name: 'temperature' })).to.contain('Temperature');
+      expect(cl({ name: 'humidity' })).to.contain('Humidity');
+      expect(cl({ name: 'show_as_current' })).to.contain('feels-like');
+    });
+
+    it('_feelsLikeChanged writes the nested feels_like object', async () => {
+      const el = await mount();
+      const cap = captureEvents('config-changed');
+      emitValueChanged(feelsForm(el), {
+        temperature: 'sensor.t',
+        humidity: 'sensor.h',
+        show_as_current: true,
+      });
+      cap.stop();
+      const cfg = (cap.events[0].detail as any).config;
+      expect(cfg.feels_like).to.deep.equal({
+        temperature: 'sensor.t',
+        humidity: 'sensor.h',
+        show_as_current: true,
+      });
+    });
+
+    it('clearing every feels-like field drops the object entirely', async () => {
+      const el = await mount({ feels_like: { temperature: 'sensor.t' } });
+      const cap = captureEvents('config-changed');
+      emitValueChanged(feelsForm(el), { temperature: '', humidity: '', show_as_current: false });
+      cap.stop();
+      const cfg = (cap.events[0].detail as any).config;
+      expect(cfg.feels_like).to.equal(undefined);
+    });
+  });
+
   describe('add-feature menu and defaultFeature per type', () => {
     it('_addOpen toggles when clicking .add-btn', async () => {
       const el = await mount();
@@ -193,6 +252,7 @@ describe('material-thermostat-card-editor', () => {
       { type: 'switch-list', check: (f) => expect(f).to.deep.equal({ type: 'switch-list', entities: [] }) },
       { type: 'button-list', check: (f) => expect(f).to.deep.equal({ type: 'button-list', items: [] }) },
       { type: 'entity-tile', check: (f) => expect(f).to.deep.equal({ type: 'entity-tile', entity: '' }) },
+      { type: 'comfort', check: (f) => expect(f).to.deep.equal({ type: 'comfort', show_target_eta: false }) },
     ];
 
     cases.forEach(({ type, check }) => {
@@ -240,10 +300,18 @@ describe('material-thermostat-card-editor', () => {
         'climate-hvac-modes',
         'climate-fan-modes',
         'climate-swing-modes',
+        'comfort',
         ...CUSTOM_TYPES,
       ]);
-      // all 8 addable feature types present, none filtered out
-      expect(types.length).to.equal(8);
+      // all 9 addable feature types present, none filtered out
+      expect(types.length).to.equal(9);
+    });
+
+    it('the comfort feature may be added only once', async () => {
+      const before = await mount({ features: [] });
+      expect((before as any)._addableFeatures().map((f: any) => f.type)).to.include('comfort');
+      const after = await mount({ features: [{ type: 'comfort' }] });
+      expect((after as any)._addableFeatures().map((f: any) => f.type)).to.not.include('comfort');
     });
 
     it('entity WITHOUT fan_modes/swing_modes → those climate types absent, hvac present', async () => {
@@ -404,6 +472,22 @@ describe('material-thermostat-card-editor', () => {
     it('entity-tile -> mt-entity-tile-editor', async () => {
       const el = await expand('entity-tile', { entity: '' });
       expect(el.shadowRoot!.querySelector('mt-entity-tile-editor')).to.not.equal(null);
+    });
+
+    it('comfort -> mt-comfort-editor, reflecting feels-like configured state', async () => {
+      const unset = await expand('comfort');
+      const edUnset = unset.shadowRoot!.querySelector('mt-comfort-editor') as any;
+      expect(edUnset).to.not.equal(null);
+      expect(edUnset.feelsLikeConfigured).to.equal(false);
+
+      const set = await mount({
+        feels_like: { temperature: 'sensor.t', humidity: 'sensor.h' },
+        features: [{ type: 'comfort' }],
+      });
+      (set as any)._editingIndex = 0;
+      await set.updateComplete;
+      const edSet = set.shadowRoot!.querySelector('mt-comfort-editor') as any;
+      expect(edSet.feelsLikeConfigured).to.equal(true);
     });
 
     it('unknown type -> "No editor available." hint', async () => {
@@ -1304,5 +1388,94 @@ describe('mt-entity-tile-editor', () => {
     );
     cap.stop();
     expect((cap.events[0].detail as any).feature.width).to.equal(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// J) comfort-editor.ts
+// ---------------------------------------------------------------------------
+describe('mt-comfort-editor', () => {
+  /** Mount the comfort editor. */
+  async function mount(feature: any, feelsLikeConfigured = true): Promise<MtComfortEditor> {
+    const hass = makeHass({});
+    return fixture<MtComfortEditor>(
+      html`<mt-comfort-editor
+        .hass=${hass}
+        .feature=${feature}
+        .feelsLikeConfigured=${feelsLikeConfigured}
+      ></mt-comfort-editor>`
+    );
+  }
+
+  it('_data fills defaults for the band and lookback', async () => {
+    const el = await mount({ type: 'comfort' });
+    expect((el as any)._data).to.deep.equal({
+      comfort_min: 20,
+      comfort_max: 26,
+      show_target_eta: false,
+      lookback_hours: 12,
+    });
+  });
+
+  it('_data reflects set values', async () => {
+    const el = await mount({
+      type: 'comfort',
+      comfort_min: 19,
+      comfort_max: 25,
+      show_target_eta: true,
+      lookback_hours: 24,
+    });
+    expect((el as any)._data).to.deep.equal({
+      comfort_min: 19,
+      comfort_max: 25,
+      show_target_eta: true,
+      lookback_hours: 24,
+    });
+  });
+
+  it('_computeLabel covers each field', async () => {
+    const cl = (await mount({ type: 'comfort' }) as any)._computeLabel;
+    expect(cl({ name: 'comfort_min' })).to.contain('Comfortable from');
+    expect(cl({ name: 'comfort_max' })).to.contain('Comfortable up to');
+    expect(cl({ name: 'show_target_eta' })).to.contain('target temperature');
+    expect(cl({ name: 'lookback_hours' })).to.contain('lookback');
+    expect(cl({ name: 'mystery' })).to.equal('mystery');
+  });
+
+  it('warns when feels-like sensors are not configured', async () => {
+    const warn = await mount({ type: 'comfort' }, false);
+    expect(warn.shadowRoot!.querySelector('.warn')).to.not.equal(null);
+    const ok = await mount({ type: 'comfort' }, true);
+    expect(ok.shadowRoot!.querySelector('.warn')).to.equal(null);
+  });
+
+  it('_changed emits a normalized feature (falsy show_target_eta -> undefined)', async () => {
+    const el = await mount({ type: 'comfort', width: 40 });
+    const cap = captureEvents('feature-changed');
+    emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
+      comfort_min: 18,
+      comfort_max: 27,
+      show_target_eta: false,
+      lookback_hours: 8,
+    });
+    cap.stop();
+    expect((cap.events[0].detail as any).feature).to.deep.equal({
+      type: 'comfort',
+      width: 40,
+      comfort_min: 18,
+      comfort_max: 27,
+      show_target_eta: undefined,
+      lookback_hours: 8,
+    });
+  });
+
+  it('emits width changes via the width field', async () => {
+    const el = await mount({ type: 'comfort' });
+    const cap = captureEvents('feature-changed');
+    el.shadowRoot!.querySelector('mt-width-field')!.dispatchEvent(
+      new CustomEvent('width-changed', { detail: { value: 70 }, bubbles: true, composed: true })
+    );
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.width).to.equal(70);
   });
 });

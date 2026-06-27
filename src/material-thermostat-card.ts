@@ -22,6 +22,7 @@ import {
 } from './grid';
 import { tokens, climateModeColor, prettyLabel } from './theme';
 import type { FeatureConfig, MaterialThermostatCardConfig } from './types';
+import { feelsLikeC } from './calc/comfort-metrics';
 import { registerMtIcons } from './register-icons';
 import './dial/circular-dial';
 import './features/feature-row';
@@ -113,12 +114,30 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   /** Entities that should trigger a re-render when their state changes. */
   private _trackedEntityIds(): string[] {
     const ids = new Set<string>([this._config.entity]);
+    const fl = this._config.feels_like;
+    if (fl?.temperature) ids.add(fl.temperature);
+    if (fl?.humidity) ids.add(fl.humidity);
     for (const f of this._config.features ?? []) {
       if ('entity' in f && f.entity) ids.add(f.entity);
       if ('entities' in f) f.entities?.forEach((e) => ids.add(e.entity));
       if ('items' in f) f.items?.forEach((e) => ids.add(e.entity));
     }
     return [...ids];
+  }
+
+  /**
+   * The current temperature to display on the dial: the computed feels-like
+   * value when enabled and both sensors read numerically, else the climate's own
+   * `current_temperature`.
+   * @param fallback the climate entity's current_temperature
+   */
+  private _displayCurrent(fallback: number | undefined): number | undefined {
+    const fl = this._config.feels_like;
+    if (!fl?.show_as_current || !fl.temperature || !fl.humidity) return fallback;
+    const t = parseFloat(String(this.hass?.states?.[fl.temperature]?.state));
+    const rh = parseFloat(String(this.hass?.states?.[fl.humidity]?.state));
+    if (!isFinite(t) || !isFinite(rh)) return fallback;
+    return feelsLikeC(t, rh);
   }
 
   protected shouldUpdate(changed: PropertyValues): boolean {
@@ -367,7 +386,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .min=${a.min_temp ?? 7}
               .max=${a.max_temp ?? 35}
               .step=${a.target_temp_step ?? 0.5}
-              .current=${a.current_temperature}
+              .current=${this._displayCurrent(a.current_temperature)}
               .mode=${colorMode}
               .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
               .unit=${unit}
@@ -395,6 +414,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
                     .entityId=${this._config.entity}
                     .feature=${feature}
                     .span=${this._featureSpan(feature)}
+                    .feelsLikeTemp=${this._config.feels_like?.temperature}
+                    .feelsLikeHumidity=${this._config.feels_like?.humidity}
                   ></mt-feature-row>`
                 )}
               </div>`
