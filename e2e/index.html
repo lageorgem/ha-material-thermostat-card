@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Material Thermostat Card — e2e harness</title>
+    <style>
+      :root {
+        --primary-color: #6750a4;
+        --card-background-color: #1c1b22;
+        --primary-text-color: #e6e1e9;
+        --secondary-text-color: #cac4d0;
+        --divider-color: #49454f;
+        --disabled-color: #8a8378;
+        --clear-background-color: #2b2933;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0e0d12;
+        font-family: 'Roboto', system-ui, sans-serif;
+      }
+      #wrap {
+        max-width: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"></div>
+    <script type="module">
+      // Minimal stubs: ha-icon (shadow DOM, never light-DOM innerHTML) + ha-card.
+      class HaIcon extends HTMLElement {
+        static get observedAttributes() {
+          return ['icon'];
+        }
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.render();
+        }
+        attributeChangedCallback() {
+          this.render();
+        }
+        render() {
+          const size = getComputedStyle(this).getPropertyValue('--mdc-icon-size') || '24px';
+          this.style.display = 'inline-grid';
+          this.style.placeItems = 'center';
+          this.style.width = size;
+          this.style.height = size;
+          this.shadowRoot.innerHTML = `<span data-icon="${this.getAttribute('icon') || ''}"
+            style="width:62%;height:62%;border-radius:50%;background:currentColor;opacity:.85"></span>`;
+        }
+      }
+      if (!customElements.get('ha-icon')) customElements.define('ha-icon', HaIcon);
+      class HaCard extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' }).innerHTML =
+            '<style>:host{display:block;box-sizing:border-box}</style><slot></slot>';
+        }
+      }
+      if (!customElements.get('ha-card')) customElements.define('ha-card', HaCard);
+
+      // Records every service call so the e2e specs can assert on them.
+      window.__calls = [];
+
+      const states = {
+        'climate.living_room': {
+          entity_id: 'climate.living_room',
+          state: 'cool',
+          attributes: {
+            friendly_name: 'Living AC',
+            hvac_action: 'cooling',
+            hvac_modes: ['off', 'cool', 'heat', 'auto'],
+            fan_modes: ['auto', 'low', 'medium', 'high'],
+            swing_modes: ['off', 'vertical', 'horizontal', 'both'],
+            fan_mode: 'low',
+            swing_mode: 'vertical',
+            current_temperature: 24,
+            temperature: 21,
+            min_temp: 16,
+            max_temp: 30,
+            target_temp_step: 0.5,
+          },
+        },
+        'switch.eco': { entity_id: 'switch.eco', state: 'on', attributes: { friendly_name: 'Eco' } },
+        'switch.boost': {
+          entity_id: 'switch.boost',
+          state: 'off',
+          attributes: { friendly_name: 'Boost' },
+        },
+        'sensor.humidity': {
+          entity_id: 'sensor.humidity',
+          state: '52',
+          attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
+        },
+      };
+
+      const hass = {
+        states,
+        config: { unit_system: { temperature: '°C' } },
+        themes: {},
+        language: 'en',
+        localize: (k) => k,
+        callService: (domain, service, data, target) => {
+          window.__calls.push({ domain, service, data, target });
+          return Promise.resolve();
+        },
+      };
+
+      await import('../dist/material-thermostat-card.js');
+
+      const card = document.createElement('material-thermostat-card');
+      card.setConfig({
+        type: 'custom:material-thermostat-card',
+        entity: 'climate.living_room',
+        name: 'Living AC',
+        features: [
+          { type: 'climate-hvac-modes' },
+          { type: 'climate-fan-modes', display: 'dropdown' },
+          { type: 'switch-group', label: 'Preset', entities: [
+            { entity: 'switch.eco', label: 'Eco', icon: 'mdi:leaf' },
+            { entity: 'switch.boost', label: 'Boost', icon: 'mdi:rocket-launch' },
+          ] },
+          { type: 'entity-tile', entity: 'sensor.humidity', name: 'Humidity', icon: 'mdi:water-percent' },
+        ],
+      });
+      document.getElementById('wrap').appendChild(card);
+      card.hass = hass;
+
+      window.__card = card;
+      window.__moreInfo = null;
+      window.addEventListener('hass-more-info', (e) => {
+        window.__moreInfo = e.detail?.entityId ?? null;
+      });
+      window.__ready = true;
+    </script>
+  </body>
+</html>

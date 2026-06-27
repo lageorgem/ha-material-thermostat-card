@@ -203,11 +203,16 @@ export class MtCircularDial extends LitElement {
     if (this.disabled || !this._isRingHit(e.clientX, e.clientY)) return;
     e.preventDefault();
     this._svg.setPointerCapture(e.pointerId);
+    // Seed the drag setpoints from the values shown BEFORE flipping `_dragging`:
+    // the `_display*` getters return the drag state once dragging, so reading
+    // them after would seed from the (stale) drag defaults instead of low/high.
+    const startLow = this._displayLow;
+    const startHigh = this._displayHigh;
     this._dragging = true;
     const v = this._valueFromPoint(e.clientX, e.clientY);
     if (this.dual) {
-      this._dragLow = this._displayLow;
-      this._dragHigh = this._displayHigh;
+      this._dragLow = startLow;
+      this._dragHigh = startHigh;
       this._activeHandle =
         Math.abs(v - this._dragLow) <= Math.abs(v - this._dragHigh) ? 'low' : 'high';
     }

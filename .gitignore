@@ -7,6 +7,13 @@ npm-debug.log*
 *.tsbuildinfo
 .rollup.cache/
 
+# Test artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+
 # Build output is committed so HACS can serve it directly from the repo,
 # and is also attached to GitHub releases. Comment the next line out if you
 # prefer release-only distribution.

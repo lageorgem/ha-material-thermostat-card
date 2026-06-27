@@ -10,6 +10,8 @@ gracefully under any Home Assistant theme.
 [![GitHub release](https://img.shields.io/github/v/release/lageorgem/ha-material-thermostat-card?display_name=tag)](https://github.com/lageorgem/ha-material-thermostat-card/releases)
 [![Downloads](https://img.shields.io/github/downloads/lageorgem/ha-material-thermostat-card/total)](https://github.com/lageorgem/ha-material-thermostat-card/releases)
 [![Validate](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/validate.yml/badge.svg)](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/validate.yml)
+[![Tests](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/test.yml/badge.svg)](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/lageorgem/ha-material-thermostat-card/branch/main/graph/badge.svg)](https://codecov.io/gh/lageorgem/ha-material-thermostat-card)
 [![License: MIT](https://img.shields.io/github/license/lageorgem/ha-material-thermostat-card)](LICENSE)
 
 [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=dashboard)
@@ -362,7 +364,25 @@ and an icons/dropdown toggle — and an **"Add feature"** menu inserts new rows.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` / `npm run lint:fix` | ESLint |
 | `npm run format` | Prettier |
+| `npm test` | Unit/component tests (real Chrome) with coverage |
+| `npm run test:watch` | Unit tests in watch mode |
+| `npm run test:e2e` | End-to-end tests against the built bundle (run `npm run build` first) |
 | `node tools/gen-icons.mjs` | Regenerate the `mt:` icon set into `src/icons.generated.ts` |
+
+### Testing
+
+The suite runs in a real browser (Chrome) — web components need a real DOM (shadow roots,
+pointer capture, SVG, the Web Animations API, `ResizeObserver`).
+
+- **Unit / component tests** (`test/unit/`) use [`@web/test-runner`](https://modern-web.dev/docs/test-runner/overview/)
+  + [`@open-wc/testing`](https://open-wc.org/docs/testing/testing-package/), with V8 coverage mapped back
+  to the TypeScript sources. Coverage is gated at **95%** (statements / branches / functions / lines).
+- **End-to-end tests** (`e2e/`) use [Playwright](https://playwright.dev/) to drive the **built bundle**
+  (`dist/material-thermostat-card.js`) against a mock `hass`, exercising full user journeys (mode
+  selection, dropdowns, the temperature dial, the switch group, more-info).
+
+Both use the system Chrome locally (no browser download); CI installs Playwright's Chromium.
+`npm run test:e2e:install` fetches it if you want to run e2e with the bundled browser.
 
 `dist/` is committed and checked by CI — **run `npm run build` and commit the result** with any
 source change. Open `dev/index.html` (after a build, served over HTTP) for a quick layout/interaction

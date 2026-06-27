@@ -22,6 +22,7 @@ web component.
 | [`layout.md`](layout.md) | changing how features are sized/placed, the grid, or responsiveness |
 | [`features.md`](features.md) | adding/changing a feature type or its visual editor |
 | [`icons.md`](icons.md) | working on the `mt:` AC-swing icon set or its generator |
+| [`testing.md`](testing.md) | writing/running tests — the unit (`@web/test-runner`) + e2e (Playwright) setup, patterns, coverage gate, CI |
 | [`gotchas.md`](gotchas.md) | **before debugging anything visual** — the non-obvious traps that cost hours |
 
 ## Golden rules (read before you commit)
@@ -52,8 +53,11 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # eslint src/**/*.ts
 npm run lint:fix   # eslint --fix
 npm run format     # prettier --write
+npm test           # unit/component tests (real Chrome) + coverage (95% gate)
+npm run test:e2e   # Playwright e2e against the built bundle (build first)
 node tools/gen-icons.mjs   # regenerate the mt: icon set into src/icons.generated.ts
 ```
 
-There is no test runner. The quality gates are `lint`, `typecheck`, `build`, and
-the HACS validation action.
+Quality gates: `lint`, `typecheck`, `build` + dist-up-to-date, HACS validation
+(`validate.yml`), and the unit + e2e suites with a 95% coverage gate
+(`test.yml`). See [`testing.md`](testing.md).
