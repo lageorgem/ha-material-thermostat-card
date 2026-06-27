@@ -440,6 +440,25 @@ describe('material-thermostat-card', () => {
       expect((rows[1] as any).colStart).to.equal((rows[0] as any).colStart + 9);
     });
 
+    it('_packLayout: a lone sized feature is a fraction of the card, not full width', async () => {
+      // Regression: a lone `width: 3` feature must occupy 3 of the card's full
+      // unit width (small), not span the whole row. (Masonry sizing fix.)
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [{ type: 'climate-swing-modes', display: 'dropdown', width: 3 } as any],
+          })
+        )
+      );
+      await setWidth(el, 480); // stacked: budget = floor(480/24) = 20 units
+      const layout = (el as any)._layout();
+      expect(layout.cols).to.equal(20);
+      const row = el.shadowRoot!.querySelector('mt-feature-row') as any;
+      expect(row.span).to.equal(3);
+      expect(row.span).to.be.lessThan(layout.cols); // not full width
+      expect(row.colStart).to.be.greaterThan(1); // centered
+    });
+
     it('_packLayout: a sized row wider than budget flushes onto its own row', async () => {
       const el = track(
         await mount(

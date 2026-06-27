@@ -287,15 +287,15 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
 
 ## Layout & responsiveness
 
-Features lay out on a grid keyed to the Home Assistant sections grid, and the same config fills
-correctly at **any** card size because widths are **relative fractions**, not fixed pixels.
+Features lay out on a grid sized to the card's measured width, so the same config works in both
+**sections** and **masonry** views.
 
 | Concept | Behavior |
 | --- | --- |
-| **Grid unit** | 1 unit ≈ **24px** (one sections‑grid unit). A full‑width view ≈ **48 units**; an icon ≈ **2 units**. |
-| **Relative widths** | Features sharing a row split it **in proportion** to their widths — two `width: 9` items are always **50/50**, regardless of the card's pixel size. |
+| **Grid unit** | 1 unit ≈ **24px**. The card is as many units wide as it measures; a full‑width sections view ≈ **48 units**; an icon ≈ **2 units**. |
+| **Width = fraction of the card** | A feature's `width` is N units out of the card's full width — a lone `width: 9` in an 18‑unit card is **50%**, a `width: 3` is small, and two `width: 9` items share a row **50/50**. |
 | **Max feature width** | **36 units** (the region beside the 12‑unit dial) — a feature can fill that region edge to edge. |
-| **Centering** | Rows narrower than the widest sized row are **centered**; a full‑row item (or a row that sums to the grid) spans edge to edge. |
+| **Centering** | Rows whose widths don't fill the card are **centered**; a full‑row item (or a row that sums to the card width) spans edge to edge. |
 | **Icon overflow** | Icon rows keep their icon size and **scroll horizontally** instead of squishing. |
 | **Side‑by‑side (wide)** | At **≥ 24 units** (~50% width) the dial anchors in its fixed **12‑unit left corner** and the feature region **fills the rest**; below that, they **stack** with full‑width features. |
 | **Tiles** | Pack several per row; use `compact` + `width` to fit more across. |

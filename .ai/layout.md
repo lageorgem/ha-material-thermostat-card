@@ -36,12 +36,13 @@ CARD_PADDING_X        = 32   ha-card horizontal padding (for width math)
   (not centered) so the feature area truly fills the remaining width. Feature
   `budget` = `avail − DIAL_UNITS`.
 
-## Width is RELATIVE, not pixels
+## Width is a fraction of the card
 
-This is the key idea (and the fix for a class of real-HA bugs): a feature's
-`width` is a **fraction of its grid**, resolved by CSS grid columns — never a
-pixel value. So a `9 + 9` row is always 50/50 regardless of HA's actual grid
-pitch.
+A feature's `width` is **N units out of the card's full unit width**, resolved by
+CSS grid columns (never a hardcoded pixel value). The card is `budget` units wide
+(≈ `_widthPx / 24`), so `width: 9` ≈ 9×24px and, in an 18-unit card, is 50%; a
+lone `width: 3` is small (3 of `budget`), not a full row. A `9 + 9` row is 50/50.
+This works identically in **masonry** (a fixed-width column) and **sections**.
 
 ### `_featureSpan(f, budget)` — units a feature wants
 - explicit `width` → clamp to `[MIN_FEATURE_UNITS, budget]`;
@@ -52,11 +53,16 @@ pitch.
 1. Walk features in order, greedily packing sized items into rows until a row
    would exceed `budget`; a `null` (flexible) feature flushes the current row and
    takes a full-width row of its own.
-2. **`cols` = the widest *sized* row's sum** (clamped `[MIN, budget]`). Flexible
-   rows just fill `cols`. This is what makes widths relative: a `9+9` row sets
-   `cols=18`, and each item spans 9 of 18 = 50%.
-3. Each row is **centered**: `colStart = floor((cols − rowSum)/2)`. A row that
-   sums to `cols` (or a full-row item) spans edge to edge; narrower rows sit
+2. **`cols` = `budget`** (the full available width in units). Each feature's
+   `width` is therefore a **fraction of the whole card**: a lone `width: 3`
+   feature spans 3 of `budget` columns (small), a `width: 9` in an 18-unit card is
+   9/18 = 50%, and a `9+9` row fills it. This is what makes sizing work in
+   **masonry** (a fixed-width column) — the earlier "cols = widest sized row" made
+   any lone sized item fill the whole row regardless of its width (the masonry
+   bug). `_featureSpan` clamps each width to `[2, budget]`, so nothing exceeds the
+   grid.
+3. Each row is **centered**: `colStart = floor((cols − rowSum)/2)`. A row whose
+   widths sum to `cols` (or a full-row item) spans edge to edge; narrower rows sit
    centered.
 4. Returns `{ cols, place[] }` where `place[i] = {row, colStart(1-based), span}`.
 

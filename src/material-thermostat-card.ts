@@ -196,11 +196,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
 
   /**
    * Pack the features into rows within `budget` units, then resolve the grid:
-   * the column count is the widest *explicit* (sized) row — so sized items are
-   * a true fraction of the grid and fill it (a 9 + 9 row resolves to 6-unit
-   * columns × 18, i.e. 50/50) regardless of the card's exact pixel width. Each
-   * row is centered, so items narrower than the grid sit in the middle while a
-   * full-width item (or a row that sums to the grid) spans edge to edge.
+   * the column count is the **full available width** (`budget`), so each
+   * feature's `width` is a true fraction of the card — a lone `width: 3` feature
+   * is 3 units wide (not a full row), and a `width: 9` in an 18-unit card is 50%.
+   * This is what makes sizing work in masonry (a fixed-width column) as well as
+   * sections. Each row is centered, so items narrower than the grid sit in the
+   * middle while a full-width item (or a row whose widths sum to the grid) spans
+   * edge to edge.
    * @param budget the available grid width, in units
    */
   private _packLayout(budget: number): {
@@ -230,10 +232,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     });
     flush();
 
-    // Grid width = widest sized row (flexible rows just fill it).
-    let cols = MIN_FEATURE_UNITS;
-    for (const r of rows) if (!r.full) cols = Math.max(cols, r.sum);
-    cols = Math.max(MIN_FEATURE_UNITS, Math.min(budget, cols));
+    // Grid width = the full available width, so widths are fractions of the card.
+    const cols = Math.max(MIN_FEATURE_UNITS, budget);
 
     const place: Array<{ row: number; colStart: number; span: number }> = [];
     rows.forEach((r, ri) => {
