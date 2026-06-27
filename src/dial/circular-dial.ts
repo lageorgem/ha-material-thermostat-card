@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, svg, css, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { tokens, climateModeColor, HVAC_MODE_ICONS } from '../theme';
@@ -83,8 +83,21 @@ export class MtCircularDial extends LitElement {
   @state() private _dragLow = 0;
   @state() private _dragHigh = 0;
   @state() private _activeHandle: 'low' | 'high' | null = null;
+  /** While a mode-color change wipes across the ring: the outgoing color. */
+  @state() private _wipeFrom: string | null = null;
+  /** Tracks the last applied dial color to detect mode-color changes. */
+  private _prevColor?: string;
+  /** Whether the previous mode was an off/uncolored mode. */
+  private _prevOff = false;
 
   @query('svg') private _svg!: SVGSVGElement;
+
+  /** The dial's mode color (off modes use the neutral variant). */
+  private get _dialColor(): string {
+    return COLORED_MODES.includes(this.mode)
+      ? climateModeColor(this.mode)
+      : 'var(--mt-on-surface-variant)';
+  }
 
   /** Decimal precision implied by the step (0 for integers, 1 for halves). */
   private get _precision(): number {
@@ -304,6 +317,64 @@ export class MtCircularDial extends LitElement {
     </div>`;
   }
 
+  /**
+   * Detect a mode-color change and kick off the directional wipe (the new color
+   * is painted underneath; an overlay of the old color is clipped away to the
+   * right, so the new color appears to slide in from the left).
+   * @param changed changed properties
+   */
+  protected updated(changed: PropertyValues): void {
+    if (!changed.has('mode')) return;
+    const color = this._dialColor;
+    const off = !COLORED_MODES.includes(this.mode);
+    // Only wipe between two coloured modes — off→on / on→off already animate via
+    // the segment's grow/shrink CSS transition, and have no old segment to slide.
+    if (this._prevColor !== undefined && this._prevColor !== color && !off && !this._prevOff) {
+      // Render the old-color overlay (sets _wipeFrom), then animate it once the
+      // overlay is in the DOM. _runWipe clears _wipeFrom when the wipe finishes.
+      this._wipeFrom = this._prevColor;
+      void this.updateComplete.then(() => this._runWipe());
+    }
+    this._prevColor = color;
+    this._prevOff = off;
+  }
+
+  /**
+   * Animate the mode-color change as a directional wipe along the value arc: the
+   * new color (base segment) grows in from the segment's start while the old
+   * color (overlay segment) shrinks toward the far end — synchronised so a clean
+   * boundary sweeps from old to new. Driven by the Web Animations API so the
+   * keyframes can use the live segment geometry.
+   */
+  private _runWipe(): void {
+    const newSeg = this.renderRoot.querySelector('.value:not(.wipe-value)') as SVGElement | null;
+    const oldSeg = this.renderRoot.querySelector('.wipe-value') as SVGElement | null;
+    const done = (): void => {
+      this._wipeFrom = null;
+    };
+    if (!newSeg || !oldSeg) return done();
+    const segLen = parseFloat(newSeg.getAttribute('stroke-dasharray') ?? '0');
+    const segStart = -parseFloat(newSeg.getAttribute('stroke-dashoffset') ?? '0'); // segS × 1000
+    const segEnd = segStart + segLen;
+    if (segLen <= 0) return done();
+    const opts: KeyframeAnimationOptions = { duration: 460, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+    // New: regrow the segment from its start (the off→on draw, in the new color).
+    newSeg.animate(
+      [{ strokeDasharray: `0 1000` }, { strokeDasharray: `${segLen} 1000` }],
+      opts
+    );
+    // Old (on top): shrink the segment toward its far end, so it slides off the
+    // right and reveals the new color filling in behind it.
+    const old = oldSeg.animate(
+      [
+        { strokeDasharray: `${segLen} 1000`, strokeDashoffset: `${-segStart}` },
+        { strokeDasharray: `0 1000`, strokeDashoffset: `${-segEnd}` },
+      ],
+      { ...opts, fill: 'forwards' }
+    );
+    old.finished.then(done, done);
+  }
+
   protected render(): TemplateResult {
     const isOff = !COLORED_MODES.includes(this.mode);
     const color = isOff ? 'var(--mt-on-surface-variant)' : climateModeColor(this.mode);
@@ -375,9 +446,19 @@ export class MtCircularDial extends LitElement {
             pathLength="1000"
             stroke-dasharray=${dashArray}
             stroke-dashoffset=${dashOffset}
-            style=${`opacity:${showSeg ? 1 : 0}`}
+            style=${`opacity:${showSeg ? 1 : 0}${this._wipeFrom ? `;stroke:${color}` : ''}`}
           />
           <path class="hit" d=${ringPath} />
+          ${this._wipeFrom && showSeg
+            ? svg`<path
+                class="value wipe-value"
+                d=${ringPath}
+                pathLength="1000"
+                stroke-dasharray=${dashArray}
+                stroke-dashoffset=${dashOffset}
+                style=${`stroke:${this._wipeFrom};opacity:1`}
+              />`
+            : nothing}
         </svg>
 
         <div class="markers">
@@ -540,6 +621,14 @@ export class MtCircularDial extends LitElement {
       }
       .dial.off .glow {
         opacity: 0.5;
+      }
+      /* Mode-change wipe: an overlay of the OLD color (ring track + value segment)
+         is laid over the dial — now painted in the NEW color — and recedes along
+         the arc (driven by the Web Animations API in _runWipe), so the old color
+         slides off toward the end while the new is revealed from the start. */
+      .wipe-value {
+        pointer-events: none;
+        transition: none;
       }
 
       /* Markers orbit the center so they ride the arc and stay on the ring. */

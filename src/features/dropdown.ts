@@ -22,16 +22,23 @@ export class MtDropdown extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('click', this._onDocClick);
+    document.addEventListener('mt-dropdown-open', this._onOtherOpen);
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener('click', this._onDocClick);
+    document.removeEventListener('mt-dropdown-open', this._onOtherOpen);
   }
 
   /** Close the menu when clicking anywhere outside this element. */
   private _onDocClick = (e: MouseEvent): void => {
     if (this._open && !e.composedPath().includes(this)) this._open = false;
+  };
+
+  /** Close this menu when another dropdown opens (only one open at a time). */
+  private _onOtherOpen = (e: Event): void => {
+    if ((e as CustomEvent).detail !== this) this._open = false;
   };
 
   private get _active(): SelectorItem | undefined {
@@ -51,6 +58,8 @@ export class MtDropdown extends LitElement {
       // The menu sizes to its content; anchor it to whichever edge keeps it on
       // screen — grow left when the trigger sits in the right half, else right.
       this._alignRight = r.left + r.width / 2 > window.innerWidth * 0.5;
+      // Tell any other open dropdown to close (only one open at a time).
+      document.dispatchEvent(new CustomEvent('mt-dropdown-open', { detail: this }));
     }
     this._open = !this._open;
   }

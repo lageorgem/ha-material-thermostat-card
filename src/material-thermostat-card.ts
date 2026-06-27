@@ -46,6 +46,10 @@ console.info(
 });
 
 const SERVICE_DEBOUNCE_MS = 600;
+/** The dial's max rendered size (matches `.dial` max-width in the dial component). */
+const DIAL_MAX_PX = 320;
+/** Fraction of the dial height left empty below the +/- by the ring's bottom gap. */
+const DIAL_BOTTOM_GAP = 0.147;
 
 @customElement(CARD_TYPE)
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
@@ -265,7 +269,14 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     // fixed corner footprint and the feature region fills the rest of the card.
     const budget = wide ? Math.max(MIN_FEATURE_UNITS, avail - DIAL_UNITS) : Math.max(1, avail);
     const { cols, place } = this._packLayout(budget);
-    if (!wide) return { wide: false, dialStyle: {}, featureStyle: {}, cols, place };
+    if (!wide) {
+      // The dial is a square but its ring leaves a ~15% empty band at the bottom
+      // (the 270° gap, where the +/- sit). Crop it with a negative margin so the
+      // gap from the controls to the feature rows matches the inter-row gap.
+      const dialPx = Math.min(this._widthPx, DIAL_MAX_PX);
+      const crop = Math.round(DIAL_BOTTOM_GAP * dialPx);
+      return { wide: false, dialStyle: { marginBottom: `-${crop}px` }, featureStyle: {}, cols, place };
+    }
     return {
       wide: true,
       dialStyle: { flex: `0 0 ${unitsToPx(DIAL_UNITS)}px` },
@@ -441,7 +452,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         display: block;
       }
       ha-card {
-        padding: 12px 16px 20px;
+        /* bottom padding equals the inter-control gap (see .body.stacked) */
+        padding: 12px 16px 12px;
         border-radius: var(--mt-shape-card);
         /* visible so an open dropdown menu can extend past the card edge */
         overflow: visible;
@@ -485,10 +497,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         display: flex;
         margin-top: 8px;
       }
-      /* Stacked (narrow): controls above a full-width feature area. */
+      /* Stacked (narrow): controls above a full-width feature area. The gap here
+         (dial → first control row) matches the inter-row gap and bottom padding
+         so the spacing below the dial is even. */
       .body.stacked {
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
       }
       /* Side-by-side (wide): the dial stays anchored in its fixed-width left
          corner and the feature region (flex:1) fills the rest of the card. */
@@ -512,7 +526,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         box-sizing: border-box;
         display: grid;
         align-content: flex-start;
-        gap: 10px;
+        gap: 12px;
         min-width: 0;
       }
       .error {
