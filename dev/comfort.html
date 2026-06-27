@@ -94,6 +94,7 @@
           'climate.ac': {
             entity_id: 'climate.ac',
             state: opts.mode,
+            last_changed: new Date(baseSec * 1000).toISOString(),
             attributes: {
               friendly_name: label,
               hvac_modes: ['off', 'cool', 'heat', 'auto'],
@@ -173,6 +174,16 @@
         curHum: 40,
         target: 23,
         tempHist: expPts(24, 14, 0.05),
+      });
+
+      // D) Cooling, hot now, NO session history → static verdict "Room feels warm".
+      makeCard('Cooling — no history yet', {
+        mode: 'cool',
+        action: 'cooling',
+        curTemp: 32,
+        curHum: 45,
+        target: 22,
+        tempHist: [],
       });
     </script>
   </body>

@@ -84,17 +84,23 @@ export function pmv(ta: number, rh: number, opts: PmvOptions = {}): number {
 }
 
 /**
- * Clothing insulation (clo) inferred from what the climate is doing — matching
- * ASHRAE 55's two comfort zones: cooling ⇒ summer dress (0.5 clo), heating ⇒
- * winter dress (1.0 clo), otherwise a mid value.
+ * Clothing insulation (clo) inferred from the climate, matching ASHRAE 55's two
+ * comfort zones: cooling ⇒ summer dress (0.5 clo), heating ⇒ winter dress
+ * (1.0 clo), otherwise a mid value.
+ *
+ * An explicit heat/cool/dry/fan_only mode determines the clothing directly — a
+ * person dresses for the season, not for whether the compressor happens to be
+ * running this minute, so an *idle* AC in `cool` mode is still summer dress (0.5),
+ * not the mid value. Only `heat_cool`/`auto`, where the mode alone is ambiguous,
+ * fall back to the live `hvac_action`.
  * @param mode the climate hvac mode (entity state)
  * @param action the climate hvac_action, if any
  */
 export function cloForClimate(mode: string, action?: string): number {
-  const heating = action === 'heating' || (!action && mode === 'heat');
-  const cooling =
-    action === 'cooling' || (!action && (mode === 'cool' || mode === 'dry' || mode === 'fan_only'));
-  if (heating) return 1.0;
-  if (cooling) return 0.5;
+  if (mode === 'heat') return 1.0;
+  if (mode === 'cool' || mode === 'dry' || mode === 'fan_only') return 0.5;
+  // heat_cool / auto: the mode is ambiguous, so use what it's actively doing.
+  if (action === 'heating') return 1.0;
+  if (action === 'cooling') return 0.5;
   return 0.7;
 }

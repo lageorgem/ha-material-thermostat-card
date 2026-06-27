@@ -21,11 +21,14 @@ interface MountOpts {
   rhNow?: string;
   history?: Record<string, { s: string; lu: number }[]>;
   noSensors?: boolean;
+  /** Epoch-seconds for the climate's last_changed (session start). */
+  sessionStartSec?: number;
 }
 
 describe('mt-comfort', () => {
   let mounted: MtComfort[] = [];
   const baseSec = Math.floor(Date.now() / 1000) - 30 * 60;
+  let lastCallWS: sinon.SinonStub;
 
   afterEach(() => {
     for (const el of mounted) el.remove();
@@ -35,15 +38,19 @@ describe('mt-comfort', () => {
 
   /** Mount mt-comfort and let its async history fetch settle. */
   async function mount(opts: MountOpts = {}): Promise<MtComfort> {
+    const climate = climateState(
+      { current_temperature: Number(opts.tempNow ?? 25), temperature: 21 },
+      opts.climateStateStr ?? 'cool'
+    );
+    // The session anchors on the climate's last_changed (since it turned on).
+    (climate as any).last_changed = new Date((opts.sessionStartSec ?? baseSec) * 1000).toISOString();
     const states: Record<string, any> = {
-      [CLIMATE]: climateState(
-        { current_temperature: Number(opts.tempNow ?? 25), temperature: 21 },
-        opts.climateStateStr ?? 'cool'
-      ),
+      [CLIMATE]: climate,
       [T_SENSOR]: entityState(T_SENSOR, opts.tempNow ?? '25'),
       [H_SENSOR]: entityState(H_SENSOR, opts.rhNow ?? '50'),
     };
     const callWS = sinon.stub().resolves(opts.history ?? {});
+    lastCallWS = callWS;
     const el = document.createElement('mt-comfort') as MtComfort;
     el.entityId = CLIMATE;
     el.feature = { type: 'comfort', ...opts.feature };
@@ -81,9 +88,9 @@ describe('mt-comfort', () => {
     expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
   });
 
-  it('is hidden when uncomfortable but there is no history to forecast', async () => {
+  it('shows a static verdict when uncomfortable but there is no history to forecast', async () => {
     const el = await mount({ tempNow: '34', rhNow: '60', history: {} });
-    expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
+    expect(line(el)).to.equal('Room feels warm');
   });
 
   it('forecasts time until comfortable from cooling history', async () => {
@@ -117,6 +124,19 @@ describe('mt-comfort', () => {
     });
     // climate target is 21 (from climateState helper); 25°C now, comfortable.
     expect(line(el)).to.match(/^Room feels comfortable, .*target temperature/);
+  });
+
+  it('fetches only the current session (from last_changed) and only the sensors', async () => {
+    const sessionStartSec = Math.floor(Date.now() / 1000) - 20 * 60; // 20 min ago
+    await mount({ tempNow: '25', sessionStartSec });
+    expect(lastCallWS.called).to.equal(true);
+    const msg = lastCallWS.firstCall.args[0];
+    expect(msg.type).to.equal('history/history_during_period');
+    // Window starts at the session boundary, not a fixed lookback.
+    expect(new Date(msg.start_time).getTime()).to.be.closeTo(sessionStartSec * 1000, 2000);
+    // The climate entity is no longer fetched — only the two sensors.
+    expect(msg.entity_ids).to.have.members([T_SENSOR, H_SENSOR]);
+    expect(msg.entity_ids).to.not.include(CLIMATE);
   });
 
   it('dispatches feature-visibility and cleans up its timer on disconnect', async () => {

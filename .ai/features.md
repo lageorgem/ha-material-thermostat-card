@@ -62,23 +62,29 @@ are threaded through `mt-feature-row` (`feelsLikeTemp`/`feelsLikeHumidity`) to t
 `mt-comfort` is the card's only **async** element. On a 60s interval (+ on
 sensor/entity change) it fetches recorder history via
 `hass.callWS({ type: 'history/history_during_period', minimal_response, no_attributes })`
-(`calc/history.ts`), slices to "since the climate last turned on"
-(`lastTurnedOnMs`), and judges comfort **scientifically** with the ASHRAE 55 /
+(`calc/history.ts`), scoped to "since the climate last turned on" via the climate's
+`last_changed` (`mt-comfort._sessionStartMs`), and judges comfort **scientifically** with the ASHRAE 55 /
 ISO 7730 **PMV model** (`calc/pmv.ts`, Fanger's equation — validated against the
 ISO 7730 Annex D table): comfortable = −0.5 < PMV < +0.5, plus an absolute‑humidity
 cap (`HUMIDITY_RATIO_MAX` 0.012). Clothing is **inferred from the mode**
-(`cloForClimate`: cooling→0.5, heating→1.0, else 0.7). It forecasts the binding
-axis (the PMV series toward ±0.5, or the humidity‑ratio series toward the cap)
-with **Newton's law of cooling** (`calc/forecast.ts`: `newtonFit` regresses
-dv/dt‑vs‑value → `{k, asymptote}`; `etaToThreshold` is the closed‑form ETA, `null`
-when the target is beyond the plateau). `analyzeComfort` (`calc/comfort-analysis.ts`,
-**pure** — all logic is unit‑tested without Lit/hass) returns the status line.
-**Comfort is calculated, not configured** (no comfort_min/max). **The row is hidden** (renders `nothing`, and asks
-`mt-feature-row` to collapse via a `feature-visibility` event → host `[hidden]`)
-when: the climate is off/unavailable, sensors are unset/non‑numeric, or it's
-uncomfortable but there isn't a confident forecast yet. "Comfortable now" needs no
-history and shows immediately; ETAs follow the first fetch. The `calc/` modules are
-the source of truth — extend/test those, keep the component thin.
+(`cloForClimate`: `cool`/`dry`/`fan_only`→0.5, `heat`→1.0, else 0.7 — an explicit
+mode wins even when idle; only `heat_cool`/`auto` consult `hvac_action`). It
+forecasts the binding axis (the PMV series toward ±0.5, or the humidity‑ratio
+series toward the cap) with **Newton's law of cooling** (`calc/forecast.ts`:
+`newtonFit` regresses dv/dt‑vs‑value → `{k, asymptote}`; `etaToThreshold` is the
+closed‑form ETA, `null` when the target is beyond the plateau). The forecast uses
+**only the current session** — history since the climate's `last_changed`
+(`mt-comfort._sessionStartMs`), not a fixed lookback. `analyzeComfort`
+(`calc/comfort-analysis.ts`, **pure** — all logic is unit‑tested without Lit/hass)
+returns the status line. **Comfort is calculated, not configured** (no
+comfort_min/max, no lookback_hours). **The row always shows a verdict** while the
+climate is on — *Room feels comfortable / warm / cool / humid* (a direct reading) —
+upgrading the uncomfortable verdict to *"…X until room feels comfortable"* only with
+a confident forecast (a guessed *time* is the inaccurate data avoided, not the
+verdict). It hides (renders `nothing`, and asks `mt-feature-row` to collapse via a
+`feature-visibility` event → host `[hidden]`) **only** when the climate is
+off/unavailable or the sensors are unset/non‑numeric. The `calc/` modules are the
+source of truth — extend/test those, keep the component thin.
 
 ## Shared selector row (`selector-row.ts`)
 

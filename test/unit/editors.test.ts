@@ -1407,11 +1407,10 @@ describe('mt-comfort-editor', () => {
     );
   }
 
-  it('_data fills the lookback default', async () => {
+  it('_data defaults show_target_eta to false', async () => {
     const el = await mount({ type: 'comfort' });
     expect((el as any)._data).to.deep.equal({
       show_target_eta: false,
-      lookback_hours: 12,
     });
   });
 
@@ -1419,18 +1418,15 @@ describe('mt-comfort-editor', () => {
     const el = await mount({
       type: 'comfort',
       show_target_eta: true,
-      lookback_hours: 24,
     });
     expect((el as any)._data).to.deep.equal({
       show_target_eta: true,
-      lookback_hours: 24,
     });
   });
 
   it('_computeLabel covers each field', async () => {
     const cl = (await mount({ type: 'comfort' }) as any)._computeLabel;
     expect(cl({ name: 'show_target_eta' })).to.contain('target temperature');
-    expect(cl({ name: 'lookback_hours' })).to.contain('lookback');
     expect(cl({ name: 'mystery' })).to.equal('mystery');
   });
 
@@ -1446,14 +1442,12 @@ describe('mt-comfort-editor', () => {
     const cap = captureEvents('feature-changed');
     emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
       show_target_eta: false,
-      lookback_hours: 8,
     });
     cap.stop();
     expect((cap.events[0].detail as any).feature).to.deep.equal({
       type: 'comfort',
       width: 40,
       show_target_eta: undefined,
-      lookback_hours: 8,
     });
   });
 

@@ -15,13 +15,7 @@ import {
   type Sample,
 } from '../../src/calc/forecast';
 import { formatDuration } from '../../src/calc/duration';
-import {
-  fetchHistory,
-  lastTurnedOnMs,
-  numericSeries,
-  mergeOnLeft,
-  OFF_STATES,
-} from '../../src/calc/history';
+import { fetchHistory, numericSeries, mergeOnLeft, OFF_STATES } from '../../src/calc/history';
 import { analyzeComfort, type ComfortInput } from '../../src/calc/comfort-analysis';
 
 /** Build an exponential approach series: v(t) = A + (v0 - A)·e^(-k·t). */
@@ -132,8 +126,23 @@ describe('calc/pmv', () => {
       expect(cloForClimate('heat')).to.equal(1.0);
       expect(cloForClimate('cool')).to.equal(0.5);
       expect(cloForClimate('dry')).to.equal(0.5);
+      expect(cloForClimate('fan_only')).to.equal(0.5);
       expect(cloForClimate('heat_cool')).to.equal(0.7);
       expect(cloForClimate('auto', 'idle')).to.equal(0.7);
+    });
+
+    it('uses the mode even when the compressor is idle (not the mid value)', () => {
+      // An idle AC in cool mode is still summer dress — the earlier action-first
+      // logic wrongly fell to 0.7 here, hiding the comfort row on cooling.
+      expect(cloForClimate('cool', 'idle')).to.equal(0.5);
+      expect(cloForClimate('heat', 'idle')).to.equal(1.0);
+      expect(cloForClimate('cool', 'off')).to.equal(0.5);
+    });
+
+    it('falls back to hvac_action only for ambiguous heat_cool/auto', () => {
+      expect(cloForClimate('heat_cool', 'heating')).to.equal(1.0);
+      expect(cloForClimate('heat_cool', 'cooling')).to.equal(0.5);
+      expect(cloForClimate('auto', 'heating')).to.equal(1.0);
     });
   });
 });
@@ -286,27 +295,8 @@ describe('calc/history', () => {
     expect(res['sensor.missing']).to.deep.equal([]);
   });
 
-  describe('lastTurnedOnMs', () => {
-    const pt = (state: string, tSec: number) => ({ state, t: tSec * 1000 });
-
-    it('finds the latest off→on transition', () => {
-      const pts = [pt('off', 0), pt('cool', 100), pt('off', 200), pt('cool', 300)];
-      expect(lastTurnedOnMs(pts)).to.equal(300_000);
-    });
-
-    it('uses the earliest point when on for the whole window', () => {
-      const pts = [pt('cool', 50), pt('cool', 100)];
-      expect(lastTurnedOnMs(pts)).to.equal(50_000);
-    });
-
-    it('returns null when currently off or empty', () => {
-      expect(lastTurnedOnMs([pt('cool', 0), pt('off', 100)])).to.equal(null);
-      expect(lastTurnedOnMs([])).to.equal(null);
-    });
-
-    it('OFF_STATES covers the not-running states', () => {
-      ['off', 'unavailable', 'unknown', ''].forEach((s) => expect(OFF_STATES.has(s)).to.equal(true));
-    });
+  it('OFF_STATES covers the not-running states', () => {
+    ['off', 'unavailable', 'unknown', ''].forEach((s) => expect(OFF_STATES.has(s)).to.equal(true));
   });
 
   describe('numericSeries', () => {
@@ -383,8 +373,25 @@ describe('calc/comfort-analysis', () => {
     expect(analyzeComfort({ ...base, tempNow: 19, rhNow: 45 }).comfortable).to.equal(false);
   });
 
-  it('hides when uncomfortable but there is not enough history to forecast', () => {
-    expect(analyzeComfort({ ...base, tempNow: 33, rhNow: 50 }).visible).to.equal(false);
+  it('shows a static verdict when uncomfortable but there is no history to forecast', () => {
+    const warm = analyzeComfort({ ...base, tempNow: 33, rhNow: 50 });
+    expect(warm).to.deep.include({ visible: true, comfortable: false, line: 'Room feels warm' });
+    expect(warm.icon).to.equal('mdi:thermometer-high');
+
+    const cool = analyzeComfort({ ...base, tempNow: 18, rhNow: 40 });
+    expect(cool).to.deep.include({ visible: true, comfortable: false, line: 'Room feels cool' });
+    expect(cool.icon).to.equal('mdi:thermometer-low');
+
+    // Comfortable temperature but muggy (humidity ratio over the cap).
+    const humid = analyzeComfort({
+      ...base,
+      mode: 'heat_cool',
+      action: 'idle',
+      tempNow: 24,
+      rhNow: 85,
+    });
+    expect(humid).to.deep.include({ visible: true, comfortable: false, line: 'Room feels humid' });
+    expect(humid.icon).to.equal('mdi:water-percent');
   });
 
   it('cooling: forecasts time until comfortable (PMV → +0.5)', () => {

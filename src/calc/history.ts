@@ -56,26 +56,6 @@ export async function fetchHistory(
 }
 
 /**
- * The epoch‑ms timestamp at which the climate most recently turned on, by
- * scanning its history for the latest off→on transition. Falls back to the first
- * sample's time when it was already on for the whole window, or `null` when it is
- * currently off / has no usable history.
- * @param points the climate entity's history (chronological)
- */
-export function lastTurnedOnMs(points: RawPoint[]): number | null {
-  if (!points.length) return null;
-  // Currently off ⇒ nothing to forecast.
-  if (OFF_STATES.has(points[points.length - 1].state)) return null;
-  for (let i = points.length - 1; i > 0; i--) {
-    if (!OFF_STATES.has(points[i].state) && OFF_STATES.has(points[i - 1].state)) {
-      return points[i].t;
-    }
-  }
-  // On for the whole window: use the earliest known point.
-  return points[0].t;
-}
-
-/**
  * Convert raw history points to numeric samples (minutes since `originMs`),
  * dropping non‑numeric states and anything before `sinceMs`.
  * @param points the raw history points (chronological)

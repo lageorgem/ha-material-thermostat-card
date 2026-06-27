@@ -156,8 +156,15 @@ export class MtCircularDial extends LitElement {
       const a = ((this._angleOf(v) % 360) + 360) % 360;
       return Math.min(Math.abs(a - 90), Math.abs(a - 270)) <= SIDE_GUARD_DEG;
     };
-    if (this.dual) return near(this._displayLow) || near(this._displayHigh) || near(this.current);
-    return near(this.current);
+    // With show_current_as_primary the current dot carries no label, while the
+    // setpoint(s) do — so the marker that can crowd the centre flips.
+    if (this.dual)
+      return (
+        near(this._displayLow) ||
+        near(this._displayHigh) ||
+        (!this.showCurrentAsPrimary && near(this.current))
+      );
+    return near(this.showCurrentAsPrimary ? this._displayValue : this.current);
   }
 
   /** Show the range for 5s after a setpoint change, then collapse to the mode. */
@@ -627,33 +634,42 @@ export class MtCircularDial extends LitElement {
                 ${showCurrent ? this._dotOrbit(curAngle, 'current') : nothing}
                 ${this._labelOrbit(
                   this._angleOf(this._displayLow),
-                  collapsedDual && dualActive === 'heat'
+                  collapsedDual && dualActive === 'heat' && !this.showCurrentAsPrimary
                     ? dualSetIconEl
                     : html`<span class="num">${this._fmtCompact(this._displayLow)}°</span>`
                 )}
                 ${this._labelOrbit(
                   this._angleOf(this._displayHigh),
-                  collapsedDual && dualActive === 'cool'
+                  collapsedDual && dualActive === 'cool' && !this.showCurrentAsPrimary
                     ? dualSetIconEl
                     : html`<span class="num">${this._fmtCompact(this._displayHigh)}°</span>`
                 )}
-                ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
+                ${showCurrent && !this.showCurrentAsPrimary
+                  ? this._labelOrbit(curAngle, currentLabel)
+                  : nothing}
               `
             : html`
                 ${this._dotOrbit(spAngle, 'setpoint')}
                 ${showCurrent ? this._dotOrbit(curAngle, 'current') : nothing}
-                ${overlap
-                  ? this._labelOrbit(
-                      curAngle,
-                      html`<span class="num current with-icon"
-                        ><ha-icon class="mode-icon inline" icon=${modeIcon}></ha-icon
-                        >${this._fmtCompact(this.current!)}°</span
-                      >`
+                ${this.showCurrentAsPrimary
+                  ? // Current is the big centre number, so the setpoint marker
+                    // carries the target value and the current dot stays bare.
+                    this._labelOrbit(
+                      spAngle,
+                      html`<span class="num">${this._fmtCompact(this._displayValue)}°</span>`
                     )
-                  : html`
-                      ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl)}
-                      ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
-                    `}
+                  : overlap
+                    ? this._labelOrbit(
+                        curAngle,
+                        html`<span class="num current with-icon"
+                          ><ha-icon class="mode-icon inline" icon=${modeIcon}></ha-icon
+                          >${this._fmtCompact(this.current!)}°</span
+                        >`
+                      )
+                    : html`
+                        ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl)}
+                        ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
+                      `}
               `}
         </div>
 

@@ -52,9 +52,15 @@ export interface ComfortResult {
   comfortable: boolean;
   /** The full status line (present iff `visible`). */
   line?: string;
+  /** Icon name reflecting the verdict (present iff `visible`). */
+  icon?: string;
 }
 
 const HIDDEN: ComfortResult = { visible: false, comfortable: false };
+
+const ICON_COMFORTABLE = 'mdi:emoticon-happy-outline';
+/** Shown while a "time until comfortable" forecast is available. */
+const ICON_FORECAST = 'mdi:timer-sand';
 
 /** Below this gap the target is treated as already reached (no ETA clause). */
 const TARGET_REACHED_EPS = 0.25;
@@ -84,9 +90,12 @@ function targetClause(i: ComfortInput): string | undefined {
 }
 
 /**
- * Analyze comfort + ETAs into a renderable status line. Returns `{visible:false}`
- * when nothing trustworthy can be shown (uncomfortable but not enough history to
- * forecast when it will be comfortable).
+ * Analyze comfort + ETAs into a renderable status line. Always returns a visible
+ * verdict for finite readings — "Room feels comfortable/warm/cool/humid" — and
+ * upgrades the uncomfortable verdict to "…X until room feels comfortable" once
+ * there's enough confident history to forecast a time (a forecast is never
+ * guessed from thin data). Only non-numeric readings hide the row here; the
+ * climate-off / sensors-unset cases are gated by the caller.
  * @param i the comfort input
  */
 export function analyzeComfort(i: ComfortInput): ComfortResult {
@@ -104,32 +113,45 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
   // Comfortable: a direct reading, shown immediately (target clause optional).
   if (!tooWarm && !tooCold && !tooHumid) {
     const line = target ? `Room feels comfortable, ${target}` : 'Room feels comfortable';
-    return { visible: true, comfortable: true, line };
+    return { visible: true, comfortable: true, line, icon: ICON_COMFORTABLE };
   }
 
-  // Uncomfortable: forecast the binding axis toward its comfort boundary. Warmth
-  // / cold are temperature-driven (PMV series); a humidity-only excess forecasts
-  // the humidity ratio toward the cap.
+  // Uncomfortable: pick the binding axis and forecast it toward its comfort
+  // boundary. Warmth / cold are temperature-driven (PMV series); a humidity-only
+  // excess forecasts the humidity ratio toward the cap. Each axis also carries a
+  // plain-language verdict + icon to fall back on when there's no usable forecast.
   const merged = mergeOnLeft(i.tempSeries, i.rhSeries);
   let series: TS[];
   let metricNow: number;
   let threshold: number;
-  if (tooWarm || tooCold) {
+  let verdict: string;
+  let verdictIcon: string;
+  if (tooWarm) {
     series = merged.map((p) => ({ t: p.t, v: pmv(p.l, p.r, { clo }) }));
     metricNow = pmvNow;
-    threshold = tooWarm ? PMV_COMFORT_LIMIT : -PMV_COMFORT_LIMIT;
+    threshold = PMV_COMFORT_LIMIT;
+    verdict = 'Room feels warm';
+    verdictIcon = 'mdi:thermometer-high';
+  } else if (tooCold) {
+    series = merged.map((p) => ({ t: p.t, v: pmv(p.l, p.r, { clo }) }));
+    metricNow = pmvNow;
+    threshold = -PMV_COMFORT_LIMIT;
+    verdict = 'Room feels cool';
+    verdictIcon = 'mdi:thermometer-low';
   } else {
     series = merged.map((p) => ({ t: p.t, v: humidityRatio(p.l, p.r) }));
     metricNow = wNow;
     threshold = HUMIDITY_RATIO_MAX;
+    verdict = 'Room feels humid';
+    verdictIcon = 'mdi:water-percent';
   }
 
+  // Forecast the time until comfortable when there's enough confident history;
+  // otherwise show the static verdict (a direct reading, never a guessed time).
   const fit = newtonFit(series);
-  if (!fit) return HIDDEN;
-  const eta = etaToThreshold(metricNow, threshold, fit);
-  if (eta == null) return HIDDEN;
-
-  const comfort = `${formatDuration(eta)} until room feels comfortable`;
-  const line = target ? `${comfort}. ${target}` : comfort;
-  return { visible: true, comfortable: false, line };
+  const eta = fit ? etaToThreshold(metricNow, threshold, fit) : null;
+  const base = eta != null ? `${formatDuration(eta)} until room feels comfortable` : verdict;
+  const icon = eta != null ? ICON_FORECAST : verdictIcon;
+  const line = target ? `${base}. ${target}` : base;
+  return { visible: true, comfortable: false, line, icon };
 }

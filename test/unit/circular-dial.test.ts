@@ -117,6 +117,31 @@ describe('mt-circular-dial', () => {
       // big = target, but bigPrecision is forced to 1 by showCurrentAsPrimary
       expect(el.shadowRoot!.querySelector('.value-text')!.textContent!.trim()).to.equal('21.0');
     });
+
+    it('showCurrentAsPrimary: labels the setpoint with the target, leaves the current dot bare', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.value = 21;
+      el.current = 28; // far from the setpoint so they don't merge
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      // current is the big centre number (not duplicated on the ring)
+      expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28.0');
+      // the setpoint marker now carries the target number...
+      const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
+        n.textContent!.trim()
+      );
+      expect(labels).to.include('21°');
+      // ...the current dot is unlabeled and no mode icon is drawn on the ring...
+      expect(sr.querySelector('.num.current')).to.equal(null);
+      expect(sr.querySelector('.markers ha-icon.mode-icon')).to.equal(null);
+      // ...but the current dot itself is still shown.
+      expect(sr.querySelector('.o-dot.current')).to.not.equal(null);
+    });
   });
 
   describe('rendering — off mode', () => {
@@ -1594,6 +1619,29 @@ describe('mt-circular-dial', () => {
       const sr = el.shadowRoot!;
       expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
       expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28.0');
+    });
+
+    it('show_current_as_primary: dual keeps both setpoint numbers and an unlabeled current dot', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> would normally collapse the high setpoint to an icon
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      // no mode icon replaces a setpoint number; both setpoints show their values
+      expect(sr.querySelector('.markers ha-icon.mode-icon')).to.equal(null);
+      const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
+        n.textContent!.trim()
+      );
+      expect(labels).to.include('18°');
+      expect(labels).to.include('24°');
+      // current dot drawn but unlabeled (it's the big centre number)
+      expect(sr.querySelector('.o-dot.current')).to.not.equal(null);
+      expect(sr.querySelector('.num.current')).to.equal(null);
     });
 
     it('without show_current_as_primary: collapsed dual shows the targeted setpoint', async () => {

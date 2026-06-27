@@ -110,8 +110,6 @@ export interface ComfortFeatureConfig {
   type: 'comfort';
   /** Also show the time until the target temperature is reached. */
   show_target_eta?: boolean;
-  /** History lookback window in hours (default 12). */
-  lookback_hours?: number;
   /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
   width?: number;
 }

@@ -9,21 +9,14 @@ interface FormSchemaItem {
   selector: Record<string, unknown>;
 }
 
-const SCHEMA: FormSchemaItem[] = [
-  { name: 'show_target_eta', selector: { boolean: {} } },
-  {
-    name: 'lookback_hours',
-    selector: { number: { min: 1, max: 72, step: 1, mode: 'box', unit_of_measurement: 'h' } },
-  },
-];
-
-const DEFAULTS = { lookback_hours: 12 };
+const SCHEMA: FormSchemaItem[] = [{ name: 'show_target_eta', selector: { boolean: {} } }];
 
 /**
- * Editor for the comfort feature: the optional target ETA and the history
- * lookback window — plus the shared width slider. Comfort itself is calculated
- * (ASHRAE 55 PMV), not configured. Warns when the card's feels-like sensors
- * aren't configured (the feature needs them).
+ * Editor for the comfort feature: the optional target ETA — plus the shared
+ * width slider. Comfort itself is calculated (ASHRAE 55 PMV), not configured, and
+ * the forecast uses only the current session (since the climate turned on), so
+ * there is no lookback to set. Warns when the card's feels-like sensors aren't
+ * configured (the feature needs them).
  */
 @customElement('mt-comfort-editor')
 export class MtComfortEditor extends LitElement {
@@ -35,7 +28,6 @@ export class MtComfortEditor extends LitElement {
   private get _data() {
     return {
       show_target_eta: this.feature.show_target_eta ?? false,
-      lookback_hours: this.feature.lookback_hours ?? DEFAULTS.lookback_hours,
     };
   }
 
@@ -47,8 +39,6 @@ export class MtComfortEditor extends LitElement {
     switch (s.name) {
       case 'show_target_eta':
         return 'Also show time until target temperature';
-      case 'lookback_hours':
-        return 'History lookback (hours)';
       default:
         return s.name;
     }
@@ -76,7 +66,6 @@ export class MtComfortEditor extends LitElement {
     const d = e.detail.value;
     this._emit({
       show_target_eta: d.show_target_eta || undefined,
-      lookback_hours: d.lookback_hours,
     });
   }
 

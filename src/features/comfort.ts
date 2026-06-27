@@ -3,20 +3,27 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { ComfortFeatureConfig } from '../types';
 import { tokens } from '../theme';
-import { fetchHistory, lastTurnedOnMs, numericSeries, OFF_STATES } from '../calc/history';
+import { fetchHistory, numericSeries, OFF_STATES } from '../calc/history';
 import { analyzeComfort, type ComfortResult, type TS } from '../calc/comfort-analysis';
 
 /** How often the history forecast is refreshed. */
 const REFRESH_MS = 60_000;
-const DEFAULT_LOOKBACK_HOURS = 12;
+/**
+ * Upper bound on how far back history is fetched — a query-cost guard, not a
+ * "lookback". The forecast only ever uses data since the current session began
+ * (see {@link MtComfort._sessionStartMs}); a session longer than this is already
+ * at steady state, so the cap never discards a still-changing trend.
+ */
+const MAX_SESSION_MS = 24 * 3_600_000;
 
 /**
  * The "comfort & time-to-comfortable" feature row. Judges comfort from the
- * shared feels-like sensors via the ASHRAE 55 / ISO 7730 PMV model and forecasts,
- * from recorder history since the climate turned on, how long until the room
- * feels comfortable — and optionally until the target is reached. Shows nothing
- * (and asks its row to collapse) when the climate is off, the sensors are unset,
- * or there isn't yet enough history to forecast.
+ * shared feels-like sensors via the ASHRAE 55 / ISO 7730 PMV model and always
+ * shows a verdict while the climate is on ("Room feels comfortable/warm/cool/
+ * humid"), upgrading the uncomfortable verdict to "…X until room feels
+ * comfortable" once there's enough current-session history to forecast it — and
+ * optionally appending the time until the target is reached. Shows nothing (and
+ * asks its row to collapse) only when the climate is off or the sensors are unset.
  */
 @customElement('mt-comfort')
 export class MtComfort extends LitElement {
@@ -132,6 +139,20 @@ export class MtComfort extends LitElement {
     );
   }
 
+  /**
+   * The epoch-ms at which the current heating/cooling session began: the climate
+   * entity's `last_changed`, which resets whenever its hvac mode changes (turning
+   * on, or switching heat↔cool). Forecasting only from this point keeps it to the
+   * current session — earlier history may reflect different settings entirely.
+   * Returns null when the timestamp is missing/unparseable.
+   */
+  private _sessionStartMs(): number | null {
+    const lc = this._climate?.last_changed;
+    if (!lc) return null;
+    const ms = new Date(lc).getTime();
+    return isFinite(ms) ? ms : null;
+  }
+
   /** Fetch fresh history, then recompute. Comfort-now shows before the fetch. */
   private async _refresh(): Promise<void> {
     this._recompute(); // instant: comfortable needs no history
@@ -139,14 +160,14 @@ export class MtComfort extends LitElement {
     this._fetching = true;
     try {
       const now = Date.now();
-      const lookbackH = this.feature.lookback_hours ?? DEFAULT_LOOKBACK_HOURS;
-      const start = now - lookbackH * 3_600_000;
-      const ids = [this.entityId, this.tempSensor!, this.humiditySensor!];
+      // Only forecast from the current session (since the climate turned on),
+      // capped so the query stays bounded for very long-running sessions.
+      const start = Math.max(this._sessionStartMs() ?? 0, now - MAX_SESSION_MS);
+      const ids = [this.tempSensor!, this.humiditySensor!];
       const hist = await fetchHistory(this.hass, ids, start, now);
-      const onMs = lastTurnedOnMs(hist[this.entityId] ?? []) ?? start;
       this._cache = {
-        tempSeries: numericSeries(hist[this.tempSensor!] ?? [], onMs, onMs),
-        rhSeries: numericSeries(hist[this.humiditySensor!] ?? [], onMs, onMs),
+        tempSeries: numericSeries(hist[this.tempSensor!] ?? [], start, start),
+        rhSeries: numericSeries(hist[this.humiditySensor!] ?? [], start, start),
       };
       this._recompute();
     } catch {
@@ -172,7 +193,7 @@ export class MtComfort extends LitElement {
     const r = this._result;
     if (!r.visible || !r.line) return nothing;
     return html`<div class="comfort" role="status">
-      <ha-icon icon=${r.comfortable ? 'mdi:emoticon-happy-outline' : 'mdi:timer-sand'}></ha-icon>
+      <ha-icon icon=${r.icon ?? 'mdi:thermometer'}></ha-icon>
       <span>${r.line}</span>
     </div>`;
   }

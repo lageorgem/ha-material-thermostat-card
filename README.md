@@ -110,7 +110,7 @@ visually, or write the YAML directly.
 | `entity` | string | — | A `climate.*` entity **(required)** |
 | `name` | string | entity name | Card title |
 | `theme` | string | — | A Home Assistant theme to apply to this card |
-| `show_current_as_primary` | boolean | `false` | Show the **current** temperature as the large number (instead of the target) |
+| `show_current_as_primary` | boolean | `false` | Show the **current** temperature as the large centre number. The target then labels the setpoint marker on the ring and the current dot is left unlabelled (no duplicate reading) |
 | `feels_like` | object | — | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature) |
 | `features` | list | `[]` | Controls rendered below / beside the dial — see [Features](#features) |
 
@@ -340,20 +340,21 @@ clothing assumption is inferred from what the system is doing — **summer dress
 winter dress (1.0 clo) when heating** — reproducing ASHRAE's two comfort zones. An ASHRAE absolute‑
 humidity cap (0.012 humidity ratio) flags a muggy room even when the temperature is fine.
 
-The forecast fits recent history (since the climate last turned on) to a Newton's‑law cooling/heating
-curve, so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
-reached**.
+The forecast uses **only the current session** — history since the climate last turned on (its
+`last_changed`), because earlier data may reflect entirely different settings — fitting it to a
+Newton's‑law cooling/heating curve, so estimates **slow as the room nears its plateau** and it can
+honestly say a target **won't be reached**.
 
 Example lines:
 
 - `15 minutes until room feels comfortable. 3 hours until target temperature is reached`
 - `Room feels comfortable, 1 hour until target temperature is reached`
 - `Room feels comfortable, temperature won't go below 24°C`
+- `Room feels warm` (uncomfortable now, not yet enough session history to forecast a time)
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `show_target_eta` | boolean | `false` | Also show the time until the target temperature is reached |
-| `lookback_hours` | number | `12` | How far back to read history for the forecast |
 | `width` | number `10`–`100` | `100` | Width as a percentage of the card |
 
 ```yaml
@@ -365,10 +366,13 @@ features:
     show_target_eta: true
 ```
 
-> The row is **deliberately hidden** when there isn't enough trustworthy history to forecast, when
-> the climate is **off**, or when the feels‑like sensors aren't set — it never shows a guess. The
-> "comfortable now" verdict appears immediately (it needs no history); the ETAs follow once enough
-> history is available. Requires Home Assistant's **recorder** to be keeping history for the sensors.
+> While the climate is **on** with valid sensors, the row always shows a verdict — *Room feels
+> comfortable / warm / cool / humid* (a direct reading). It upgrades to *"…X until room feels
+> comfortable"* only once there's enough current‑session history to forecast a time — a guessed
+> *time* is the inaccurate data it avoids, not the verdict. The row is hidden only when the climate is
+> **off** or the feels‑like sensors aren't set. Note the same room temperature can read "comfortable"
+> while heating yet "too cool/warm" while cooling — that's the ASHRAE summer‑vs‑winter clothing model,
+> not a bug. Requires Home Assistant's **recorder** to be keeping history for the sensors.
 
 ## Layout & responsiveness
 

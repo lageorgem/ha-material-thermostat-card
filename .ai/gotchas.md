@@ -143,14 +143,26 @@ a plain `{detail}` object has no `stopPropagation`.
   entity_ids, minimal_response: true, no_attributes: true })`. The response is
   **compact**: per-entity arrays of `{ s: state, lu: last_updated, lc: last_changed }`
   (epoch **seconds**, sometimes only `lc`). `fetchHistory` tolerates both compact
-  and verbose key spellings. Needs HA's **recorder**; on error it shows nothing
-  (never a guess).
+  and verbose key spellings. Needs HA's **recorder**; on error it shows the
+  verdict only (no forecast).
+- **Current session only — anchor on `climate.last_changed`, not a lookback.**
+  The forecast must use only data since the climate turned on (earlier history may
+  reflect totally different settings). `_sessionStartMs()` reads the climate
+  entity's `last_changed` (it resets when the hvac mode changes, i.e. on turn-on
+  or heat↔cool), and history is fetched from there (capped at `MAX_SESSION_MS`
+  purely to bound the query). There is **no** `lookback_hours` config and we no
+  longer fetch the climate entity's history (so `lastTurnedOnMs` is gone). It's
+  fine to have no forecast for the first ~10–15 min of a session.
 - **`Date.now()` / `new Date()` are fine here** — that ban is only for Workflow
   scripts, not card runtime or the web-test-runner browser tests.
-- **Don't show inaccurate data.** The row hides (renders `nothing`) until there's a
+- **Verdict always shows; only the *forecast* is gated.** While the climate is on
+  with valid sensors, the row always shows a comfort verdict — "Room feels
+  comfortable / warm / cool / humid" (a direct reading). It upgrades the
+  uncomfortable verdict to "…X until room feels comfortable" **only** with a
   confident `newtonFit` (≥ `MIN_SAMPLES`, ≥ `MIN_SPAN_MIN`, converging k > 0,
-  r² ≥ `MIN_FIT_R2`) — and also when the climate is off or sensors are unset.
-  "Comfortable now" is a direct reading and shows immediately (no history).
+  r² ≥ `MIN_FIT_R2`) — a guessed *time* is the "inaccurate data" we avoid, not the
+  verdict. The row collapses (`nothing` + `feature-visibility`) only when the
+  climate is off or the sensors are unset.
 - **Self-collapse via an event, not just `display:none`.** A hidden `mt-comfort`
   still occupies a grid cell (its `mt-feature-row` host), leaving a stray gap. So
   `mt-comfort` dispatches `feature-visibility {visible}` and `mt-feature-row`
@@ -162,11 +174,16 @@ a plain `{detail}` object has no `stopPropagation`.
 - **Comfort is the PMV model, calculated not configured.** `calc/pmv.ts` is the
   verbatim ISO 7730 Annex D / ASHRAE 55 Fanger algorithm (validated against the
   standard's table); comfortable = −0.5 < PMV < +0.5 plus an absolute‑humidity cap
-  (`HUMIDITY_RATIO_MAX` 0.012). Clothing is inferred from the mode (`cloForClimate`:
-  cooling 0.5, heating 1.0, else 0.7) — that's what makes 25°C comfortable when
-  cooling but 22°C when heating (ASHRAE's two zones). The heat index (`heatIndexC`)
-  is now **only** the dial's "feels‑like" number, not the comfort decision. Don't
-  reintroduce comfort_min/max — the user explicitly wanted it scientific.
+  (`HUMIDITY_RATIO_MAX` 0.012). Clothing is inferred from the **mode**
+  (`cloForClimate`: `cool`/`dry`/`fan_only` → 0.5, `heat` → 1.0, else 0.7) — an
+  explicit mode picks the clothing **even when the compressor is idle** (an idle
+  `cool` system is still summer dress; only `heat_cool`/`auto` consult
+  `hvac_action`). This is what makes ~25°C comfortable when cooling but ~22°C when
+  heating (ASHRAE's two zones) — and why the *same* room temp can read
+  "comfortable" heating yet "too cool/warm" cooling; that asymmetry is correct, not
+  a bug. The heat index (`heatIndexC`) is now **only** the dial's "feels‑like"
+  number, not the comfort decision. Don't reintroduce comfort_min/max — the user
+  explicitly wanted it scientific.
 
 ## Misc env
 
