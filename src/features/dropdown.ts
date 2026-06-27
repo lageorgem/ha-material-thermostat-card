@@ -17,6 +17,7 @@ export class MtDropdown extends LitElement {
 
   @state() private _open = false;
   @state() private _up = false;
+  @state() private _alignRight = false;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -47,6 +48,9 @@ export class MtDropdown extends LitElement {
     if (!this._open) {
       const r = this.getBoundingClientRect();
       this._up = r.bottom > window.innerHeight * 0.55;
+      // The menu sizes to its content; anchor it to whichever edge keeps it on
+      // screen — grow left when the trigger sits in the right half, else right.
+      this._alignRight = r.left + r.width / 2 > window.innerWidth * 0.5;
     }
     this._open = !this._open;
   }
@@ -78,7 +82,10 @@ export class MtDropdown extends LitElement {
         <ha-icon class="chev" icon="mdi:chevron-down"></ha-icon>
       </button>
       ${this._open
-        ? html`<div class=${classMap({ menu: true, up: this._up })} role="listbox">
+        ? html`<div
+            class=${classMap({ menu: true, up: this._up, right: this._alignRight })}
+            role="listbox"
+          >
             ${this.items.map(
               (it) => html`<button
                 class=${classMap({ opt: true, active: !!it.active })}
@@ -155,13 +162,18 @@ export class MtDropdown extends LitElement {
       .menu {
         position: absolute;
         left: 0;
-        right: 0;
+        right: auto;
         top: calc(100% + 6px);
         z-index: 20;
         display: flex;
         flex-direction: column;
         gap: 2px;
         padding: 6px;
+        /* at least as wide as the trigger, but grow to fit the widest option
+           (so long labels aren't clipped); capped so it stays on screen */
+        min-width: 100%;
+        width: max-content;
+        max-width: min(360px, 85vw);
         background: var(--mt-surface-container-high);
         border-radius: 20px;
         box-shadow:
@@ -170,6 +182,11 @@ export class MtDropdown extends LitElement {
         max-height: 280px;
         overflow-y: auto;
         animation: mt-pop 130ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      /* anchor to the right edge so a content-wide menu grows into the card */
+      .menu.right {
+        left: auto;
+        right: 0;
       }
       .menu.up {
         top: auto;
