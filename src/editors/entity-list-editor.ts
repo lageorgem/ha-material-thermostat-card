@@ -70,6 +70,9 @@ export class MtEntityListEditor extends LitElement {
    * @param e ha-sortable's item-moved event
    */
   private _moveItem(e: CustomEvent): void {
+    // Nested inside the editor's features ha-sortable — stop the composed,
+    // bubbling `item-moved` so it doesn't also reorder the outer feature.
+    e.stopPropagation();
     const { oldIndex, newIndex } = e.detail;
     const items = [...this._items];
     const [moved] = items.splice(oldIndex, 1);

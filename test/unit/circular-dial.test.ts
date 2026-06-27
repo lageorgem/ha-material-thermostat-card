@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import { oncePromise, captureEvents } from '../helpers';
 import '../../src/dial/circular-dial';
 import type { MtCircularDial } from '../../src/dial/circular-dial';
-import { climateModeColor } from '../../src/theme';
+import { climateModeColor, HVAC_MODE_ICONS } from '../../src/theme';
 
 /** The neutral gray used for an idle range / a demand that makes no sense. */
 const IDLE_COLOR = 'var(--mt-on-surface-variant)';
@@ -1519,6 +1519,95 @@ describe('mt-circular-dial', () => {
       const sr = el.shadowRoot!;
       expect(sr.querySelector('.temp.dual')).to.not.equal(null);
       expect(sr.querySelector('.dash')).to.not.equal(null);
+    });
+
+    // The collapsed readout (after the 5s range window) shows the active
+    // sub-mode's icon before the "Cooling"/"Heating" label.
+    it('collapsed cooling shows the cool mode icon before the label', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> collapsed
+      await el.updateComplete;
+      const icon = el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline');
+      expect(icon).to.not.equal(null);
+      expect(icon!.getAttribute('icon')).to.equal(HVAC_MODE_ICONS['cool']);
+    });
+
+    it('collapsed heating shows the heat mode icon before the label', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 14; // heating -> collapsed
+      await el.updateComplete;
+      const icon = el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline');
+      expect(icon).to.not.equal(null);
+      expect(icon!.getAttribute('icon')).to.equal(HVAC_MODE_ICONS['heat']);
+    });
+
+    it('the range readout has no inline mode icon', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21; // idle -> range
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline')).to.equal(null);
+    });
+  });
+
+  describe('_centerTight (centre-readout crowding guard)', () => {
+    it('dual: true when a setpoint sits near 3 o\'clock (≈90°)', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 7;
+      el.max = 35;
+      el.lowValue = 30.4; // ≈90°
+      el.highValue = 31.4;
+      el.current = 28.9;
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.true;
+      expect(el.shadowRoot!.querySelector('.center.tight')).to.not.equal(null);
+    });
+
+    it('dual: false when the setpoints + current are away from the horizontal axis', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 7;
+      el.max = 35;
+      el.lowValue = 16;
+      el.highValue = 24;
+      el.current = 21;
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.false;
+      expect(el.shadowRoot!.querySelector('.center.tight')).to.equal(null);
+    });
+
+    it('single: true when the current marker is near the horizontal axis', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 7;
+      el.max = 35;
+      el.value = 24;
+      el.current = 30; // ≈90°
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.true;
+    });
+
+    it('single: false when there is no current temperature', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.value = 24;
+      el.current = undefined;
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.false;
     });
   });
 

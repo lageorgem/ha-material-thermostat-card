@@ -47,6 +47,10 @@ export class MtClimateFeatureEditor extends LitElement {
    * @param e ha-sortable's item-moved event
    */
   private _moveOption(e: CustomEvent): void {
+    // This list is nested inside the editor's features ha-sortable; ha-sortable's
+    // `item-moved` is composed+bubbling, so without this it would also reach the
+    // outer features sortable and reorder the FEATURE instead of the options.
+    e.stopPropagation();
     const { oldIndex, newIndex } = e.detail;
     const order = this._orderedValues();
     const [moved] = order.splice(oldIndex, 1);

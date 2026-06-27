@@ -568,9 +568,27 @@ describe('mt-climate-feature-editor', () => {
         { 'climate.test': climateState({ hvac_modes: ['off', 'cool', 'heat'] }) }
       );
       const cap = captureEvents('feature-changed');
-      (el as any)._moveOption({ detail: { oldIndex: 0, newIndex: 2 } });
+      (el as any)._moveOption(new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 2 } }));
       cap.stop();
       expect((cap.events[0].detail as any).feature.order).to.deep.equal(['cool', 'heat', 'off']);
+    });
+
+    // Regression: the options list is nested inside the outer features
+    // ha-sortable; its composed+bubbling item-moved must be stopped or it would
+    // also reorder the FEATURE (and collapse the panel) instead of the options.
+    it('_moveOption stops the event so it cannot reach the outer features sortable', async () => {
+      const el = await mount(
+        'hvac',
+        { type: 'climate-hvac-modes' },
+        { 'climate.test': climateState({ hvac_modes: ['off', 'cool', 'heat'] }) }
+      );
+      const ev = new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 1 } });
+      let stopped = false;
+      ev.stopPropagation = () => {
+        stopped = true;
+      };
+      (el as any)._moveOption(ev);
+      expect(stopped).to.be.true;
     });
   });
 
@@ -789,9 +807,20 @@ describe('mt-input-select-editor', () => {
     it('_moveOption (0 → 2) emits feature-changed with the reordered order list', async () => {
       const el = await withOptions();
       const cap = captureEvents('feature-changed');
-      (el as any)._moveOption({ detail: { oldIndex: 0, newIndex: 2 } });
+      (el as any)._moveOption(new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 2 } }));
       cap.stop();
       expect((cap.events[0].detail as any).feature.order).to.deep.equal(['away', 'sleep', 'home']);
+    });
+
+    it('_moveOption stops the event so it cannot reach the outer features sortable', async () => {
+      const el = await withOptions();
+      const ev = new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 1 } });
+      let stopped = false;
+      ev.stopPropagation = () => {
+        stopped = true;
+      };
+      (el as any)._moveOption(ev);
+      expect(stopped).to.be.true;
     });
   });
 
@@ -1128,13 +1157,27 @@ describe('mt-entity-list-editor', () => {
       itemsKey: 'entities',
     });
     const cap = captureEvents('feature-changed');
-    (el as any)._moveItem({ detail: { oldIndex: 0, newIndex: 2 } });
+    (el as any)._moveItem(new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 2 } }));
     cap.stop();
     expect((cap.events[0].detail as any).feature.entities).to.deep.equal([
       { entity: 'switch.b' },
       { entity: 'switch.c' },
       { entity: 'switch.a' },
     ]);
+  });
+
+  it('_moveItem stops the event so it cannot reach the outer features sortable', async () => {
+    const el = await mount({
+      feature: { type: 'switch-group', entities: [{ entity: 'switch.a' }, { entity: 'switch.b' }] },
+      itemsKey: 'entities',
+    });
+    const ev = new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 1 } });
+    let stopped = false;
+    ev.stopPropagation = () => {
+      stopped = true;
+    };
+    (el as any)._moveItem(ev);
+    expect(stopped).to.be.true;
   });
 
   it('_removeItem removes by index', async () => {

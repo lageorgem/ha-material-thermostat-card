@@ -28,6 +28,7 @@ const ARC_START = 225; // degrees, clockwise from top — bottom-left (= min)
 const SWEEP = 270; // total degrees the range spans
 const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 135 — bottom-right (= max)
 const OVERLAP_DEG = 18; // angular gap under which setpoint icon + current temp merge
+const SIDE_GUARD_DEG = 26; // a numeric marker this close to 3/9 o'clock crowds the centre readout
 
 /**
  * Convert a polar angle (0° = top, increasing clockwise) to an SVG point.
@@ -140,6 +141,23 @@ export class MtCircularDial extends LitElement {
   /** Show the "Heat/Cool" range readout (vs. the collapsed active-mode readout). */
   private get _showRange(): boolean {
     return this._dragging || this._showRangeTimer || this._dualActive === null;
+  }
+
+  /**
+   * Whether a numeric marker sits near the 3 or 9 o'clock position, where it
+   * would crowd the (horizontally widest) centre readout. When true the centre
+   * shrinks and wraps so the setpoint/current labels don't overlap the value or
+   * unit (only the current dot carries a number in single mode; both setpoints
+   * and the current dot do in dual).
+   */
+  private get _centerTight(): boolean {
+    const near = (v?: number): boolean => {
+      if (v == null) return false;
+      const a = ((this._angleOf(v) % 360) + 360) % 360;
+      return Math.min(Math.abs(a - 90), Math.abs(a - 270)) <= SIDE_GUARD_DEG;
+    };
+    if (this.dual) return near(this._displayLow) || near(this._displayHigh) || near(this.current);
+    return near(this.current);
   }
 
   /** Show the range for 5s after a setpoint change, then collapse to the mode. */
@@ -629,7 +647,7 @@ export class MtCircularDial extends LitElement {
     const big = this.showCurrentAsPrimary && this.current != null ? this.current : target;
     const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
     return html`
-      <div class="center">
+      <div class=${classMap({ center: true, tight: this._centerTight })}>
         ${this.modeLabel ? html`<div class="mode">${this.modeLabel}</div>` : nothing}
         <div class="temp">
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
@@ -648,7 +666,7 @@ export class MtCircularDial extends LitElement {
   private _renderDualCenter(): TemplateResult {
     if (this._showRange) {
       return html`
-        <div class="center">
+        <div class=${classMap({ center: true, tight: this._centerTight })}>
           ${this.modeLabel ? html`<div class="mode">${this.modeLabel}</div>` : nothing}
           <div class="temp dual">
             <span class="value-text">${this._fmt(this._displayLow, this._precision)}</span>
@@ -662,9 +680,12 @@ export class MtCircularDial extends LitElement {
     const active = this._dualActive;
     const label = active === 'cool' ? 'Cooling' : 'Heating';
     const target = active === 'cool' ? this._displayHigh : this._displayLow;
+    const icon = HVAC_MODE_ICONS[active === 'cool' ? 'cool' : 'heat'] ?? 'mdi:thermostat';
     return html`
-      <div class="center">
-        <div class="mode">${label}</div>
+      <div class=${classMap({ center: true, tight: this._centerTight })}>
+        <div class="mode">
+          <ha-icon class="mode-inline" icon=${icon}></ha-icon><span>${label}</span>
+        </div>
         <div class="temp">
           <span class="value-text">${this._fmt(target, this._precision)}</span>
           <span class="unit">${this.unit}</span>
@@ -852,9 +873,16 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface);
       }
       .mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
         color: var(--mt-on-surface-variant);
         font-weight: 500;
+      }
+      .mode-inline {
+        --mdc-icon-size: clamp(12px, 5.5cqi, 18px);
+        color: var(--dial-color);
       }
       .temp {
         display: flex;
@@ -866,11 +894,28 @@ export class MtCircularDial extends LitElement {
         gap: 6px;
       }
       .temp.dual .value-text {
-        font-size: clamp(15px, 12.5cqi, var(--md-sys-typescale-display-small-size, 40px));
+        font-size: clamp(14px, 10cqi, 32px);
       }
       .temp.dual .dash {
-        font-size: clamp(15px, 12.5cqi, var(--md-sys-typescale-display-small-size, 40px));
+        font-size: clamp(14px, 10cqi, 32px);
         color: var(--mt-on-surface-variant);
+      }
+      /* A numeric marker near 3/9 o'clock crowds the centre readout — shrink and
+         allow the value/unit to wrap so the orbiting labels don't overlap it. */
+      .center.tight .temp {
+        max-width: 46%;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .center.tight .value-text {
+        font-size: clamp(13px, 14cqi, 46px);
+      }
+      .center.tight .unit {
+        font-size: clamp(9px, 5cqi, 16px);
+      }
+      .center.tight .temp.dual .value-text,
+      .center.tight .temp.dual .dash {
+        font-size: clamp(12px, 7cqi, 22px);
       }
       .value-text {
         font-size: clamp(22px, 20cqi, var(--md-sys-typescale-display-large-size, 64px));

@@ -31,6 +31,9 @@ export class MtInputSelectEditor extends LitElement {
    * @param e ha-sortable's item-moved event
    */
   private _moveOption(e: CustomEvent): void {
+    // Nested inside the editor's features ha-sortable — stop the composed,
+    // bubbling `item-moved` so it doesn't also reorder the outer feature.
+    e.stopPropagation();
     const { oldIndex, newIndex } = e.detail;
     const order = this._orderedValues();
     const [moved] = order.splice(oldIndex, 1);

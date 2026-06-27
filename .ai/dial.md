@@ -101,8 +101,19 @@ change via the CSS `stroke` transition, not the slide).
 "Heat/Cool" **range** (low – high) while dragging, for **5s after a setpoint
 changes** (`_bumpRangeDisplay` 5s timer, armed in `updated()` — guarded by
 `_prevLow/_prevHigh` so the initial set doesn't arm it), or while idle. Otherwise
-it **collapses** to the active sub-mode label ("Cooling"/"Heating") + the single
-setpoint being targeted (high while cooling, low while heating).
+it **collapses** to the active sub-mode **icon** (`.mode-inline`, mode-colored)
++ label ("Cooling"/"Heating") + the single setpoint being targeted (high while
+cooling, low while heating).
+
+**Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
+sit at radius ~100 and can collide with the (horizontally widest) centre readout
+when a marker lands near 3 or 9 o'clock. `_centerTight` is true when any numeric
+marker is within `SIDE_GUARD_DEG` (26°) of 90°/270° (dual: low/high/current;
+single: current only — the single setpoint marker is a small icon). When true the
+`.center` gets a `tight` class that shrinks the value/unit and lets `.temp` wrap
+(`max-width: 46%`), so the readout stays clear of the labels. Base dual-range font
+is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre past
+~46% when tight or the °C overlaps the right-hand markers again (the original bug).
 
 ## Interaction
 

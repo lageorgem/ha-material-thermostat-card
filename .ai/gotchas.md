@@ -122,6 +122,20 @@ dial.shadowRoot.getAnimations({ subtree: true }).forEach(a => {
 `document.getAnimations()` does **not** descend into shadow DOM in Chrome — call
 `getAnimations()` on the dial's shadow root (or the element subtree).
 
+## Nested `ha-sortable` — stop the inner `item-moved`
+
+The editor nests sortables: the **features** list is an `ha-sortable`, and each
+expanded climate/input_select/list sub-editor has its **own** `ha-sortable` for
+its options/items. `ha-sortable`'s `item-moved` is dispatched **composed +
+bubbling**, so an inner option drag bubbles up to the outer features sortable and
+reorders the **feature** (and collapses the panel, since `_moveFeature` clears
+`_editingIndex`) instead of the options — the preview then doesn't change. Fix:
+every inner move handler (`_moveOption`/`_moveItem`) must call
+`e.stopPropagation()` **first**. (The inner `.handle` elements are safe from the
+outer SortableJS because they live in the sub-editor's shadow DOM; only the event
+leaks.) Tests that call these handlers directly must pass a real `CustomEvent` —
+a plain `{detail}` object has no `stopPropagation`.
+
 ## Misc env
 
 - `rsvg-convert` is installed for rasterizing icon SVGs; ImageMagick `montage` is
