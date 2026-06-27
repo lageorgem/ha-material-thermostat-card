@@ -509,32 +509,50 @@ export class MtCircularDial extends LitElement {
     const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
     const dashOffset = (-segS * 1000).toFixed(2);
 
-    // Dual-mode segments: the comfort band between the two setpoints, plus a
-    // colored demand band from the active setpoint to the current temperature
-    // (cooling above the high setpoint, heating below the low one). The comfort
-    // band is the heat_cool mode color (matching the halo) when the current temp
-    // sits within it (idle); while actively heating/cooling the overshoot it's
-    // muted gray so the demand band reads as the active one.
-    const dualSegs: Array<{ from: number; to: number; color: string; idle?: boolean }> = [];
+    // Dual-mode segments: a comfort "range" band between the two setpoints plus a
+    // "demand" overshoot band — BOTH always rendered (the demand is opacity 0
+    // when idle) so they cross-fade as the sub-mode changes instead of popping.
+    const dualSegs: Array<{ from: number; to: number; color: string; opacity: number; cls: string }> =
+      [];
     if (this.dual) {
       const lo = this._fracOf(this._displayLow);
       const hi = this._fracOf(this._displayHigh);
       const active = this._dualActive;
+      // Comfort range: heat_cool color (green) when the current temp is within it
+      // (idle), muted gray while actively heating/cooling the overshoot.
       dualSegs.push({
         from: lo,
         to: hi,
         color: active === null ? color : MtCircularDial.IDLE_COLOR,
-        idle: active !== null,
+        opacity: active === null ? 1 : 0.5,
+        cls: 'range',
       });
-      if (showCurrent) {
-        const cur = this._fracOf(this.current!);
-        if (active === 'cool') dualSegs.push({ from: hi, to: cur, color: climateModeColor('cool') });
-        else if (active === 'heat') dualSegs.push({ from: cur, to: lo, color: climateModeColor('heat') });
-      }
+      // Demand overshoot: cooling above the high setpoint (blue) / heating below
+      // the low one (orange). Geometry is continuous across the boundary (it
+      // shrinks to zero as a setpoint meets the current temp), so toggling its
+      // opacity cross-fades it cleanly instead of popping in/out.
+      const cur = showCurrent ? this._fracOf(this.current!) : hi;
+      const coolSide =
+        this.current != null && this.current >= (this._displayLow + this._displayHigh) / 2;
+      dualSegs.push({
+        from: coolSide ? hi : Math.min(lo, cur),
+        to: coolSide ? Math.max(hi, cur) : lo,
+        color: coolSide ? climateModeColor('cool') : climateModeColor('heat'),
+        opacity: active === null ? 0 : 1,
+        cls: 'demand',
+      });
     }
 
+    // Collapsed dual: the targeted setpoint marker shows the active sub-mode icon
+    // (like single mode), so the icon sits at the setpoint, not in the centre.
+    const dualActive = this._dualActive;
+    const collapsedDual = this.dual && !this._showRange;
     const currentLabel = html`<span class="num current">${this._fmtCompact(this.current!)}°</span>`;
     const modeIconEl = html`<ha-icon class="mode-icon" icon=${modeIcon}></ha-icon>`;
+    const dualSetIconEl = html`<ha-icon
+      class="mode-icon"
+      icon=${HVAC_MODE_ICONS[dualActive === 'cool' ? 'cool' : 'heat'] ?? 'mdi:thermostat'}
+    ></ha-icon>`;
 
     return html`
       <div
@@ -572,12 +590,12 @@ export class MtCircularDial extends LitElement {
           ${this.dual
             ? dualSegs.map(
                 (seg) => svg`<path
-                  class=${`value${seg.idle ? ' idle' : ''}`}
+                  class=${`value ${seg.cls}`}
                   d=${ringPath}
                   pathLength="1000"
-                  stroke-dasharray=${`${((seg.to - seg.from) * 1000).toFixed(2)} 1000`}
+                  stroke-dasharray=${`${(Math.max(0, seg.to - seg.from) * 1000).toFixed(2)} 1000`}
                   stroke-dashoffset=${(-seg.from * 1000).toFixed(2)}
-                  style=${`stroke:${seg.color}`}
+                  style=${`opacity:${seg.opacity};stroke:${seg.color}`}
                 />`
               )
             : svg`<path
@@ -609,11 +627,15 @@ export class MtCircularDial extends LitElement {
                 ${showCurrent ? this._dotOrbit(curAngle, 'current') : nothing}
                 ${this._labelOrbit(
                   this._angleOf(this._displayLow),
-                  html`<span class="num">${this._fmtCompact(this._displayLow)}°</span>`
+                  collapsedDual && dualActive === 'heat'
+                    ? dualSetIconEl
+                    : html`<span class="num">${this._fmtCompact(this._displayLow)}°</span>`
                 )}
                 ${this._labelOrbit(
                   this._angleOf(this._displayHigh),
-                  html`<span class="num">${this._fmtCompact(this._displayHigh)}°</span>`
+                  collapsedDual && dualActive === 'cool'
+                    ? dualSetIconEl
+                    : html`<span class="num">${this._fmtCompact(this._displayHigh)}°</span>`
                 )}
                 ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
               `
@@ -680,14 +702,15 @@ export class MtCircularDial extends LitElement {
     const active = this._dualActive;
     const label = active === 'cool' ? 'Cooling' : 'Heating';
     const target = active === 'cool' ? this._displayHigh : this._displayLow;
-    const icon = HVAC_MODE_ICONS[active === 'cool' ? 'cool' : 'heat'] ?? 'mdi:thermostat';
+    // Honor show_current_as_primary: the big number is the current temperature
+    // (the targeted setpoint is shown by the mode-icon marker on the ring).
+    const big = this.showCurrentAsPrimary && this.current != null ? this.current : target;
+    const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
-        <div class="mode">
-          <ha-icon class="mode-inline" icon=${icon}></ha-icon><span>${label}</span>
-        </div>
+        <div class="mode">${label}</div>
         <div class="temp">
-          <span class="value-text">${this._fmt(target, this._precision)}</span>
+          <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
       </div>
@@ -779,11 +802,6 @@ export class MtCircularDial extends LitElement {
           stroke var(--mt-motion-dur) var(--mt-motion-ease),
           opacity var(--mt-motion-dur) var(--mt-motion-ease);
       }
-      /* The gray "range" band (between the two heat_cool setpoints) is muted so
-         the colored demand band reads as the active one. */
-      .value.idle {
-        opacity: 0.5;
-      }
       .glow {
         transition: opacity var(--mt-motion-dur) var(--mt-motion-ease);
       }
@@ -873,16 +891,9 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface);
       }
       .mode {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
         font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
         color: var(--mt-on-surface-variant);
         font-weight: 500;
-      }
-      .mode-inline {
-        --mdc-icon-size: clamp(12px, 5.5cqi, 18px);
-        color: var(--dial-color);
       }
       .temp {
         display: flex;

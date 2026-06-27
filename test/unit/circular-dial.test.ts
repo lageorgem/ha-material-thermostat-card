@@ -1292,7 +1292,7 @@ describe('mt-circular-dial', () => {
   });
 
   describe('dual segment rendering', () => {
-    it('idle (current in range): one .value path, the mode-color range band', async () => {
+    it('idle (current in range): green range band, demand band faded out', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1301,20 +1301,19 @@ describe('mt-circular-dial', () => {
       el.current = 21;
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      const values = sr.querySelectorAll('.value');
-      expect(values.length).to.equal(1);
-      // in range -> the comfort band is the heat_cool mode color (matching the
-      // halo), full opacity (NOT the muted gray idle band)
-      expect(values[0].classList.contains('idle')).to.be.false;
-      expect(sr.querySelectorAll('.value.idle').length).to.equal(0);
-      // no mid-wipe overlay in dual
+      // both bands always present (so they cross-fade); demand hidden when idle
+      const range = sr.querySelector('.value.range') as SVGElement;
+      const demand = sr.querySelector('.value.demand') as SVGElement;
+      expect(range).to.not.equal(null);
+      expect(demand).to.not.equal(null);
+      const rangeStyle = range.getAttribute('style')!;
+      expect(rangeStyle).to.contain(`stroke:${climateModeColor('heat_cool')}`);
+      expect(rangeStyle).to.contain('opacity:1;');
+      expect(demand.getAttribute('style')).to.contain('opacity:0;');
       expect(sr.querySelector('.wipe-value')).to.equal(null);
-      const style = (values[0] as SVGElement).getAttribute('style')!;
-      expect(style).to.contain(`stroke:${climateModeColor('heat_cool')}`);
-      expect(style).to.not.contain(IDLE_COLOR);
     });
 
-    it('cooling (current above high): a gray range band + a cool demand band', async () => {
+    it('cooling (current above high): muted gray range + visible cool demand band', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1323,17 +1322,15 @@ describe('mt-circular-dial', () => {
       el.current = 28;
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      const values = sr.querySelectorAll('.value');
-      expect(values.length).to.equal(2);
-      // exactly one is the idle (gray range) band
-      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
-      const demand = Array.from(values).find((p) => !p.classList.contains('idle'))!;
-      expect(demand).to.not.equal(undefined);
-      expect((demand as SVGElement).getAttribute('style')).to.contain(climateModeColor('cool'));
-      expect(sr.querySelector('.wipe-value')).to.equal(null);
+      const range = sr.querySelector('.value.range') as SVGElement;
+      const demand = sr.querySelector('.value.demand') as SVGElement;
+      expect(range.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(range.getAttribute('style')).to.contain('opacity:0.5;');
+      expect(demand.getAttribute('style')).to.contain(`stroke:${climateModeColor('cool')}`);
+      expect(demand.getAttribute('style')).to.contain('opacity:1;');
     });
 
-    it('heating (current below low): a gray range band + a heat demand band', async () => {
+    it('heating (current below low): muted gray range + visible heat demand band', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1342,13 +1339,30 @@ describe('mt-circular-dial', () => {
       el.current = 14;
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      const values = sr.querySelectorAll('.value');
-      expect(values.length).to.equal(2);
-      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
-      const demand = Array.from(values).find((p) => !p.classList.contains('idle'))!;
-      expect(demand).to.not.equal(undefined);
-      expect((demand as SVGElement).getAttribute('style')).to.contain(climateModeColor('heat'));
-      expect(sr.querySelector('.wipe-value')).to.equal(null);
+      const range = sr.querySelector('.value.range') as SVGElement;
+      const demand = sr.querySelector('.value.demand') as SVGElement;
+      expect(range.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
+      expect(demand.getAttribute('style')).to.contain(`stroke:${climateModeColor('heat')}`);
+      expect(demand.getAttribute('style')).to.contain('opacity:1;');
+    });
+
+    // The demand band must stay in the DOM across the heat/idle/cool transition
+    // so it can cross-fade (opacity) instead of popping out.
+    it('keeps both .value paths across an active -> idle change (persistent for crossfade)', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelectorAll('.value').length).to.equal(2);
+      el.current = 21; // -> idle; demand fades but stays in the DOM
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelectorAll('.value').length).to.equal(2);
+      expect(el.shadowRoot!.querySelector('.value.demand')!.getAttribute('style')).to.contain(
+        'opacity:0;'
+      );
     });
   });
 
@@ -1522,8 +1536,9 @@ describe('mt-circular-dial', () => {
     });
 
     // The collapsed readout (after the 5s range window) shows the active
-    // sub-mode's icon before the "Cooling"/"Heating" label.
-    it('collapsed cooling shows the cool mode icon before the label', async () => {
+    // sub-mode's icon AT THE TARGETED SETPOINT MARKER (like single mode), NOT in
+    // the centre text.
+    it('collapsed cooling shows the cool mode icon at the active setpoint marker', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1531,12 +1546,15 @@ describe('mt-circular-dial', () => {
       el.highValue = 24;
       el.current = 28; // cooling -> collapsed
       await el.updateComplete;
-      const icon = el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline');
+      const sr = el.shadowRoot!;
+      const icon = sr.querySelector('.markers ha-icon.mode-icon');
       expect(icon).to.not.equal(null);
       expect(icon!.getAttribute('icon')).to.equal(HVAC_MODE_ICONS['cool']);
+      // not in the centre
+      expect(sr.querySelector('.center ha-icon')).to.equal(null);
     });
 
-    it('collapsed heating shows the heat mode icon before the label', async () => {
+    it('collapsed heating shows the heat mode icon at the active setpoint marker', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1544,12 +1562,14 @@ describe('mt-circular-dial', () => {
       el.highValue = 24;
       el.current = 14; // heating -> collapsed
       await el.updateComplete;
-      const icon = el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline');
+      const sr = el.shadowRoot!;
+      const icon = sr.querySelector('.markers ha-icon.mode-icon');
       expect(icon).to.not.equal(null);
       expect(icon!.getAttribute('icon')).to.equal(HVAC_MODE_ICONS['heat']);
+      expect(sr.querySelector('.center ha-icon')).to.equal(null);
     });
 
-    it('the range readout has no inline mode icon', async () => {
+    it('the range readout has no marker mode icon (both setpoints show numbers)', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1557,7 +1577,37 @@ describe('mt-circular-dial', () => {
       el.highValue = 24;
       el.current = 21; // idle -> range
       await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.center .mode ha-icon.mode-inline')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.markers ha-icon.mode-icon')).to.equal(null);
+    });
+
+    // show_current_as_primary should also apply to the collapsed heat_cool readout.
+    it('show_current_as_primary: collapsed dual shows the current temp as the big number', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> collapsed (target would be 24)
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28.0');
+    });
+
+    it('without show_current_as_primary: collapsed dual shows the targeted setpoint', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // cooling -> target is the high setpoint (24)
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent!.trim()).to.equal(
+        '24.0'
+      );
     });
   });
 

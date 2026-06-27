@@ -76,34 +76,44 @@ below).
 In dual mode the dial does NOT just fill between the two setpoints. It derives
 the **active sub-mode from the current temperature** (`_dualActive`):
 `current > displayHigh` → `'cool'`, `current < displayLow` → `'heat'`, else
-`null` (idle, in range). It renders a **comfort "range" band** between the
-setpoints, plus (when out of range) a **colored demand band**:
+`null` (idle, in range). It renders **two persistent bands** (both `.value`
+paths, classes `range` + `demand`) — ALWAYS both, so they **cross-fade** as the
+sub-mode changes instead of popping (see below):
 
-- the **range band** `[low, high]`:
+- the **range band** `.value.range` `[low, high]`:
   - **idle (current in range)** → the **heat_cool mode color** (= `--dial-color`,
-    green), full opacity, so it matches the halo. The room is comfortable; the
-    whole range glows the mode color. (This is the only band drawn when idle.)
-  - **actively heating/cooling** → muted **gray** (`.value.idle`, opacity 0.5),
-    so the colored demand band reads as the active one.
-- the **colored demand band** from the active setpoint to the current temp:
-  cooling → `[high, current]` in the cool color; heating → `[current, low]` in
-  heat; idle → none.
+    green), full opacity (matches the halo — the whole comfort range glows).
+  - **actively heating/cooling** → muted **gray** (`IDLE_COLOR`, opacity 0.5),
+    so the demand band reads as the active one.
+- the **demand band** `.value.demand`: the overshoot from the crossed setpoint to
+  the current temp — cooling → `[high, current]` (cool color); heating →
+  `[current, low]` (heat color); **idle → opacity 0** (faded out, NOT removed).
+  Side (cool/heat) is picked by `current` vs the setpoint midpoint, and the
+  geometry is **continuous across the boundary** (shrinks to zero as a setpoint
+  meets current), so toggling opacity fades it cleanly.
 
-⚠️ Do NOT make the range band gray when idle — the maintainer explicitly wants
-the between-setpoints fill to be the mode color (green) whenever the current temp
-sits within the range.
+⚠️ Do NOT make the range band gray when idle, and do NOT remove the demand band
+when idle (rebuild from the array each render reused these by position — keep BOTH
+pushed so Lit reuses the same nodes and the opacity/stroke transitions fire).
 
-`_effectiveMode`/`_dialColor` follow the sub-mode (cool/heat/heat_cool), so the
-halo + big number recolor too. The mode **wipe is skipped for dual** (colors
-change via the CSS `stroke` transition, not the slide).
+`_effectiveMode`/`_dialColor` follow the sub-mode (cool/heat/heat_cool). The
+**cross-fade** works because `--dial-color` is a registered animatable `<color>`
+on `.dial`: the halo, ring, and big number (`color: var(--dial-color)`) all
+interpolate with it — even the centre `.value-text`, which is re-created on the
+collapsed↔range flip, picks up the *currently animating* inherited value. The
+range band stroke (gray↔green) and the demand band opacity (1↔0) transition via
+the `.value` CSS transition. The mode **wipe is skipped for dual**.
 
 **Center readout** (`_renderDualCenter` gated by `_showRange`): shows the
 "Heat/Cool" **range** (low – high) while dragging, for **5s after a setpoint
 changes** (`_bumpRangeDisplay` 5s timer, armed in `updated()` — guarded by
 `_prevLow/_prevHigh` so the initial set doesn't arm it), or while idle. Otherwise
-it **collapses** to the active sub-mode **icon** (`.mode-inline`, mode-colored)
-+ label ("Cooling"/"Heating") + the single setpoint being targeted (high while
-cooling, low while heating).
+it **collapses** to the active sub-mode label ("Cooling"/"Heating") + the
+targeted setpoint value, **and the active setpoint's ring marker shows the
+sub-mode icon** (`dualSetIconEl`, like single mode — the icon is at the SETPOINT,
+not in the centre text). `show_current_as_primary` makes the collapsed big number
+the **current temperature** (the setpoint is then shown only by the icon marker),
+mirroring single mode.
 
 **Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
 sit at radius ~100 and can collide with the (horizontally widest) centre readout
