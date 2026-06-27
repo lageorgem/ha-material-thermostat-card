@@ -7,7 +7,8 @@
  *   - Horizontal swing = a vent bar + 5 fanned rays (left..right).
  *   - Selected positions are PRIMARY (dark); unselected are SECONDARY (gray).
  *   - Fixed = 1 selected; partial swing = 3 selected (top3/mid3/bottom3 …);
- *     full swing = all 5. Vertical swings also get an oscillation double-arrow.
+ *     full swing = all 5. Swings (both axes) also get an oscillation double-arrow;
+ *     fixed cones extend further out (to the line ends) since they have no arrow.
  *
  * Run: node tools/gen-icons.mjs  -> src/icons.generated.ts + icons/ previews.
  */
@@ -86,7 +87,10 @@ function head(tx, ty, dirDeg, L, hw) {
 }
 
 // ----- vertical: corner + 5 cone wedges (index 0 = top .. 4 = bottom) -----
-const V = { O: [4.6, 4.6], r0: 4.3, r1: 12.6, a0: -2, span: 90, gap: 4.6, N: 5 };
+// a0/span inset the fan off the top and left bars so it isn't crowding them.
+// r1 is the swing outer radius (leaves room for the arrow); r1Fixed is longer so
+// the fixed cones reach out to the ends of the corner lines (no arrow there).
+const V = { O: [4.6, 4.6], r0: 4.8, r1: 12.6, r1Fixed: 16, arrowR: 15.3, a0: 8, span: 72, gap: 4.5, N: 5 };
 V.wedgeW = (V.span - V.gap * (V.N - 1)) / V.N;
 function vConeAngles(k) {
   const s = V.a0 + k * (V.wedgeW + V.gap);
@@ -99,33 +103,38 @@ function vCorner() {
   return bar(3.7, 2.4, 3.7, 20.9, 1.8, false, true) + bar(2.8, 3.3, 20.2, 3.3, 1.8, false, true);
 }
 /**
- * Oscillation double-arrow that only spans the swept cones [kmin..kmax], set at
- * a radius clear of the cone fan (and inset from the ends so the heads don't
- * touch the corner frame).
+ * Oscillation double-arrow as an arc band at radius R between the cone-fan edges
+ * [loEdge, hiEdge] (deg, loEdge < hiEdge). The band is pulled in by one
+ * head-length at each end so the arrowhead TIPS land exactly on those edges —
+ * the arrow never extends past the cone boundaries.
  */
-function vArrow(kmin, kmax) {
-  const [cx, cy] = V.O;
-  const R = 15.3;
+function arrowBand(cx, cy, R, loEdge, hiEdge) {
   const hl = 2.6;
   const hw = 2.2;
-  // Span the swept range, but clamp the ends so the heads clear the top bar
-  // (>= 15°) and the left bar (<= 76°).
-  const a0 = Math.max(vConeAngles(kmin)[0] + 3, 15);
-  const a1 = Math.min(vConeAngles(kmax)[1] - 3, 76);
+  const degHl = (hl / R) * (180 / Math.PI); // a head-length as an arc angle at R
+  const a0 = loEdge + degHl;
+  const a1 = hiEdge - degHl;
   let d = wedge(cx, cy, R - 0.8, R + 0.8, a0, a1);
   const p0 = [cx + R * Math.cos(a0 * D), cy + R * Math.sin(a0 * D)];
   const p1 = [cx + R * Math.cos(a1 * D), cy + R * Math.sin(a1 * D)];
-  // start head continues "up" (decreasing-angle tangent); end head continues "down"
+  // low-edge head continues toward decreasing angle; high-edge head toward increasing.
   d += head(p0[0] + Math.cos((a0 - 90) * D) * hl, p0[1] + Math.sin((a0 - 90) * D) * hl, a0 - 90, hl, hw);
   d += head(p1[0] + Math.cos((a1 + 90) * D) * hl, p1[1] + Math.sin((a1 + 90) * D) * hl, a1 + 90, hl, hw);
   return d;
 }
+/** Vertical oscillation arrow spanning the swept cones [kmin..kmax]. */
+function vArrow(kmin, kmax) {
+  return arrowBand(V.O[0], V.O[1], V.arrowR, vConeAngles(kmin)[0], vConeAngles(kmax)[1]);
+}
 function vertical(selected, arrow) {
   let primary = vCorner();
   let secondary = '';
+  // Fixed cones (no arrow) extend out to the line ends; swing cones stop short
+  // so the oscillation arrow has clear space beyond them.
+  const r1 = arrow ? V.r1 : V.r1Fixed;
   for (let k = 0; k < V.N; k++) {
     const [a, b] = vConeAngles(k);
-    const slice = wedge(V.O[0], V.O[1], V.r0, V.r1, a, b);
+    const slice = wedge(V.O[0], V.O[1], V.r0, r1, a, b);
     if (selected.includes(k)) primary += slice;
     else secondary += slice;
   }
@@ -133,30 +142,36 @@ function vertical(selected, arrow) {
   return { path: primary, secondary };
 }
 
-// ----- horizontal: vent bar + 5 perspective slats (index 0 = left .. 4 = right) -----
-// Each slat is a parallelogram with flat horizontal top/bottom edges, slanted to
-// fan symmetrically (left tilts left, centre vertical, right tilts right) so the
-// row reads as louvres viewed at an angle (3D depth).
-const H = {
-  topY: 9,
-  botY: 19.2,
-  topX: [6.4, 9.2, 12, 14.8, 17.6],
-  botX: [4.4, 8.2, 12, 15.8, 19.6],
-};
-/** Parallelogram slat: top edge at topY (centre txc), bottom edge at botY (centre bxc). */
-function slat(txc, bxc, hw) {
-  return (
-    `M${f(txc - hw)} ${f(H.topY)}L${f(txc + hw)} ${f(H.topY)}` +
-    `L${f(bxc + hw)} ${f(H.botY)}L${f(bxc - hw)} ${f(H.botY)}Z`
-  );
+// ----- horizontal: vent bar + 5 cone wedges fanning DOWN (index 0 = left .. 4 = right) -----
+// Mirrors the vertical fan, rotated to point straight down and centred on x=12:
+// same span/radii/arrow so the fixed/swing sizing (and 1:1 aspect) match vertical.
+// The fan is centred on 90° (straight down); aLeft (= 90 + span/2) is the leftmost
+// (largest-angle) edge, and cone angles decrease with k toward the right.
+const H = { O: [12, 5], r0: 4, r1: 12.6, r1Fixed: 16, arrowR: 15.3, span: 72, gap: 4.5, N: 5 };
+H.wedgeW = (H.span - H.gap * (H.N - 1)) / H.N;
+H.aLeft = 90 + H.span / 2; // 126° — leftmost cone edge (down-left)
+function hConeAngles(k) {
+  const aHigh = H.aLeft - k * (H.wedgeW + H.gap); // k=0 leftmost (down-left)
+  return [aHigh - H.wedgeW, aHigh];
 }
-function horizontal(selected) {
-  let primary = capsule(3, 6.6, 21, 6.6, 2);
+/** Horizontal oscillation arrow spanning the swept cones [kmin..kmax]. */
+function hArrow(kmin, kmax) {
+  // Angles decrease with k: kmax is the right (smaller-angle) edge, kmin the left.
+  return arrowBand(H.O[0], H.O[1], H.arrowR, hConeAngles(kmax)[0], hConeAngles(kmin)[1]);
+}
+function horizontal(selected, arrow) {
+  let primary = capsule(3.6, H.O[1], 20.4, H.O[1], 2); // vent bar across the apex
   let secondary = '';
-  for (let k = 0; k < 5; k++) {
-    if (selected.includes(k)) primary += slat(H.topX[k], H.botX[k], 0.9);
-    else secondary += slat(H.topX[k], H.botX[k], 0.72);
+  // Fixed cones (no arrow) extend down to the swing arrow's reach; swing cones
+  // stop short so the oscillation arrow has clear space beyond them.
+  const r1 = arrow ? H.r1 : H.r1Fixed;
+  for (let k = 0; k < H.N; k++) {
+    const [a, b] = hConeAngles(k);
+    const slice = wedge(H.O[0], H.O[1], H.r0, r1, a, b);
+    if (selected.includes(k)) primary += slice;
+    else secondary += slice;
   }
+  if (arrow) primary += hArrow(Math.min(...selected), Math.max(...selected));
   return { path: primary, secondary };
 }
 
@@ -175,15 +190,15 @@ const icons = {
   'swing-vertical-middle': vertical(MID3, true),
   'swing-vertical-bottom': vertical(BOT3, true),
   'swing-vertical-full': vertical(ALL, true),
-  'swing-horizontal-fixed-left': horizontal([0]),
-  'swing-horizontal-fixed-left-middle': horizontal([1]),
-  'swing-horizontal-fixed-middle': horizontal([2]),
-  'swing-horizontal-fixed-right-middle': horizontal([3]),
-  'swing-horizontal-fixed-right': horizontal([4]),
-  'swing-horizontal-left': horizontal(TOP3),
-  'swing-horizontal-middle': horizontal(MID3),
-  'swing-horizontal-right': horizontal(BOT3),
-  'swing-horizontal-full': horizontal(ALL),
+  'swing-horizontal-fixed-left': horizontal([0], false),
+  'swing-horizontal-fixed-left-middle': horizontal([1], false),
+  'swing-horizontal-fixed-middle': horizontal([2], false),
+  'swing-horizontal-fixed-right-middle': horizontal([3], false),
+  'swing-horizontal-fixed-right': horizontal([4], false),
+  'swing-horizontal-left': horizontal(TOP3, true),
+  'swing-horizontal-middle': horizontal(MID3, true),
+  'swing-horizontal-right': horizontal(BOT3, true),
+  'swing-horizontal-full': horizontal(ALL, true),
 };
 
 // ----- emit TS -----
@@ -230,8 +245,25 @@ cells.forEach((c, i) => {
 });
 const W = cols * cell;
 const Hh = rows * (cell + labelH);
+const sheet = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}"><rect width="${W}" height="${Hh}" fill="#0e0d12"/>${body}</svg>`;
+writeFileSync('/tmp/sheet.svg', sheet);
+writeFileSync(join(previewDir, 'preview.svg'), sheet);
+
+// Self-contained HTML gallery (inline SVGs) for quick verification in a browser.
+const tiles = cells
+  .map(
+    (c) =>
+      `<figure><svg viewBox="0 0 24 24" width="120" height="120">${c.inner}</svg>` +
+      `<figcaption>${c.k}</figcaption></figure>`
+  )
+  .join('');
 writeFileSync(
-  '/tmp/sheet.svg',
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}"><rect width="${W}" height="${Hh}" fill="#0e0d12"/>${body}</svg>`
+  join(previewDir, 'preview.html'),
+  `<!doctype html><meta charset="utf-8"><title>mt swing icons</title>` +
+    `<style>body{background:#ece4d8;margin:0;padding:24px;font-family:system-ui}` +
+    `main{display:flex;flex-wrap:wrap;gap:16px}figure{margin:0;background:#fff;border-radius:12px;` +
+    `padding:8px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.15)}` +
+    `figcaption{font:11px/1.4 monospace;color:#555;margin-top:4px;max-width:120px}</style>` +
+    `<h2>Material Thermostat — AC swing icons</h2><main>${tiles}</main>`
 );
-console.log(`Generated ${cells.length} icons + /tmp/sheet.svg`);
+console.log(`Generated ${cells.length} icons + icons/preview.html + icons/preview.svg`);

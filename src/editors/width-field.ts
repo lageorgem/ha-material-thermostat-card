@@ -1,18 +1,18 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-import { MAX_INTERNAL_UNITS } from '../grid';
+import { MIN_FEATURE_UNITS, MAX_UNITS } from '../grid';
 
 const SCHEMA = [
   {
     name: 'width',
-    selector: { number: { min: 1, max: MAX_INTERNAL_UNITS, step: 1, mode: 'box' } },
+    selector: { number: { min: MIN_FEATURE_UNITS, max: MAX_UNITS, step: 1, mode: 'box' } },
   },
 ];
 
 /**
- * A small editor control for a feature's width, expressed in internal grid
- * units (1 unit = one icon). Empty means "let the card decide" (a full row for
+ * A small editor control for a feature's width, expressed in grid units
+ * (1 unit ≈ 24px, min 2). Empty means "let the card decide" (a full row for
  * selector/list features, a sensible default for tiles). Built on `ha-form` so
  * it renders the same number box as Home Assistant's own selectors. Emits
  * `width-changed` with `{ value: number | undefined }`.
@@ -22,7 +22,7 @@ export class MtWidthField extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ type: Number }) value?: number;
 
-  private _computeLabel = (): string => 'Width (grid units, 1 = one icon)';
+  private _computeLabel = (): string => 'Width (grid units, ≈24px each, min 2)';
 
   /**
    * Re-emit the form's change as a `width-changed` event.

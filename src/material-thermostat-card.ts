@@ -10,18 +10,18 @@ import {
 import { styleMap, type StyleInfo } from 'lit/directives/style-map.js';
 import { CARD_TYPE, EDITOR_TYPE, CARD_NAME, CARD_DESCRIPTION, CARD_VERSION } from './const';
 import {
-  SECTION_UNIT_PX,
-  INTERNAL_UNIT_PX,
-  MAX_INTERNAL_UNITS,
-  DIAL_INTERNAL_UNITS,
+  UNIT_PX,
+  MIN_FEATURE_UNITS,
+  MAX_UNITS,
+  DIAL_UNITS,
   SIDE_BY_SIDE_MIN_UNITS,
-  DROPDOWN_UNITS,
-  TILE_UNITS,
+  TILE_DEFAULT_UNITS,
+  TILE_COMPACT_UNITS,
   CARD_PADDING_X,
   unitsToPx,
 } from './grid';
 import { tokens, climateModeColor, prettyLabel } from './theme';
-import type { FeatureConfig, MaterialThermostatCardConfig, OptionOverride } from './types';
+import type { FeatureConfig, MaterialThermostatCardConfig } from './types';
 import { registerMtIcons } from './register-icons';
 import './dial/circular-dial';
 import './features/feature-row';
@@ -55,7 +55,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @state() private _selectedTemp?: number;
   @state() private _selectedLow?: number;
   @state() private _selectedHigh?: number;
-  /** The card's inner content width in px (measured), for the internal grid. */
+  /** The card's inner content width in px (measured), for the grid. */
   @state() private _widthPx = 0;
 
   private _debounceTimer?: number;
@@ -154,7 +154,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * Observe the card's width so the internal grid can recompute on resize.
+   * Observe the card's width so the grid can recompute on resize.
    * We observe the host (which always exists), not the inner `ha-card` (absent
    * until both hass and config are set) — the inner content width is the host
    * width minus the card padding. Idempotent across disconnect/reconnect.
@@ -175,93 +175,68 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * Count the visible options of a selector (entity values minus hidden ones).
-   * @param values the underlying option values from the entity
-   * @param overrides per-option config overrides (a `hide` removes the option)
-   */
-  private _visibleCount(values: string[] | undefined, overrides?: OptionOverride[]): number {
-    if (!values?.length) return 0;
-    if (!overrides?.length) return values.length;
-    const hidden = new Set(overrides.filter((o) => o.hide).map((o) => o.value));
-    return values.filter((v) => !hidden.has(v)).length;
-  }
-
-  /**
-   * How many internal grid units a feature wants — one unit per icon for icon
-   * rows, a fixed sane width for dropdowns/tiles.
+   * How many grid units a feature should span, in a grid `cols` units wide.
+   *  - an explicit `width` wins (clamped to `[2, cols]`);
+   *  - an entity tile defaults to a compact/normal footprint;
+   *  - any other feature (selectors, lists) defaults to a full row.
    * @param f the feature config
+   * @param cols the width of the feature grid, in units
    */
-  private _featureUnits(f: FeatureConfig): number {
-    // An explicit width (in internal units) wins over the icon-count estimate.
-    if ('width' in f && typeof f.width === 'number' && f.width > 0) return f.width;
-    const a = this._stateObj?.attributes;
-    switch (f.type) {
-      case 'climate-hvac-modes':
-        return f.display === 'dropdown'
-          ? DROPDOWN_UNITS
-          : this._visibleCount(a?.hvac_modes, f.options);
-      case 'climate-fan-modes':
-        return f.display === 'dropdown'
-          ? DROPDOWN_UNITS
-          : this._visibleCount(a?.fan_modes, f.options);
-      case 'climate-swing-modes':
-        return f.display === 'dropdown'
-          ? DROPDOWN_UNITS
-          : this._visibleCount(a?.swing_modes, f.options);
-      case 'input-select':
-        return f.display === 'dropdown'
-          ? DROPDOWN_UNITS
-          : this._visibleCount(this.hass.states[f.entity]?.attributes?.options, f.options);
-      case 'switch-group':
-        return f.display === 'dropdown' ? DROPDOWN_UNITS : (f.entities?.length ?? 0);
-      case 'switch-list':
-        return f.entities?.length ?? 0;
-      case 'button-list':
-        return f.items?.length ?? 0;
-      case 'entity-tile':
-        return TILE_UNITS;
-      default:
-        return 0;
+  private _featureDemand(f: FeatureConfig, cols: number): number {
+    const clamp = (n: number): number => Math.max(MIN_FEATURE_UNITS, Math.min(cols, Math.round(n)));
+    if ('width' in f && typeof f.width === 'number' && f.width > 0) return clamp(f.width);
+    if (f.type === 'entity-tile') {
+      return clamp(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
     }
-  }
-
-  /** The widest internal-unit demand across all feature rows. */
-  private _maxFeatureUnits(): number {
-    const feats = this._config.features ?? [];
-    if (!feats.length) return 0;
-    return Math.max(1, ...feats.map((f) => this._featureUnits(f)));
+    // Selectors and lists with no explicit width take a full row.
+    return cols;
   }
 
   /**
-   * Resolve the internal-grid layout for the current width: stacked (narrow) or
-   * side-by-side (wide). In the wide format the circular controls keep a fixed
-   * 12-sections-grid footprint and any surplus from a wider side-control column
-   * is distributed as padding around them, so they never appear stretched.
+   * Greedily pack the feature rows into a grid at most `maxCols` units wide and
+   * return the widest row used — i.e. the smallest feature-grid width that holds
+   * the configured features (so the wide layout can size and center the column).
+   * @param maxCols the maximum grid width, in units
    */
-  private _layout(): { wide: boolean; dialStyle: StyleInfo; featureStyle: StyleInfo } {
-    const feats = this._config.features ?? [];
-    const avail = Math.min(
-      MAX_INTERNAL_UNITS,
-      Math.max(1, Math.floor(this._widthPx / INTERNAL_UNIT_PX))
-    );
-    const wide = this._widthPx > 0 && feats.length > 0 && avail >= SIDE_BY_SIDE_MIN_UNITS;
-    if (!wide) return { wide: false, dialStyle: {}, featureStyle: {} };
-
-    // Side controls want one unit per icon (capped at half the max grid); the
-    // dial column grows to match a wider feature column, padding the dial.
-    let featureUnits = Math.min(this._maxFeatureUnits(), MAX_INTERNAL_UNITS / 2);
-    let dialUnits = Math.max(DIAL_INTERNAL_UNITS, featureUnits);
-    while (dialUnits + featureUnits > avail && featureUnits > 1) {
-      featureUnits -= 1;
-      dialUnits = Math.max(DIAL_INTERNAL_UNITS, featureUnits);
+  private _packedFeatureUnits(maxCols: number): number {
+    let widest = 0;
+    let cur = 0;
+    for (const f of this._config.features ?? []) {
+      const w = this._featureDemand(f, maxCols);
+      if (cur > 0 && cur + w > maxCols) {
+        widest = Math.max(widest, cur);
+        cur = w;
+      } else {
+        cur += w;
+      }
     }
-    // Feature-3 spacing: (side-control units × 2) − 12 sections-grid units, split
-    // either side of the fixed-width circular controls.
-    const padPx = (dialUnits - DIAL_INTERNAL_UNITS) * SECTION_UNIT_PX;
+    return Math.max(widest, cur, MIN_FEATURE_UNITS);
+  }
+
+  /**
+   * Resolve the grid layout for the current width: stacked (narrow) or
+   * side-by-side (wide), plus the number of grid columns (units) the feature
+   * area spans. In the wide format the circular controls keep a fixed footprint
+   * and the feature column is sized to the packed features, with the whole block
+   * centered so neither side over-stretches.
+   */
+  private _layout(): { wide: boolean; dialStyle: StyleInfo; featureStyle: StyleInfo; cols: number } {
+    const feats = this._config.features ?? [];
+    const avail = Math.min(MAX_UNITS, Math.max(1, Math.floor(this._widthPx / UNIT_PX)));
+    const wide = this._widthPx > 0 && feats.length > 0 && avail >= SIDE_BY_SIDE_MIN_UNITS;
+    if (!wide) {
+      // Stacked: the feature grid spans the full content width.
+      return { wide: false, dialStyle: {}, featureStyle: {}, cols: Math.max(MIN_FEATURE_UNITS, avail) };
+    }
+    // Wide: the dial keeps its fixed footprint; the feature column is sized to
+    // the packed features (1 unit reserved for the gap between the two columns).
+    const remaining = Math.max(MIN_FEATURE_UNITS, avail - DIAL_UNITS - 1);
+    const featureUnits = this._packedFeatureUnits(remaining);
     return {
       wide: true,
-      dialStyle: { flex: `0 0 ${unitsToPx(dialUnits)}px`, paddingInline: `${padPx}px` },
+      dialStyle: { flex: `0 0 ${unitsToPx(DIAL_UNITS)}px` },
       featureStyle: { flex: `0 0 ${unitsToPx(featureUnits)}px` },
+      cols: featureUnits,
     };
   }
 
@@ -399,12 +374,19 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           </div>
 
           ${this._config.features?.length
-            ? html`<div class="features" style=${styleMap(layout.featureStyle)}>
+            ? html`<div
+                class="features"
+                style=${styleMap({
+                  ...layout.featureStyle,
+                  gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
+                })}
+              >
                 ${this._config.features.map(
                   (feature: FeatureConfig) => html`<mt-feature-row
                     .hass=${this.hass}
                     .entityId=${this._config.entity}
                     .feature=${feature}
+                    .span=${this._featureDemand(feature, layout.cols)}
                   ></mt-feature-row>`
                 )}
               </div>`
@@ -471,7 +453,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         gap: 16px;
       }
       /* Side-by-side (wide): dial and feature columns, centered as a block so
-         neither over-stretches; column widths are set inline in internal units. */
+         neither over-stretches; column widths are set inline in grid units. */
       .body.wide {
         flex-direction: row;
         align-items: center;
@@ -484,10 +466,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         justify-content: center;
         min-width: 0;
       }
+      /* Feature area is a CSS grid: columns are set inline in grid units, each
+         feature spans its width via grid-column, and the grid gap is handled by
+         the grid itself — so two half-width items sit side by side rather than
+         wrapping the way a flex gap forces. */
       .features {
         box-sizing: border-box;
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
         align-content: flex-start;
         gap: 10px;
         min-width: 0;

@@ -153,34 +153,37 @@ features:
     entity: sensor.living_humidity
     icon: mdi:water-percent
     compact: true
-    width: 2 # internal grid units (1 unit = one icon)
+    width: 4 # grid units (≈24px each; an icon ≈ 2 units)
 ```
 
-**Width** — every feature accepts an optional `width` in **internal grid units** (1 unit = one
-icon ≈ 2 sections-grid units). Set it to fit several features on one row; leave it unset for a full
-row (selectors/lists) or a sensible default (tiles). `switch-group`, `switch-list`, and
-`button-list` items accept `{ entity, label?, icon? }`. The entity tile additionally accepts
-`name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for switches, press for
-buttons, more-info otherwise), and `compact: true` (icon + value only, no title).
+**Width** — every feature accepts an optional `width` in **grid units** (1 unit = one
+Home Assistant sections-grid unit, ≈24px; an icon ≈ 2 units). Two features sharing a row each take
+half the row's units — on a 12-unit row that's `width: 6` apiece. The minimum is **2 units**; leave
+`width` unset for a full row (selectors/lists) or a sensible default (tiles). `switch-group`,
+`switch-list`, and `button-list` items accept `{ entity, label?, icon? }`. The entity tile
+additionally accepts `name`, `icon`, a standard Lovelace `tap_action` (defaults to toggle for
+switches, press for buttons, more-info otherwise), and `compact: true` (icon + value only, no
+title).
 
 ## Responsiveness
 
-The card lays its content out on an **internal grid** keyed to the Home Assistant sections grid
-(48 units across a full-width view):
+The card lays its content out on a **grid** keyed to the Home Assistant sections grid (48 units
+across a full-width view):
 
-- **1 internal unit = 1 icon = 2 sections-grid units** (~48px). All feature widths are defined in
-  these units rather than pixels, and the internal grid is capped at **18 units** (the wide format
-  spans up to 36 sections-grid units).
-- **Scrollable icon rows.** Each icon claims one internal unit. When the space per icon drops below
-  2 sections-grid units, icons keep their size and the row **scrolls horizontally** instead of
-  squishing — e.g. a 6-icon row stays un-scrolled down to 12 sections-grid units of width.
-- **Side-by-side at ≥ 50% width.** At 24 sections-grid units (12 internal) and up, the circular
-  controls (a fixed 12 sections-grid footprint) and the feature column sit **side by side**; below
-  that they stack with the feature area full width.
-- **No stretching.** In the wide format the circular controls keep their fixed size; if the side
-  controls need a wider column, the surplus is distributed as padding **around** the controls rather
-  than stretching them, and the whole block is centered so it never over-extends on large cards.
-- Entity tiles wrap onto multiple per row; use `compact` + `width` to pack several across.
+- **1 grid unit = 1 sections-grid unit (~24px); an icon ≈ 2 units.** All feature widths are defined
+  in these units rather than pixels, with a **minimum of 2 units** per feature, and the grid is
+  capped at **36 units** (the wide format). Features are laid out with **CSS grid**, so the gap
+  between two side-by-side items never forces a line break — two `width: 6` features sit perfectly
+  side by side on a 12-unit row.
+- **Scrollable icon rows.** Each icon claims ≈2 units. When the space per icon drops too low, icons
+  keep their size and the row **scrolls horizontally** instead of squishing.
+- **Side-by-side at ≥ 50% width.** At 24 units and up, the circular controls (a fixed 12-unit
+  footprint) and the feature column sit **side by side**; below that they stack with the feature
+  area full width.
+- **No stretching.** In the wide format the circular controls keep their fixed size and the feature
+  column is sized to the packed features, with the whole block centered so it never over-extends on
+  large cards.
+- Entity tiles pack several per row; use `compact` + `width` to fit more across.
 
 ## AC swing icons (`mt:` icon set)
 

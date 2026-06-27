@@ -34,7 +34,7 @@ export interface EntityItem {
 
 interface BaseSelectorFeature {
   display?: FeatureDisplay;
-  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
   width?: number;
 }
 
@@ -70,7 +70,7 @@ export interface SwitchListFeatureConfig {
   type: 'switch-list';
   label?: string;
   entities: EntityItem[];
-  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
   width?: number;
 }
 
@@ -78,7 +78,7 @@ export interface ButtonListFeatureConfig {
   type: 'button-list';
   label?: string;
   items: EntityItem[];
-  /** Width in internal grid units (1 unit = 1 icon). Unset = full row. */
+  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = full row. */
   width?: number;
 }
 
@@ -90,7 +90,7 @@ export interface EntityTileFeatureConfig {
   tap_action?: ActionConfig;
   /** Compact variant: icon + value only (no title), for fitting many per row. */
   compact?: boolean;
-  /** Width in internal grid units (1 unit = 1 icon). Unset = a sensible default. */
+  /** Width in grid units (1 unit ≈ 24px, min 2). Unset = a sensible default. */
   width?: number;
 }
 

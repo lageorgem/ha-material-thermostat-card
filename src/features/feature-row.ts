@@ -2,7 +2,6 @@ import { LitElement, html, css, nothing, type PropertyValues, type TemplateResul
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureConfig } from '../types';
-import { unitsToPx, TILE_DEFAULT_UNITS, TILE_COMPACT_UNITS } from '../grid';
 import './climate-selector';
 import './input-select';
 import './switch-group';
@@ -19,35 +18,18 @@ export class MtFeatureRow extends LitElement {
   /** The card's climate entity (used by the climate selectors). */
   @property() entityId!: string;
   @property({ attribute: false }) feature!: FeatureConfig;
+  /** How many grid columns (units) this feature spans (computed by the card). */
+  @property({ type: Number }) span = 1;
 
   /**
-   * Size the host as a flex item in the card's wrapping feature area. Widths are
-   * expressed in internal grid units (1 unit = 1 icon), never pixels:
-   *  - an explicit `width` (units) → the host is exactly that many units wide,
-   *    so several features can share a row;
-   *  - an entity tile with no width → a sensible default (compact packs tighter,
-   *    a normal tile grows to fill the row);
-   *  - any other feature with no width → a full row.
+   * Span the host across `span` columns of the card's feature grid, so several
+   * features can share a row (the grid gap separates them without forcing a
+   * wrap). The column count and per-feature span are computed by the card.
    * @param changed changed properties
    */
   protected willUpdate(changed: PropertyValues): void {
-    if (!changed.has('feature') || !this.feature) return;
-    const f = this.feature as FeatureConfig & { compact?: boolean; width?: number };
-    const units = typeof f.width === 'number' && f.width > 0 ? f.width : undefined;
-    if (units) {
-      // Exact size (no grow/shrink) so features pack predictably and wrap rather
-      // than squish; capped so they never exceed the bounded feature column.
-      const px = unitsToPx(units);
-      this.style.flex = `0 0 ${px}px`;
-      this.style.maxWidth = '100%';
-    } else if (f.type === 'entity-tile') {
-      const basis = unitsToPx(f.compact ? TILE_COMPACT_UNITS : TILE_DEFAULT_UNITS);
-      this.style.flex = `1 1 ${basis}px`;
-      // Compact tiles stay small (pack many per row); normal tiles grow to fill.
-      this.style.maxWidth = f.compact ? `${basis}px` : 'none';
-    } else {
-      this.style.flex = '1 1 100%';
-      this.style.maxWidth = 'none';
+    if (changed.has('span')) {
+      this.style.gridColumn = `span ${Math.max(1, this.span)}`;
     }
   }
 

@@ -355,10 +355,15 @@ export class MtCircularDial extends LitElement {
           @keydown=${this._onKeyDown}
         >
           <defs>
+            <!-- Soft halo: full color at the center easing smoothly out to fully
+                 transparent at the perimeter (no hard edge / residual disc). -->
             <radialGradient id="mt-glow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stop-color="var(--dial-color)" stop-opacity="0.38" />
-              <stop offset="58%" stop-color="var(--dial-color)" stop-opacity="0.13" />
-              <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0.02" />
+              <stop offset="20%" stop-color="var(--dial-color)" stop-opacity="0.3" />
+              <stop offset="40%" stop-color="var(--dial-color)" stop-opacity="0.2" />
+              <stop offset="60%" stop-color="var(--dial-color)" stop-opacity="0.11" />
+              <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.04" />
+              <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
           </defs>
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
