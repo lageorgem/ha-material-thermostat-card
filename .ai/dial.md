@@ -68,21 +68,30 @@ setpoint → gray, "not cooling anything").
 halo, ring, mode icon, and big number all read from `--dial-color`, which is
 `_dialColor`/`_effectiveMode` (mode-derived) and is **never** affected by
 `_demandSensible` — so an inactive heater/cooler still glows its mode color, only
-the arc segment goes gray. Dual (heat_cool) does NOT use this rule at all: it
-shows the gray **range band** between the setpoints instead (see below).
+the arc segment goes gray. Dual (heat_cool) does NOT use this rule at all (see
+below).
 
 ## Dual (heat_cool): temperature-derived sub-mode
 
 In dual mode the dial does NOT just fill between the two setpoints. It derives
 the **active sub-mode from the current temperature** (`_dualActive`):
 `current > displayHigh` → `'cool'`, `current < displayLow` → `'heat'`, else
-`null` (idle, in range). Then it renders **two** bands (each a `.value` path):
+`null` (idle, in range). It renders a **comfort "range" band** between the
+setpoints, plus (when out of range) a **colored demand band**:
 
-- a muted **gray "range" band** between the setpoints (`.value.idle`, opacity
-  0.5) — always present, so the range is never empty.
-- a **colored demand band** from the active setpoint to the current temp: cooling
-  → `[high, current]` in the cool color; heating → `[current, low]` in heat;
-  idle → none.
+- the **range band** `[low, high]`:
+  - **idle (current in range)** → the **heat_cool mode color** (= `--dial-color`,
+    green), full opacity, so it matches the halo. The room is comfortable; the
+    whole range glows the mode color. (This is the only band drawn when idle.)
+  - **actively heating/cooling** → muted **gray** (`.value.idle`, opacity 0.5),
+    so the colored demand band reads as the active one.
+- the **colored demand band** from the active setpoint to the current temp:
+  cooling → `[high, current]` in the cool color; heating → `[current, low]` in
+  heat; idle → none.
+
+⚠️ Do NOT make the range band gray when idle — the maintainer explicitly wants
+the between-setpoints fill to be the mode color (green) whenever the current temp
+sits within the range.
 
 `_effectiveMode`/`_dialColor` follow the sub-mode (cool/heat/heat_cool), so the
 halo + big number recolor too. The mode **wipe is skipped for dual** (colors

@@ -1292,7 +1292,7 @@ describe('mt-circular-dial', () => {
   });
 
   describe('dual segment rendering', () => {
-    it('idle (current in range): exactly one .value path, the gray range band', async () => {
+    it('idle (current in range): one .value path, the mode-color range band', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1303,12 +1303,15 @@ describe('mt-circular-dial', () => {
       const sr = el.shadowRoot!;
       const values = sr.querySelectorAll('.value');
       expect(values.length).to.equal(1);
-      expect(values[0].classList.contains('idle')).to.be.true;
-      expect(sr.querySelectorAll('.value.idle').length).to.equal(1);
+      // in range -> the comfort band is the heat_cool mode color (matching the
+      // halo), full opacity (NOT the muted gray idle band)
+      expect(values[0].classList.contains('idle')).to.be.false;
+      expect(sr.querySelectorAll('.value.idle').length).to.equal(0);
       // no mid-wipe overlay in dual
       expect(sr.querySelector('.wipe-value')).to.equal(null);
-      // the lone band is the gray range
-      expect((values[0] as SVGElement).getAttribute('style')).to.contain(IDLE_COLOR);
+      const style = (values[0] as SVGElement).getAttribute('style')!;
+      expect(style).to.contain(`stroke:${climateModeColor('heat_cool')}`);
+      expect(style).to.not.contain(IDLE_COLOR);
     });
 
     it('cooling (current above high): a gray range band + a cool demand band', async () => {

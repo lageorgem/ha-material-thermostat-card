@@ -491,17 +491,25 @@ export class MtCircularDial extends LitElement {
     const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
     const dashOffset = (-segS * 1000).toFixed(2);
 
-    // Dual-mode segments: a gray "range" band between the two setpoints, plus a
+    // Dual-mode segments: the comfort band between the two setpoints, plus a
     // colored demand band from the active setpoint to the current temperature
-    // (cooling above the high setpoint, heating below the low one).
+    // (cooling above the high setpoint, heating below the low one). The comfort
+    // band is the heat_cool mode color (matching the halo) when the current temp
+    // sits within it (idle); while actively heating/cooling the overshoot it's
+    // muted gray so the demand band reads as the active one.
     const dualSegs: Array<{ from: number; to: number; color: string; idle?: boolean }> = [];
     if (this.dual) {
       const lo = this._fracOf(this._displayLow);
       const hi = this._fracOf(this._displayHigh);
-      dualSegs.push({ from: lo, to: hi, color: MtCircularDial.IDLE_COLOR, idle: true });
+      const active = this._dualActive;
+      dualSegs.push({
+        from: lo,
+        to: hi,
+        color: active === null ? color : MtCircularDial.IDLE_COLOR,
+        idle: active !== null,
+      });
       if (showCurrent) {
         const cur = this._fracOf(this.current!);
-        const active = this._dualActive;
         if (active === 'cool') dualSegs.push({ from: hi, to: cur, color: climateModeColor('cool') });
         else if (active === 'heat') dualSegs.push({ from: cur, to: lo, color: climateModeColor('heat') });
       }
