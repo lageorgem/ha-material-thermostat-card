@@ -1,15 +1,20 @@
 name: Release
 
+# Publishes a GitHub release whenever the package.json version changes on main.
+# HACS uses the release tag as the installed version (instead of the commit SHA),
+# and the built card is attached as a release asset.
+
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-attach:
-    name: Build & attach dist
+  release:
+    name: Tag & release on version bump
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,9 +22,36 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: Attach built card to the release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/material-thermostat-card.js
+
+      - name: Read version from package.json
+        id: v
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.v.outputs.version }} already released — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the card bundle
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" \
+            dist/material-thermostat-card.js \
+            --target main \
+            --title "v${{ steps.v.outputs.version }}" \
+            --generate-notes
