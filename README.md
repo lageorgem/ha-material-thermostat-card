@@ -122,8 +122,8 @@ The dial mirrors the stock thermostat card's controls with a Nest‑style 270° 
 the bottom, where the `+/−` live).
 
 <p align="center">
-  <img src="assets/dial-heat.png" alt="Single heat setpoint (orange)" width="280">
   <img src="assets/dial-heat-cool.png" alt="heat_cool dual setpoint with low/high handles" width="280">
+  <img src="assets/show-current.png" alt="Current temperature shown as the large primary number" width="280">
 </p>
 
 | Interaction | Behavior |
@@ -240,6 +240,10 @@ shown. Unlisted values keep their Home Assistant defaults.
 | `label` | string | Replacement display label |
 | `icon` | string | Replacement icon (`mdi:…` or `mt:…`) |
 | `hide` | boolean | Remove this option from the row |
+
+<p align="center">
+  <img src="assets/selectors.png" alt="A card using a HVAC dropdown, fan-mode option overrides, and an input_select row" width="400">
+</p>
 
 ### `input-select`
 
