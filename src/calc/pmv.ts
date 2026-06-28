@@ -84,23 +84,17 @@ export function pmv(ta: number, rh: number, opts: PmvOptions = {}): number {
 }
 
 /**
- * Clothing insulation (clo) inferred from the climate, matching ASHRAE 55's two
- * comfort zones: cooling ⇒ summer dress (0.5 clo), heating ⇒ winter dress
- * (1.0 clo), otherwise a mid value.
+ * Clothing insulation (clo) inferred from the **room temperature itself**, not
+ * the HVAC mode — people dress lighter as a space warms (the "dynamic clothing"
+ * idea behind ASHRAE 55). This is calibrated so the resulting PMV comfort band
+ * lands around 21–27°C: heavy winter dress (1.0 clo) at/below ~20°C, easing
+ * linearly to light summer dress (0.5 clo) at/above ~27°C.
  *
- * An explicit heat/cool/dry/fan_only mode determines the clothing directly — a
- * person dresses for the season, not for whether the compressor happens to be
- * running this minute, so an *idle* AC in `cool` mode is still summer dress (0.5),
- * not the mid value. Only `heat_cool`/`auto`, where the mode alone is ambiguous,
- * fall back to the live `hvac_action`.
- * @param mode the climate hvac mode (entity state)
- * @param action the climate hvac_action, if any
+ * Being mode-independent, the comfort verdict no longer flips when the thermostat
+ * is switched between heat and cool at the same temperature (an idle heater on a
+ * warm day shouldn't make the room read "warm" just because the mode says heat).
+ * @param tempC the room (dry-bulb) temperature in °C
  */
-export function cloForClimate(mode: string, action?: string): number {
-  if (mode === 'heat') return 1.0;
-  if (mode === 'cool' || mode === 'dry' || mode === 'fan_only') return 0.5;
-  // heat_cool / auto: the mode is ambiguous, so use what it's actively doing.
-  if (action === 'heating') return 1.0;
-  if (action === 'cooling') return 0.5;
-  return 0.7;
+export function cloForTemp(tempC: number): number {
+  return Math.max(0.5, Math.min(1.0, 0.95 - 0.075 * (tempC - 21)));
 }

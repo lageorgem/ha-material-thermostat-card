@@ -335,15 +335,18 @@ reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can 
 
 Comfort is **calculated, not configured.** It uses the building‑science standard — the **ASHRAE 55 /
 ISO 7730 PMV model** (Fanger's Predicted Mean Vote): comfortable means −0.5 < PMV < +0.5 (≈ 80% of
-people satisfied). PMV folds temperature, humidity, clothing, and activity into one number, and the
-clothing assumption is inferred from what the system is doing — **summer dress (0.5 clo) when cooling,
-winter dress (1.0 clo) when heating** — reproducing ASHRAE's two comfort zones. An ASHRAE absolute‑
-humidity cap (0.012 humidity ratio) flags a muggy room even when the temperature is fine.
+people satisfied). PMV folds temperature, humidity, clothing, and activity into one number. Clothing is
+inferred from the **room temperature itself** (dynamic clothing: lighter as it warms — heavy dress at
+~20 °C easing to light dress at ~27 °C), **not the thermostat mode**, so the verdict is the same whether
+you're heating or cooling at a given temperature. The result is a comfort band of roughly **21–27 °C**.
+An ASHRAE absolute‑humidity cap (0.012 humidity ratio) flags a muggy room even when the temperature is
+fine.
 
 The forecast uses **only the current session** — history since the climate last turned on (its
-`last_changed`), because earlier data may reflect entirely different settings — fitting it to a
-Newton's‑law cooling/heating curve, so estimates **slow as the room nears its plateau** and it can
-honestly say a target **won't be reached**.
+`last_changed`), because earlier data may reflect entirely different settings. It fits a Newton's‑law
+cooling/heating curve by **integration** (robust to the coarse, quantized steps real sensors record),
+so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
+reached**. It needs ~10 minutes of session history before the first ETA.
 
 Example lines:
 
@@ -366,13 +369,13 @@ features:
     show_target_eta: true
 ```
 
-> While the climate is **on** with valid sensors, the row always shows a verdict — *Room feels
-> comfortable / warm / cool / humid* (a direct reading). It upgrades to *"…X until room feels
-> comfortable"* only once there's enough current‑session history to forecast a time — a guessed
-> *time* is the inaccurate data it avoids, not the verdict. The row is hidden only when the climate is
-> **off** or the feels‑like sensors aren't set. Note the same room temperature can read "comfortable"
-> while heating yet "too cool/warm" while cooling — that's the ASHRAE summer‑vs‑winter clothing model,
-> not a bug. Requires Home Assistant's **recorder** to be keeping history for the sensors.
+> Whenever the sensors read, the row shows a verdict — *Room feels comfortable / warm / cool / humid* (a
+> direct reading) — **including when the climate is off** (just without a forecast). The icon reflects
+> the state: a warm room in the heat colour, a cool room in the cool colour, comfortable in green. It
+> upgrades to *"…X until room feels comfortable"* only once there's enough current‑session history to
+> forecast a time — a guessed *time* is the inaccurate data it avoids, not the verdict. The row is
+> hidden only when the feels‑like sensors aren't set or the climate is unavailable. Requires Home
+> Assistant's **recorder** to be keeping history for the sensors.
 
 ## Layout & responsiveness
 

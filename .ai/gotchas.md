@@ -79,6 +79,17 @@ coordinate space (worst at the arc extremes).
 A `.value` segment of length 0 with `stroke-linecap:round` paints a small dot.
 Hide the segment with `opacity:0` when there's nothing to show.
 
+## 9. `touch-action` on the dial — let the page scroll over it (mobile)
+
+The dial fills a lot of phone height; with `touch-action: none` on the whole
+`<svg>`, a vertical swipe *anywhere* on it was swallowed and the dashboard
+couldn't scroll. Fix: `svg { touch-action: pan-y }` (browser handles vertical
+pan = page scroll) and `.hit { touch-action: none }` on just the ring band (so
+dragging the ring to set the temperature still works). Where SVG `touch-action`
+is honoured the ring drags in any direction; where it isn't, side-of-ring
+vertical drags fall back to scrolling — the top of the arc and the +/- buttons
+still adjust. Don't put `touch-action: none` back on the whole svg.
+
 ---
 
 # Dev & verification tooling
@@ -152,17 +163,32 @@ a plain `{detail}` object has no `stopPropagation`.
   or heat↔cool), and history is fetched from there (capped at `MAX_SESSION_MS`
   purely to bound the query). There is **no** `lookback_hours` config and we no
   longer fetch the climate entity's history (so `lastTurnedOnMs` is gone). It's
-  fine to have no forecast for the first ~10–15 min of a session.
+  fine to have no forecast for the first ~10 min of a session.
+- **Forecast by INTEGRATION, not differencing (the big issue-4 fix).** Real
+  recorders log coarse 0.2–0.3° steps at irregular intervals; estimating `dv/dt`
+  by differencing consecutive samples turns that quantization into pure noise
+  (r² ≈ 0.05 on real data → `newtonFit` never converged → no ETA ever). `newtonFit`
+  now integrates the first-order ODE instead: `v−v₀ = −k·∫v dτ + kA·t`, a 2-var
+  regression of `y=v−v₀` on `[∫v dτ, t]`. Integration averages noise out (r² ≈ 0.99
+  on the same data). Gates: `MIN_SAMPLES` 4, `MIN_SPAN_MIN` 10, k > 0, `MIN_FIT_R2`
+  0.5. **Don't go back to a dv/dt cloud / moving-average.**
 - **`Date.now()` / `new Date()` are fine here** — that ban is only for Workflow
   scripts, not card runtime or the web-test-runner browser tests.
-- **Verdict always shows; only the *forecast* is gated.** While the climate is on
-  with valid sensors, the row always shows a comfort verdict — "Room feels
-  comfortable / warm / cool / humid" (a direct reading). It upgrades the
-  uncomfortable verdict to "…X until room feels comfortable" **only** with a
-  confident `newtonFit` (≥ `MIN_SAMPLES`, ≥ `MIN_SPAN_MIN`, converging k > 0,
-  r² ≥ `MIN_FIT_R2`) — a guessed *time* is the "inaccurate data" we avoid, not the
-  verdict. The row collapses (`nothing` + `feature-visibility`) only when the
-  climate is off or the sensors are unset.
+- **Verdict always shows (even when OFF); only the *forecast* is gated.** Whenever
+  the sensors read, the row shows a comfort verdict — "Room feels comfortable /
+  warm / cool / humid" (a direct reading) — **including when the climate is off**
+  (the verdict is mode-independent, see below). It upgrades the uncomfortable
+  verdict to "…X until room feels comfortable" **only** while running and with a
+  confident `newtonFit`. `_hasReadings()` gates the verdict (climate not
+  unavailable/unknown + numeric sensors; **off is allowed**); `_isRunning()`
+  (not in `OFF_STATES`) additionally gates the forecast/target. The row collapses
+  (`nothing` + `feature-visibility`) only when the sensors are unset or the climate
+  is unavailable/unknown.
+- **Icon + colour come from `result.status`** (`comfortable|warm|cool|humid`), set
+  inline in `render()` via `climateModeColor`: warm → heat colour, cool/humid →
+  cool colour (the *opposite* of the mode you'd switch on), comfortable → green
+  (heat_cool). Don't colour the icon with the dial's active mode colour (it was
+  confusing — an orange "warm" thermometer in heat mode).
 - **Self-collapse via an event, not just `display:none`.** A hidden `mt-comfort`
   still occupies a grid cell (its `mt-feature-row` host), leaving a stray gap. So
   `mt-comfort` dispatches `feature-visibility {visible}` and `mt-feature-row`
@@ -171,19 +197,19 @@ a plain `{detail}` object has no `stopPropagation`.
 - **Keep logic in `calc/`.** `analyzeComfort` and the forecast math are pure and
   unit-tested without Lit/hass (`calc.test.ts`). The Lit component just parses
   `hass`, calls them, and renders. Extend/test the `calc/` modules, not the widget.
-- **Comfort is the PMV model, calculated not configured.** `calc/pmv.ts` is the
-  verbatim ISO 7730 Annex D / ASHRAE 55 Fanger algorithm (validated against the
-  standard's table); comfortable = −0.5 < PMV < +0.5 plus an absolute‑humidity cap
-  (`HUMIDITY_RATIO_MAX` 0.012). Clothing is inferred from the **mode**
-  (`cloForClimate`: `cool`/`dry`/`fan_only` → 0.5, `heat` → 1.0, else 0.7) — an
-  explicit mode picks the clothing **even when the compressor is idle** (an idle
-  `cool` system is still summer dress; only `heat_cool`/`auto` consult
-  `hvac_action`). This is what makes ~25°C comfortable when cooling but ~22°C when
-  heating (ASHRAE's two zones) — and why the *same* room temp can read
-  "comfortable" heating yet "too cool/warm" cooling; that asymmetry is correct, not
-  a bug. The heat index (`heatIndexC`) is now **only** the dial's "feels‑like"
-  number, not the comfort decision. Don't reintroduce comfort_min/max — the user
-  explicitly wanted it scientific.
+- **Comfort is the PMV model, calculated not configured — clothing from TEMP, not
+  mode.** `calc/pmv.ts` is the verbatim ISO 7730 Annex D / ASHRAE 55 Fanger
+  algorithm (validated against the standard's table); comfortable = −0.5 < PMV <
+  +0.5 plus an absolute‑humidity cap (`HUMIDITY_RATIO_MAX` 0.012). Clothing is
+  inferred from the **room temperature** (`cloForTemp`: dynamic clothing,
+  `0.95 − 0.075·(T−21)` clamped to [0.5, 1.0] → 1.0 clo at ≤20°C, 0.5 at ≥27°C),
+  **NOT the HVAC mode**. The earlier mode-based `cloForClimate` made the *same* room
+  temp flip between "comfortable" (cooling) and "warm" (heating) when you switched
+  the thermostat — the user rejected that. Temp-based clothing is mode-independent
+  and gives a ~21–27°C band. The heat index (`heatIndexC`) is now **only** the
+  dial's "feels‑like" number, not the comfort decision. **Don't reintroduce
+  comfort_min/max or mode-based clothing** — comfort must be scientific AND
+  mode-independent.
 
 ## Misc env
 

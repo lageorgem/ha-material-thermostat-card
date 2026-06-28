@@ -78,8 +78,27 @@ describe('mt-comfort', () => {
     expect(line(el)).to.equal('Room feels comfortable');
   });
 
-  it('is hidden when the climate is off', async () => {
-    const el = await mount({ climateStateStr: 'off', tempNow: '25' });
+  it('still shows the verdict when the climate is off (no forecast)', async () => {
+    const el = await mount({ climateStateStr: 'off', tempNow: '25', rhNow: '50' });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('shows the bare verdict when off and uncomfortable, never an ETA', async () => {
+    // Off + warm + plenty of "history": still no forecast, just the verdict.
+    const temps = Array.from({ length: 16 }, (_, i) => 24 + 10 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      climateStateStr: 'off',
+      tempNow: '33',
+      rhNow: '45',
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.equal('Room feels warm');
+    // No history is fetched while off.
+    expect(lastCallWS.called).to.equal(false);
+  });
+
+  it('is hidden when the climate is unavailable', async () => {
+    const el = await mount({ climateStateStr: 'unavailable', tempNow: '25' });
     expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
   });
 

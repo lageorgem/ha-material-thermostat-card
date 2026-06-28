@@ -3,10 +3,13 @@
  *
  * A heating/cooling room approaches a steady temperature roughly per Newton's
  * law of cooling: `dv/dt = -k·(v - A)`, where `A` is the plateau the room is
- * heading toward and `k > 0` the rate constant. Both are recovered with a single
- * linear regression of the (value, rate‑of‑change) cloud — no nonlinear solver —
- * which also yields an honest "won't reach, plateaus at A" result and ETAs that
- * correctly slow as the room nears its plateau.
+ * heading toward and `k > 0` the rate constant. Rather than estimate `dv/dt` by
+ * differencing consecutive samples — which amplifies sensor quantization (coarse
+ * 0.2–0.3° steps) into pure noise — we recover `k` and `A` by **integrating** the
+ * ODE: `v(t) − v₀ = −k·∫v dτ + k·A·t`, a two‑variable linear regression of
+ * `y = v − v₀` on `[∫v dτ, t]`. Integration averages the noise out, so the fit is
+ * stable on real recorder data. This still yields an honest "won't reach,
+ * plateaus at A" result and ETAs that correctly slow near the plateau.
  */
 
 /** A time/value sample. `t` is in minutes (monotonic, any origin). */
@@ -34,11 +37,11 @@ export interface NewtonFit {
 }
 
 /** Minimum samples required before any forecast is attempted. */
-export const MIN_SAMPLES = 5;
+export const MIN_SAMPLES = 4;
 /** Minimum time span (minutes) the samples must cover. */
 export const MIN_SPAN_MIN = 10;
-/** Minimum rate‑vs‑value fit quality to trust a Newton fit. */
-export const MIN_FIT_R2 = 0.2;
+/** Minimum fit quality (R² of the integral regression) to trust a fit. */
+export const MIN_FIT_R2 = 0.5;
 
 /**
  * Ordinary least‑squares fit of `v = slope·t + intercept`.
@@ -69,57 +72,68 @@ export function linregress(pts: Sample[]): LinFit | null {
   return { slope, intercept, n, r2 };
 }
 
-/** Smooth a series with a centered moving average of the given odd window. */
-function movingAverage(sorted: Sample[], window: number): Sample[] {
-  const half = Math.floor(window / 2);
-  const out: Sample[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    let sum = 0;
-    let count = 0;
-    for (let j = Math.max(0, i - half); j <= Math.min(sorted.length - 1, i + half); j++) {
-      sum += sorted[j].v;
-      count++;
-    }
-    out.push({ t: sorted[i].t, v: sum / count });
-  }
-  return out;
-}
-
 /**
  * Fit Newton's law of cooling/heating to a series and recover its plateau and
- * rate constant. Returns `null` when there is not enough data, the data is too
- * noisy, or the series is not converging (k ≤ 0). Callers should treat `null` as
- * "not enough confident data" — i.e. show nothing rather than a guess.
+ * rate constant, using the integral form (see the module comment) so coarse
+ * sensor quantization doesn't wreck the fit. Returns `null` when there is not
+ * enough data, the data is too noisy, or the series is not converging (k ≤ 0).
+ * Callers should treat `null` as "not enough confident data" — i.e. show nothing
+ * rather than a guess.
  * @param samples the time/value series (minutes / value)
  */
 export function newtonFit(samples: Sample[]): NewtonFit | null {
   if (samples.length < MIN_SAMPLES) return null;
   const sorted = [...samples].sort((a, b) => a.t - b.t);
-  const span = sorted[sorted.length - 1].t - sorted[0].t;
+  const t0 = sorted[0].t;
+  const v0 = sorted[0].v;
+  const span = sorted[sorted.length - 1].t - t0;
   if (span < MIN_SPAN_MIN) return null;
 
-  // Light smoothing tames sensor quantization before differencing.
-  const smooth = movingAverage(sorted, 3);
-
-  // Build the (value, rate‑of‑change) cloud from consecutive samples.
-  const cloud: Sample[] = [];
-  for (let i = 1; i < smooth.length; i++) {
-    const dt = smooth[i].t - smooth[i - 1].t;
-    if (dt <= 0) continue;
-    cloud.push({
-      t: (smooth[i].v + smooth[i - 1].v) / 2, // value (midpoint)
-      v: (smooth[i].v - smooth[i - 1].v) / dt, // dv/dt
-    });
+  // y = v − v₀ regressed on x1 = ∫v dτ (cumulative trapezoid) and x2 = t − t₀,
+  // through the origin (the relation holds exactly at t₀: y = x1 = x2 = 0).
+  let area = 0;
+  let prevT = t0;
+  let prevV = v0;
+  let a11 = 0;
+  let a12 = 0;
+  let a22 = 0;
+  let c1 = 0;
+  let c2 = 0;
+  const rows: Array<{ x1: number; x2: number; y: number }> = [];
+  for (const p of sorted) {
+    area += ((p.v + prevV) / 2) * (p.t - prevT);
+    prevT = p.t;
+    prevV = p.v;
+    const x1 = area;
+    const x2 = p.t - t0;
+    const y = p.v - v0;
+    rows.push({ x1, x2, y });
+    a11 += x1 * x1;
+    a12 += x1 * x2;
+    a22 += x2 * x2;
+    c1 += x1 * y;
+    c2 += x2 * y;
   }
-  if (cloud.length < 3) return null;
-
-  // dv/dt = a·value + b  ⇒  k = -a,  A = b / k.
-  const fit = linregress(cloud);
-  if (!fit || fit.r2 < MIN_FIT_R2) return null;
-  const k = -fit.slope;
+  const det = a11 * a22 - a12 * a12;
+  if (Math.abs(det) < 1e-12) return null;
+  const b1 = (c1 * a22 - c2 * a12) / det; // = −k
+  const b2 = (a11 * c2 - a12 * c1) / det; // = k·A
+  const k = -b1;
   if (!(k > 1e-6)) return null; // flat or diverging → no usable forecast
-  const asymptote = fit.intercept / k;
-  return { k, asymptote, r2: fit.r2 };
+  const asymptote = b2 / k;
+
+  // R² of the integral regression (high for a genuine first‑order approach).
+  let ssr = 0;
+  let sst = 0;
+  const meanY = rows.reduce((acc, r) => acc + r.y, 0) / rows.length;
+  for (const r of rows) {
+    const yh = b1 * r.x1 + b2 * r.x2;
+    ssr += (r.y - yh) ** 2;
+    sst += (r.y - meanY) ** 2;
+  }
+  const r2 = sst === 0 ? 1 : 1 - ssr / sst;
+  if (r2 < MIN_FIT_R2) return null;
+  return { k, asymptote, r2 };
 }
 
 /**

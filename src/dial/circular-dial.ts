@@ -781,7 +781,12 @@ export class MtCircularDial extends LitElement {
         display: block; /* avoid inline baseline gap that offsets the SVG vs marker overlays */
         width: 100%;
         height: 100%;
-        touch-action: none;
+        /* Let a vertical swipe scroll the page (the dial fills a lot of phone
+           height); only the ring band itself (.hit) swallows the gesture to drag.
+           Where SVG touch-action is honoured the ring drags in any direction; if
+           not, side-of-ring drags fall back to scrolling — the top of the arc and
+           the +/- buttons still adjust. */
+        touch-action: pan-y;
         outline: none;
       }
       .glow,
@@ -795,6 +800,8 @@ export class MtCircularDial extends LitElement {
         stroke-width: 50;
         stroke-linecap: butt;
         pointer-events: stroke;
+        /* the ring band claims the touch so dragging it doesn't scroll the page */
+        touch-action: none;
         cursor: pointer;
       }
       .dial.disabled .hit {

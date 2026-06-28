@@ -2,9 +2,14 @@ import { LitElement, html, css, nothing, type PropertyValues, type TemplateResul
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { ComfortFeatureConfig } from '../types';
-import { tokens } from '../theme';
+import { tokens, climateModeColor } from '../theme';
 import { fetchHistory, numericSeries, OFF_STATES } from '../calc/history';
-import { analyzeComfort, type ComfortResult, type TS } from '../calc/comfort-analysis';
+import {
+  analyzeComfort,
+  type ComfortResult,
+  type ComfortStatus,
+  type TS,
+} from '../calc/comfort-analysis';
 
 /** How often the history forecast is refreshed. */
 const REFRESH_MS = 60_000;
@@ -16,14 +21,33 @@ const REFRESH_MS = 60_000;
  */
 const MAX_SESSION_MS = 24 * 3_600_000;
 
+/** Climate states with no usable readings at all (vs. plain "off"). */
+const DEAD_STATES = new Set(['unavailable', 'unknown', '']);
+
+/** Icon + colour per comfort state. Warm reads in the heat colour, cool/humid in
+ * the cool colour (the opposite of the mode you'd switch on), comfortable green. */
+const STATUS_ICON: Record<ComfortStatus, string> = {
+  comfortable: 'mdi:emoticon-happy-outline',
+  warm: 'mdi:thermometer-high',
+  cool: 'mdi:thermometer-low',
+  humid: 'mdi:water-percent',
+};
+const STATUS_MODE: Record<ComfortStatus, string> = {
+  comfortable: 'heat_cool',
+  warm: 'heat',
+  cool: 'cool',
+  humid: 'cool',
+};
+
 /**
  * The "comfort & time-to-comfortable" feature row. Judges comfort from the
  * shared feels-like sensors via the ASHRAE 55 / ISO 7730 PMV model and always
- * shows a verdict while the climate is on ("Room feels comfortable/warm/cool/
- * humid"), upgrading the uncomfortable verdict to "…X until room feels
- * comfortable" once there's enough current-session history to forecast it — and
- * optionally appending the time until the target is reached. Shows nothing (and
- * asks its row to collapse) only when the climate is off or the sensors are unset.
+ * shows a verdict ("Room feels comfortable/warm/cool/humid") whenever the sensors
+ * read — including when the climate is **off** — upgrading the uncomfortable
+ * verdict to "…X until room feels comfortable" once there's enough current-session
+ * history to forecast it (only while running), and optionally appending the time
+ * until the target is reached. Shows nothing (and asks its row to collapse) only
+ * when the sensors are unset or the climate is unavailable/unknown.
  */
 @customElement('mt-comfort')
 export class MtComfort extends LitElement {
@@ -102,13 +126,17 @@ export class MtComfort extends LitElement {
     return isFinite(t) ? t : null;
   }
 
-  /** Whether comfort can be evaluated at all (on, with numeric sensors). */
-  private _ready(): boolean {
+  /**
+   * Whether the comfort verdict can be evaluated at all: numeric sensors and a
+   * climate entity that isn't unavailable/unknown. "off" still qualifies — the
+   * verdict is shown even when the climate is off, just without a forecast.
+   */
+  private _hasReadings(): boolean {
     const c = this._climate;
     return !!(
       this.hass &&
       c &&
-      !OFF_STATES.has(c.state) &&
+      !DEAD_STATES.has(c.state) &&
       this.tempSensor &&
       this.humiditySensor &&
       isFinite(this._tempNow()) &&
@@ -116,24 +144,30 @@ export class MtComfort extends LitElement {
     );
   }
 
+  /** Whether the climate is actively running (a session worth forecasting). */
+  private _isRunning(): boolean {
+    const c = this._climate;
+    return !!(c && !OFF_STATES.has(c.state));
+  }
+
   /** Recompute the status line from current readings + cached history. */
   private _recompute(): void {
-    if (!this._ready()) {
+    if (!this._hasReadings()) {
       this._set({ visible: false, comfortable: false });
       return;
     }
-    const climate = this._climate!;
     const tempNow = this._tempNow();
+    // Forecasts (time-to-comfortable, target ETA) only make sense while running;
+    // when off, show the bare verdict from the current readings.
+    const running = this._isRunning();
     this._set(
       analyzeComfort({
-        mode: climate.state,
-        action: climate.attributes?.hvac_action,
         tempNow,
         rhNow: this._rhNow(),
-        tempSeries: this._cache?.tempSeries ?? [],
-        rhSeries: this._cache?.rhSeries ?? [],
-        target: this._target(tempNow),
-        showTargetEta: this.feature.show_target_eta ?? false,
+        tempSeries: running ? (this._cache?.tempSeries ?? []) : [],
+        rhSeries: running ? (this._cache?.rhSeries ?? []) : [],
+        target: running ? this._target(tempNow) : null,
+        showTargetEta: running && (this.feature.show_target_eta ?? false),
         unit: this.hass.config?.unit_system?.temperature ?? '°C',
       })
     );
@@ -153,10 +187,10 @@ export class MtComfort extends LitElement {
     return isFinite(ms) ? ms : null;
   }
 
-  /** Fetch fresh history, then recompute. Comfort-now shows before the fetch. */
+  /** Fetch fresh history, then recompute. The verdict shows before the fetch. */
   private async _refresh(): Promise<void> {
-    this._recompute(); // instant: comfortable needs no history
-    if (this._fetching || !this._ready()) return;
+    this._recompute(); // instant: the verdict needs no history
+    if (this._fetching || !this._hasReadings() || !this._isRunning()) return;
     this._fetching = true;
     try {
       const now = Date.now();
@@ -192,8 +226,12 @@ export class MtComfort extends LitElement {
   protected render(): TemplateResult | typeof nothing {
     const r = this._result;
     if (!r.visible || !r.line) return nothing;
+    const status = r.status ?? 'comfortable';
     return html`<div class="comfort" role="status">
-      <ha-icon icon=${r.icon ?? 'mdi:thermometer'}></ha-icon>
+      <ha-icon
+        icon=${STATUS_ICON[status]}
+        style=${`color:${climateModeColor(STATUS_MODE[status])}`}
+      ></ha-icon>
       <span>${r.line}</span>
     </div>`;
   }
@@ -218,7 +256,7 @@ export class MtComfort extends LitElement {
       .comfort ha-icon {
         flex: 0 0 auto;
         --mdc-icon-size: 18px;
-        color: var(--mt-active-color, var(--mt-on-surface-variant));
+        /* colour is set inline per comfort state (see render) */
       }
     `,
   ];

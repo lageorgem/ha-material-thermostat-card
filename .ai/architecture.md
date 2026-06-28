@@ -63,9 +63,9 @@ src/
     comfort.ts                 mt-comfort: ASYNC status line (history forecast); add-once feature
 
   calc/                        PURE, framework-free logic (heavily unit-tested in calc.test.ts)
-    pmv.ts                     ASHRAE 55 / ISO 7730 PMV (Fanger) + cloForClimate() — the comfort metric
+    pmv.ts                     ASHRAE 55 / ISO 7730 PMV (Fanger) + cloForTemp() (dynamic clothing) — the comfort metric
     comfort-metrics.ts         heatIndexC (NOAA, the dial feels-like), svpPa, humidityRatio, feelsLikeC
-    forecast.ts                linregress, newtonFit (Newton's-law fit), etaToThreshold, reachable
+    forecast.ts                linregress, newtonFit (integral first-order fit), etaToThreshold, reachable
     history.ts                 fetchHistory (callWS), numericSeries, mergeOnLeft
     comfort-analysis.ts        analyzeComfort(): PMV + humidity cap + forecast → status line (no Lit/hass)
     duration.ts                formatDuration(minutes) → "15 minutes" / "2h 10m" / "about 5 hours"

@@ -87,6 +87,8 @@
       }
       const flat = (v) => Array.from({ length: 16 }, (_, i) => ({ s: String(v), lu: baseSec + i * 120 }));
       const cool16 = flat('cool');
+      /** Sparse, coarsely-quantized steps like the real recorder (minutes→°C). */
+      const stepPts = (steps) => steps.map(([min, v]) => ({ s: String(v), lu: baseSec + min * 60 }));
 
       /** Build a card + mock hass for one scenario. */
       function makeCard(label, opts) {
@@ -146,17 +148,20 @@
         card.hass = hass;
       }
 
-      // A) Cooling, hot now → "X until comfortable. won't go below 24°C" (target 22 below plateau).
-      makeCard('Cooling — warming down', {
+      // A) Cooling, warm now, SPARSE coarse history (the real-recorder shape) →
+      //    the integral fit still yields "X until comfortable" (warm icon, heat colour).
+      makeCard('Cooling — sparse history (ETA)', {
         mode: 'cool',
         action: 'cooling',
-        curTemp: 32,
-        curHum: 40,
-        target: 22,
-        tempHist: expPts(24, 36, 0.05),
+        curTemp: 27.8,
+        curHum: 47,
+        target: 16,
+        tempHist: stepPts([
+          [0, 28.8], [5, 28.5], [9, 28.2], [16, 27.8],
+        ]),
       });
 
-      // B) Comfortable now + target reachable → "Room feels comfortable, Y until target".
+      // B) Comfortable now + target reachable → green happy icon.
       makeCard('Comfortable + target ETA', {
         mode: 'cool',
         action: 'cooling',
@@ -166,7 +171,7 @@
         tempHist: expPts(20.5, 26, 0.05),
       });
 
-      // C) Heating, cold now → "X until comfortable" (apparent-temp metric).
+      // C) Heating, cold now → "X until comfortable" (cool icon, cool colour).
       makeCard('Heating — warming up', {
         mode: 'heat',
         action: 'heating',
@@ -176,11 +181,11 @@
         tempHist: expPts(24, 14, 0.05),
       });
 
-      // D) Cooling, hot now, NO session history → static verdict "Room feels warm".
-      makeCard('Cooling — no history yet', {
-        mode: 'cool',
-        action: 'cooling',
-        curTemp: 32,
+      // D) Climate OFF but warm → bare verdict "Room feels warm" (issue 3 + 2).
+      makeCard('Off — still shows verdict', {
+        mode: 'off',
+        action: 'off',
+        curTemp: 29,
         curHum: 45,
         target: 22,
         tempHist: [],
