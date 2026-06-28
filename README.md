@@ -330,8 +330,9 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
 ### `comfort`
 
 A single status line that tells you whether the room **feels comfortable** and, when it doesn't,
-forecasts **how long until it will** — optionally also **how long until the target temperature is
-reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can be added **only once**.
+forecasts **how long until it will** — and once it is comfortable, **how long until the target
+temperature is reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can be added
+**only once**.
 
 Comfort is **calculated, not configured.** It uses the building‑science standard — the **ASHRAE 55 /
 ISO 7730 PMV model** (Fanger's Predicted Mean Vote): comfortable means −0.5 < PMV < +0.5 (≈ 80% of
@@ -348,19 +349,19 @@ cooling/heating curve by **integration** (robust to the coarse, quantized steps 
 so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
 reached**. The forecast is gated on **time coverage**, not sample count (it adapts to the sensor — a
 coarse sensor qualifies with 2–3 readings, a fast one needs many): once the history spans ~6 minutes it
-shows an ETA — a **rough early estimate** from the real trend, refining to the accurate fit as it
-converges — and says **“calculating…”** until then.
+shows a **rough early estimate** from the real trend, refining to the accurate fit as it converges.
+Times are compact (`7m`, `1h`, `2hr+`); until there's enough coverage it just shows the verdict.
 
 Example lines:
 
-- `15 minutes until room feels comfortable. 3 hours until target temperature is reached`
-- `Room feels comfortable, 1 hour until target temperature is reached`
-- `Room feels comfortable, temperature won't go below 24°C`
-- `Room feels warm` (uncomfortable now, not yet enough session history to forecast a time)
+- `18m until comfortable` (warming/cooling toward the comfort band)
+- `34m until cooled to 16°C` / `14m until heated to 26°C` (comfortable now, heading to the setpoint)
+- `won't go below 24°C` (comfortable, but the room plateaus short of the setpoint)
+- `Room feels warm` (uncomfortable, not yet enough session history to forecast a time)
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `show_target_eta` | boolean | `false` | Also show the time until the target temperature is reached |
+| `show_target_eta` | boolean | `false` | When comfortable, show the time until the target temperature is reached |
 | `width` | number `10`–`100` | `100` | Width as a percentage of the card |
 
 ```yaml
@@ -374,11 +375,11 @@ features:
 
 > Whenever the sensors read, the row shows a verdict — *Room feels comfortable / warm / cool / humid* (a
 > direct reading) — **including when the climate is off** (just without a forecast). The icon reflects
-> the state: a warm room in the heat colour, a cool room in the cool colour, comfortable in green. It
-> upgrades to *"…X until room feels comfortable"* once the session history covers ~6 minutes (showing
-> *"…, calculating…"* until then). Early estimates are rough and refine over time. The row is hidden
-> only when the feels‑like sensors aren't set or the climate is unavailable. Requires Home Assistant's
-> **recorder** to be keeping history for the sensors.
+> the state: a warm room in the heat colour, a cool room in the cool colour, comfortable in green. While
+> uncomfortable it upgrades to *"{time} until comfortable"* once the session history covers ~6 minutes
+> (early estimates are rough and refine over time); once comfortable it switches to the *"{time} until
+> cooled/heated to {target}"* line. The row is hidden only when the feels‑like sensors aren't set or the
+> climate is unavailable. Requires Home Assistant's **recorder** to be keeping history for the sensors.
 
 ## Layout & responsiveness
 

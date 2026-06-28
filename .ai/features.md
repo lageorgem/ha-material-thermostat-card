@@ -78,9 +78,13 @@ coarse quantized steps real recorders log, where differencing was pure noise;
 plateau). The forecast uses **only the current session** — history since the
 climate's `last_changed` (`mt-comfort._sessionStartMs`), not a fixed lookback.
 **Gating is by time coverage** (`MIN_SPAN_MIN` 6, not sample count) so it adapts to
-the sensor; below it the row says "calculating…", above it shows the accurate
-integral fit or a rough `linearEta` fallback (early estimate from a coarse sensor /
-the transient, refining over time). Forecast only when `running` (off → bare verdict). `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
+the sensor; below it the row shows the plain verdict (no "calculating…"), above it
+shows the accurate integral fit or a rough `linearEta` fallback (early estimate from
+a coarse sensor / the transient, refining over time). Uncomfortable → "{t} until
+comfortable"; once comfortable → the Nest-style time to the setpoint ("{t} until
+cooled to 24°C" / "heated to 26°C", gated by `show_target_eta`). Times are compact
+via `formatDuration` ("7m" / "1h" / "2hr+"). Forecast only when `running` (off →
+bare verdict). `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
 logic is unit‑tested without Lit/hass) returns `{ line, status }` where `status` ∈
 `comfortable|warm|cool|humid` drives the row's icon + colour (warm→heat colour,
 cool/humid→cool colour, comfortable→green). **Comfort is calculated, not configured**

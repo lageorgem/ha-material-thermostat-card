@@ -161,24 +161,25 @@
         ]),
       });
 
-      // B) Comfortable now + target reachable → green happy icon.
-      makeCard('Comfortable + target ETA', {
+      // B) Comfortable now, still cooling toward the setpoint → green happy icon +
+      //    "X until cooled to 16°C" (Nest-style target ETA).
+      makeCard('Comfortable — until cooled to target', {
         mode: 'cool',
         action: 'cooling',
         curTemp: 25,
         curHum: 45,
-        target: 21,
-        tempHist: expPts(20.5, 26, 0.05),
+        target: 16,
+        tempHist: expPts(14, 28, 0.05),
       });
 
-      // C) Heating, cold now → "X until comfortable" (cool icon, cool colour).
-      makeCard('Heating — warming up', {
+      // C) Comfortable now, still heating toward the setpoint → "X until heated to 26°C".
+      makeCard('Comfortable — until heated to target', {
         mode: 'heat',
         action: 'heating',
-        curTemp: 15,
+        curTemp: 24,
         curHum: 40,
-        target: 23,
-        tempHist: expPts(24, 14, 0.05),
+        target: 26,
+        tempHist: expPts(28, 20, 0.05),
       });
 
       // D) Climate OFF but warm → bare verdict "Room feels warm" (no forecast).
@@ -189,18 +190,6 @@
         curHum: 45,
         target: 22,
         tempHist: [],
-      });
-
-      // E) Running, warm, only a couple of minutes of data → "calculating…".
-      makeCard('Warming up — calculating', {
-        mode: 'cool',
-        action: 'cooling',
-        curTemp: 28.7,
-        curHum: 47,
-        target: 16,
-        tempHist: stepPts([
-          [0, 29], [3, 28.7],
-        ]),
       });
     </script>
   </body>

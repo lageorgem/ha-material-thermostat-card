@@ -107,12 +107,12 @@ describe('mt-comfort', () => {
     expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
   });
 
-  it('says "calculating…" while running + uncomfortable with no history yet', async () => {
+  it('shows the plain verdict (no "calculating") while uncomfortable with no history yet', async () => {
     const el = await mount({ tempNow: '34', rhNow: '60', history: {} });
-    expect(line(el)).to.equal('Room feels warm, calculating…');
+    expect(line(el)).to.equal('Room feels warm');
   });
 
-  it('forecasts time until comfortable from cooling history', async () => {
+  it('forecasts "{time} until comfortable" from cooling history', async () => {
     // Room cooling 36→27°C at 30% RH, currently 32°C → PMV well above +0.5.
     const temps: number[] = [];
     for (let i = 0; i < 16; i++) temps.push(24 + 12 * Math.exp(-0.05 * i * 2));
@@ -125,10 +125,10 @@ describe('mt-comfort', () => {
         [H_SENSOR]: pts(Array(16).fill(30), baseSec),
       },
     });
-    expect(line(el)).to.match(/until room feels comfortable$/);
+    expect(line(el)).to.match(/until comfortable$/);
   });
 
-  it('appends the target ETA when enabled', async () => {
+  it('comfortable: shows the Nest-style time until cooled to the target', async () => {
     const temps: number[] = [];
     for (let i = 0; i < 16; i++) temps.push(20 + 5 * Math.exp(-0.05 * i * 2)); // → 20
     const el = await mount({
@@ -142,7 +142,7 @@ describe('mt-comfort', () => {
       },
     });
     // climate target is 21 (from climateState helper); 25°C now, comfortable.
-    expect(line(el)).to.match(/^Room feels comfortable, .*target temperature/);
+    expect(line(el)).to.match(/until cooled to 21°C$/);
   });
 
   it('fetches only the current session (from last_changed) and only the sensors', async () => {

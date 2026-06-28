@@ -311,16 +311,15 @@ describe('calc/forecast', () => {
 });
 
 describe('calc/duration', () => {
-  it('formats minutes, hours and days', () => {
-    expect(formatDuration(0.3)).to.equal('less than a minute');
-    expect(formatDuration(1)).to.equal('1 minute');
-    expect(formatDuration(15)).to.equal('15 minutes');
-    expect(formatDuration(60)).to.equal('1 hour');
-    expect(formatDuration(120)).to.equal('2 hours');
-    expect(formatDuration(130)).to.equal('2h 10m');
-    expect(formatDuration(60 * 5 + 10)).to.equal('about 5 hours');
-    expect(formatDuration(60 * 25)).to.equal('1 day');
-    expect(formatDuration(60 * 50)).to.equal('2 days');
+  it('formats compactly: minutes, "1h", and "2hr+" past two hours', () => {
+    expect(formatDuration(0.3)).to.equal('1m');
+    expect(formatDuration(7)).to.equal('7m');
+    expect(formatDuration(50)).to.equal('50m');
+    expect(formatDuration(59)).to.equal('59m');
+    expect(formatDuration(60)).to.equal('1h');
+    expect(formatDuration(119)).to.equal('1h');
+    expect(formatDuration(120)).to.equal('2hr+');
+    expect(formatDuration(300)).to.equal('2hr+');
   });
 
   it('returns empty for invalid input', () => {
@@ -441,14 +440,13 @@ describe('calc/comfort-analysis', () => {
     expect(analyzeComfort({ ...base, tempNow: 19, rhNow: 45 }).comfortable).to.equal(false);
   });
 
-  it('says "calculating…" when running + uncomfortable + not enough coverage yet', () => {
+  it('shows the plain verdict when uncomfortable + not enough coverage yet', () => {
     const warm = analyzeComfort({ ...base, tempNow: 33, rhNow: 50 });
     expect(warm).to.deep.include({
       visible: true,
       comfortable: false,
-      line: 'Room feels warm, calculating…',
+      line: 'Room feels warm',
       status: 'warm',
-      calculating: true,
     });
 
     // A couple of points spanning < MIN_SPAN_MIN still isn't enough coverage.
@@ -465,14 +463,13 @@ describe('calc/comfort-analysis', () => {
         { t: 2, v: 50 },
       ],
     });
-    expect(tooShort.calculating).to.equal(true);
+    expect(tooShort.line).to.equal('Room feels warm');
   });
 
-  it('shows a bare verdict (no "calculating") when not running, e.g. climate off', () => {
+  it('shows a bare verdict when not running, e.g. climate off', () => {
     const warm = analyzeComfort({ ...base, running: false, tempNow: 33, rhNow: 50 });
     expect(warm).to.deep.include({ visible: true, comfortable: false, line: 'Room feels warm' });
     expect(warm.status).to.equal('warm');
-    expect(warm.calculating).to.equal(undefined);
 
     const cool = analyzeComfort({ ...base, running: false, tempNow: 18, rhNow: 40 });
     expect(cool.line).to.equal('Room feels cool');
@@ -503,11 +500,10 @@ describe('calc/comfort-analysis', () => {
     });
     expect(r.comfortable).to.equal(false);
     expect(r.status).to.equal('warm');
-    expect(r.calculating).to.not.equal(true);
-    expect(r.line).to.match(/until room feels comfortable$/);
+    expect(r.line).to.match(/^\d+m until comfortable$/);
   });
 
-  it('cooling: forecasts time until comfortable (PMV → +0.5)', () => {
+  it('cooling: forecasts "{time} until comfortable" (PMV → +0.5)', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 33,
@@ -518,7 +514,7 @@ describe('calc/comfort-analysis', () => {
     expect(r.visible).to.equal(true);
     expect(r.comfortable).to.equal(false);
     expect(r.status).to.equal('warm');
-    expect(r.line).to.match(/until room feels comfortable$/);
+    expect(r.line).to.match(/until comfortable$/);
   });
 
   it('heating: forecasts upward toward comfort (PMV → −0.5)', () => {
@@ -532,7 +528,7 @@ describe('calc/comfort-analysis', () => {
     expect(r.visible).to.equal(true);
     expect(r.comfortable).to.equal(false);
     expect(r.status).to.equal('cool');
-    expect(r.line).to.match(/until room feels comfortable$/);
+    expect(r.line).to.match(/until comfortable$/);
   });
 
   it('too humid (PMV ok) forecasts the humidity ratio toward the cap', () => {
@@ -547,10 +543,10 @@ describe('calc/comfort-analysis', () => {
     expect(r.comfortable).to.equal(false);
     expect(r.status).to.equal('humid');
     expect(r.visible).to.equal(true);
-    expect(r.line).to.match(/until room feels comfortable$/);
+    expect(r.line).to.match(/until comfortable$/);
   });
 
-  it('comfortable + target ETA, joined with a comma', () => {
+  it('comfortable: shows the Nest-style time until cooled to the target', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 25,
@@ -561,7 +557,22 @@ describe('calc/comfort-analysis', () => {
       rhSeries: flat(45),
     });
     expect(r.comfortable).to.equal(true);
-    expect(r.line).to.match(/^Room feels comfortable, .*until target temperature is reached$/);
+    expect(r.status).to.equal('comfortable');
+    expect(r.line).to.match(/^\S+ until cooled to 21°C$/);
+  });
+
+  it('comfortable + heating: "…until heated to {target}"', () => {
+    const r = analyzeComfort({
+      ...base,
+      tempNow: 22,
+      rhNow: 45,
+      target: 26,
+      showTargetEta: true,
+      tempSeries: exp(27, 20, 0.05), // warming up toward 27, passes 26
+      rhSeries: flat(45),
+    });
+    expect(r.comfortable).to.equal(true);
+    expect(r.line).to.match(/^\S+ until heated to 26°C$/);
   });
 
   it("comfortable + target unreachable → won't go below the plateau", () => {
@@ -575,7 +586,7 @@ describe('calc/comfort-analysis', () => {
       rhSeries: flat(45),
     });
     expect(r.comfortable).to.equal(true);
-    expect(r.line).to.match(/^Room feels comfortable, temperature won't go below 2[34]°C$/);
+    expect(r.line).to.match(/^won't go below 2[34]°C$/);
   });
 
   it("comfortable + target unreachable → won't go above the plateau", () => {
@@ -591,10 +602,10 @@ describe('calc/comfort-analysis', () => {
       rhSeries: flat(45),
     });
     expect(r.comfortable).to.equal(true);
-    expect(r.line).to.match(/^Room feels comfortable, temperature won't go above 2[234]°C$/);
+    expect(r.line).to.match(/^won't go above 2[234]°C$/);
   });
 
-  it('omits the target clause when its data is insufficient (row still shown)', () => {
+  it('comfortable: bare verdict when the target ETA data is insufficient', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 25,
@@ -607,7 +618,7 @@ describe('calc/comfort-analysis', () => {
     expect(r.line).to.equal('Room feels comfortable');
   });
 
-  it('omits the target clause when already at the target', () => {
+  it('comfortable: bare verdict when already at the target', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 25.1,
@@ -620,7 +631,7 @@ describe('calc/comfort-analysis', () => {
     expect(r.line).to.equal('Room feels comfortable');
   });
 
-  it('omits the target clause when moving away from the target', () => {
+  it('comfortable: bare verdict when moving away from the target', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 25,
@@ -633,7 +644,7 @@ describe('calc/comfort-analysis', () => {
     expect(r.line).to.equal('Room feels comfortable');
   });
 
-  it('uncomfortable + target ETA joined with a period', () => {
+  it('uncomfortable shows only the time-until-comfortable, never a target clause', () => {
     const r = analyzeComfort({
       ...base,
       tempNow: 33,
@@ -643,7 +654,9 @@ describe('calc/comfort-analysis', () => {
       tempSeries: exp(24, 33, 0.06),
       rhSeries: flat(50),
     });
-    expect(r.line).to.match(/until room feels comfortable\. .*until target temperature is reached$/);
+    expect(r.line).to.match(/until comfortable$/);
+    expect(r.line).to.not.contain('cooled');
+    expect(r.line).to.not.contain('target');
   });
 
   it('mid-range temperature reads comfortable', () => {

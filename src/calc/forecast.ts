@@ -43,7 +43,7 @@ export const MIN_SAMPLES = 4;
  * This is the primary gate — it adapts to the sensor: a coarse sensor reaches it
  * with 2–3 readings, a fast one needs many. It guarantees the trend is *real*
  * (a few minutes of change) rather than a momentary blip, while keeping the ETA
- * early. Below this span the caller shows "calculating…".
+ * early. Below this span the caller shows the plain verdict.
  */
 export const MIN_SPAN_MIN = 6;
 /** Minimum fit quality (R² of the integral regression) to trust a fit. */

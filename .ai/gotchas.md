@@ -166,15 +166,20 @@ a plain `{detail}` object has no `stopPropagation`.
 - **ETA gating is by TIME COVERAGE, not sample count, + a rough fallback.** The gate
   is `MIN_SPAN_MIN` (6 min): it adapts to the sensor (a coarse sensor qualifies with
   2–3 readings, a fast one needs many — a 2-min blip from a wifi sensor doesn't).
-  Below the span → `analyzeComfort` returns `{calculating:true}` and the row shows
-  "Room feels warm, calculating…". Once covered, it shows the **accurate** integral
-  `newtonFit` ETA if it converges, else a **rough `linearEta`** (straight-line
-  extrapolation of the real trend, works from 2 points) so a coarse sensor / the
-  turn-on transient still gets an early estimate that refines over time. The user
-  explicitly wanted "show it early even if rough, with calculating… until then" —
-  this REVERSES the earlier "hide until accurate" stance. `linearEta` self-rejects
-  when moving away / flat (capped at 12 h). Forecast/calculating only when
-  `running` (passed into `ComfortInput`); when off → bare verdict, no "calculating".
+  Below the span → just the plain verdict ("Room feels warm"); **there is no
+  "calculating…"** (the user found it noise — don't reintroduce it). Once covered, it
+  shows the **accurate** integral `newtonFit` ETA if it converges, else a **rough
+  `linearEta`** (straight-line extrapolation of the real trend, works from 2 points)
+  so a coarse sensor / the turn-on transient still gets an early estimate that refines
+  over time. `linearEta` self-rejects when moving away / flat (capped at 12 h).
+  Forecast only when `running` (passed into `ComfortInput`); off → bare verdict.
+- **Two ETA phases + COMPACT time format.** Uncomfortable → "{t} until comfortable";
+  once comfortable → the Nest-style time to the SETPOINT: "{t} until cooled to 24°C"
+  / "{t} until heated to 26°C" (or "won't go below/above N°C" when plateauing short),
+  gated by `show_target_eta` and using the accurate fit only (no rough fallback for an
+  aggressive setpoint). `formatDuration` is now COMPACT: "7m" / "1h" / "2hr+" (caps at
+  ~2 h — precision past that isn't useful). Don't restore the verbose "15 minutes"
+  form or append the target clause while uncomfortable.
 - **Forecast by INTEGRATION, not differencing (the big issue-4 fix).** Real
   recorders log coarse 0.2–0.3° steps at irregular intervals; estimating `dv/dt`
   by differencing consecutive samples turns that quantization into pure noise

@@ -15,7 +15,9 @@
  * Forecast gating is by **time coverage**, not sample count: once the series
  * spans `MIN_SPAN_MIN` it shows an ETA — the accurate integral fit when it
  * converges, otherwise a rough linear extrapolation of the real trend (early /
- * coarse sensor). Until the span is covered it reports "calculating…".
+ * coarse sensor). Until then it shows the plain verdict. While the room is
+ * comfortable it switches to the time until the target setpoint is reached
+ * (Nest-style: "15m until cooled to 24°C").
  */
 import { humidityRatio, HUMIDITY_RATIO_MAX } from './comfort-metrics';
 import { pmv, cloForTemp, PMV_COMFORT_LIMIT } from './pmv';
@@ -62,8 +64,6 @@ export interface ComfortResult {
   line?: string;
   /** The comfort state, which drives the row's icon + colour (iff `visible`). */
   status?: ComfortStatus;
-  /** True while gathering data for the "time until comfortable" forecast. */
-  calculating?: boolean;
 }
 
 const HIDDEN: ComfortResult = { visible: false, comfortable: false };
@@ -72,38 +72,48 @@ const HIDDEN: ComfortResult = { visible: false, comfortable: false };
 const TARGET_REACHED_EPS = 0.25;
 
 /**
- * Build the optional "…until target temperature is reached" / "won't go
- * below/above N°" clause, or undefined when the data is insufficient.
+ * The Nest-style time-to-target line shown while the room is comfortable:
+ * "15m until cooled to 24°C" / "50m until heated to 26°C", or "won't go
+ * below/above N°" when the room plateaus short of the setpoint. Undefined when
+ * disabled, already at the target, or there's no confident temperature fit.
+ * Uses the accurate fit only (no rough fallback) — an aggressive setpoint
+ * shouldn't be claimed reachable on a straight-line guess.
  * @param i the comfort input
  */
-function targetClause(i: ComfortInput): string | undefined {
+function targetEta(i: ComfortInput): string | undefined {
   if (!i.showTargetEta || i.target == null) return undefined;
   if (Math.abs(i.tempNow - i.target) < TARGET_REACHED_EPS) return undefined;
 
   const fit = newtonFit(i.tempSeries);
   if (!fit) return undefined;
 
+  const cooling = i.target < i.tempNow;
   const eta = etaToThreshold(i.tempNow, i.target, fit);
-  if (eta != null) return `${formatDuration(eta)} until target temperature is reached`;
+  if (eta != null) {
+    return `${formatDuration(eta)} until ${cooling ? 'cooled' : 'heated'} to ${i.target}${i.unit}`;
+  }
 
-  // Unreachable: report the plateau, but only when the room is actually moving
-  // toward (not away from) the target.
+  // Unreachable: report the plateau, but only when actually moving toward it.
   const towardTarget = (i.target - i.tempNow) * (fit.asymptote - i.tempNow) > 0;
   if (!towardTarget) return undefined;
   const plateau = Math.round(fit.asymptote);
-  const verb = i.target < i.tempNow ? "won't go below" : "won't go above";
-  return `temperature ${verb} ${plateau}${i.unit}`;
+  return `won't go ${cooling ? 'below' : 'above'} ${plateau}${i.unit}`;
 }
 
 /**
  * Analyze comfort + ETAs into a renderable status line. Always returns a visible
- * verdict for finite readings — "Room feels comfortable/warm/cool/humid". When
- * the climate is running and the room is uncomfortable it forecasts the time
- * until comfortable, gating on **time coverage** (`MIN_SPAN_MIN`): below that it
- * reports "calculating…"; above it shows the accurate integral fit, or a rough
- * linear extrapolation of the real trend when the fit hasn't converged yet (e.g.
- * the turn-on transient or a coarse sensor). Only non-numeric readings hide the
- * row here; the sensors-unset / climate-unavailable cases are gated by the caller.
+ * verdict for finite readings — "Room feels comfortable/warm/cool/humid".
+ *
+ * - **Uncomfortable + running:** once the history covers `MIN_SPAN_MIN` it shows
+ *   "{time} until comfortable" — the accurate integral fit, or a rough linear
+ *   extrapolation of the real trend when the fit hasn't converged yet (turn-on
+ *   transient / coarse sensor). Below that coverage it shows the plain verdict.
+ * - **Comfortable + running:** switches to the time until the target setpoint is
+ *   reached ("15m until cooled to 24°C"), when enabled and forecastable.
+ * - **Not running (climate off):** the plain verdict, no forecast.
+ *
+ * Only non-numeric readings hide the row here; the sensors-unset /
+ * climate-unavailable cases are gated by the caller.
  * @param i the comfort input
  */
 export function analyzeComfort(i: ComfortInput): ComfortResult {
@@ -111,16 +121,21 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
 
   const pmvNow = pmv(i.tempNow, i.rhNow, { clo: cloForTemp(i.tempNow) });
   const wNow = humidityRatio(i.tempNow, i.rhNow);
-  const target = targetClause(i);
 
   const tooWarm = pmvNow > PMV_COMFORT_LIMIT;
   const tooCold = pmvNow < -PMV_COMFORT_LIMIT;
   const tooHumid = wNow > HUMIDITY_RATIO_MAX;
 
-  // Comfortable: a direct reading, shown immediately (target clause optional).
+  // Comfortable: show the time until the target setpoint is reached, else the
+  // plain verdict. (The target ETA only makes sense while actively running.)
   if (!tooWarm && !tooCold && !tooHumid) {
-    const line = target ? `Room feels comfortable, ${target}` : 'Room feels comfortable';
-    return { visible: true, comfortable: true, line, status: 'comfortable' };
+    const target = i.running ? targetEta(i) : undefined;
+    return {
+      visible: true,
+      comfortable: true,
+      line: target ?? 'Room feels comfortable',
+      status: 'comfortable',
+    };
   }
 
   // Uncomfortable: pick the binding axis. Warmth / cold are temperature-driven
@@ -149,30 +164,17 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
   }
 
   const verdict = `Room feels ${status}`;
-  const withTarget = (base: string): string => (target ? `${base}. ${target}` : base);
 
-  // Not running (e.g. climate off): a bare verdict, no forecast.
-  if (!i.running) return { visible: true, comfortable: false, line: withTarget(verdict), status };
-
-  // Running: gate the forecast on time coverage, not sample count.
+  // Not running, or not enough time coverage yet: just the verdict.
   const span = series.length ? series[series.length - 1].t - series[0].t : 0;
-  if (series.length < 2 || span < MIN_SPAN_MIN) {
-    return { visible: true, comfortable: false, line: `${verdict}, calculating…`, status, calculating: true };
+  if (!i.running || series.length < 2 || span < MIN_SPAN_MIN) {
+    return { visible: true, comfortable: false, line: verdict, status };
   }
 
   // Enough coverage: the accurate integral fit if it converges, else a rough
   // linear extrapolation of the (real) trend.
   const fit = newtonFit(series);
   const eta = (fit ? etaToThreshold(metricNow, threshold, fit) : null) ?? linearEta(series, threshold);
-  if (eta != null) {
-    return {
-      visible: true,
-      comfortable: false,
-      line: withTarget(`${formatDuration(eta)} until room feels comfortable`),
-      status,
-    };
-  }
-
-  // Enough data, but the room isn't heading toward comfort → just the verdict.
-  return { visible: true, comfortable: false, line: withTarget(verdict), status };
+  const line = eta != null ? `${formatDuration(eta)} until comfortable` : verdict;
+  return { visible: true, comfortable: false, line, status };
 }
