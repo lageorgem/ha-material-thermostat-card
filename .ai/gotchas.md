@@ -162,8 +162,14 @@ a plain `{detail}` object has no `stopPropagation`.
   entity's `last_changed` (it resets when the hvac mode changes, i.e. on turn-on
   or heat↔cool), and history is fetched from there (capped at `MAX_SESSION_MS`
   purely to bound the query). There is **no** `lookback_hours` config and we no
-  longer fetch the climate entity's history (so `lastTurnedOnMs` is gone). It's
-  fine to have no forecast for the first ~10 min of a session.
+  longer fetch the climate entity's history (so `lastTurnedOnMs` is gone). The ETA
+  appears as soon as the fit is trustworthy — `MIN_SPAN_MIN` (5) is a small floor,
+  not a fixed delay. The real limiters are the turn-on transient (the first several
+  minutes the room's cooling/heating *accelerates*, which is non-Newtonian → `k<0`
+  → correctly rejected) and the sensor's resolution (recorder logs one point per
+  value-change, so a coarse 0.3° sensor needs ~3 changes ≈ ~15 min to confirm the
+  glide). Don't try to force an earlier ETA by loosening `k>0`/`MIN_FIT_R2` — that
+  just shows a guess during the transient.
 - **Forecast by INTEGRATION, not differencing (the big issue-4 fix).** Real
   recorders log coarse 0.2–0.3° steps at irregular intervals; estimating `dv/dt`
   by differencing consecutive samples turns that quantization into pure noise

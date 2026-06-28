@@ -200,6 +200,14 @@ describe('calc/forecast', () => {
       expect(fit!.r2).to.be.greaterThan(0.9);
     });
 
+    it('fits a confident short span (no fixed 10-minute floor)', () => {
+      // 4 clean samples over 6 minutes — appears well under 10 min when the data
+      // is trustworthy (MIN_SPAN_MIN is a small floor, not a delay).
+      const fit = newtonFit(genExp(24, 30, 0.1, 4, 2));
+      expect(fit).to.not.equal(null);
+      expect(fit!.k).to.be.greaterThan(0);
+    });
+
     it('returns null with too few samples', () => {
       // 3 samples spanning 12 min: enough span, but below MIN_SAMPLES (4).
       expect(newtonFit(genExp(24, 30, 0.1, 3, 6))).to.equal(null);

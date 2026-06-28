@@ -346,7 +346,9 @@ The forecast uses **only the current session** — history since the climate las
 `last_changed`), because earlier data may reflect entirely different settings. It fits a Newton's‑law
 cooling/heating curve by **integration** (robust to the coarse, quantized steps real sensors record),
 so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
-reached**. It needs ~10 minutes of session history before the first ETA.
+reached**. The ETA appears **as soon as the fit is trustworthy** — no fixed delay; how soon depends on
+how often the sensor's reading changes and how quickly the room settles into a steady glide after
+turn‑on (a long start‑up lag or a coarse sensor naturally pushes it later).
 
 Example lines:
 

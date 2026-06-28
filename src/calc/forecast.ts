@@ -38,8 +38,15 @@ export interface NewtonFit {
 
 /** Minimum samples required before any forecast is attempted. */
 export const MIN_SAMPLES = 4;
-/** Minimum time span (minutes) the samples must cover. */
-export const MIN_SPAN_MIN = 10;
+/**
+ * Minimum time span (minutes) the samples must cover. This is a small floor to
+ * avoid fitting a 1–2 minute blip, NOT a fixed delay: the ETA appears as soon as
+ * the fit is trustworthy (k > 0 and r² ≥ {@link MIN_FIT_R2}), which can be well
+ * under 10 minutes when the sensor's readings change often enough. A long
+ * turn-on transient or a coarse sensor (few recorded changes) may push the first
+ * trustworthy fit later — that's the data, not an artificial wait.
+ */
+export const MIN_SPAN_MIN = 5;
 /** Minimum fit quality (R² of the integral regression) to trust a fit. */
 export const MIN_FIT_R2 = 0.5;
 
