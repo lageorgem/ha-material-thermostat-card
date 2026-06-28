@@ -582,22 +582,19 @@ function t(t,e,i,s){var a,o=arguments.length,r=o<3?e:null===s?s=Object.getOwnPro
         }
       }
     `],t([mt({attribute:!1})],Bt.prototype,"items",void 0),t([mt()],Bt.prototype,"placeholder",void 0),t([ft()],Bt.prototype,"_open",void 0),t([ft()],Bt.prototype,"_up",void 0),t([ft()],Bt.prototype,"_alignRight",void 0),Bt=t([dt("mt-dropdown")],Bt);let Wt=class extends ct{constructor(){super(...arguments),this.items=[],this.display="icons"}_select(t){this.dispatchEvent(new CustomEvent("item-selected",{detail:{value:t},bubbles:!0,composed:!0}))}render(){return this.items.length?"dropdown"===this.display?this._renderDropdown():this._renderIcons():W}_renderIcons(){return V`
-      <div class="row">
-        ${this.label?V`<span class="row-label">${this.label}</span>`:W}
-        <div class="chips" role="group" aria-label=${this.label??"options"}>
-          ${this.items.map(t=>V`
-              <button
-                class=${Ht({chip:!0,active:!!t.active})}
-                ?disabled=${t.disabled}
-                title=${t.label}
-                aria-label=${t.label}
-                aria-pressed=${t.active?"true":"false"}
-                @click=${()=>this._select(t.value)}
-              >
-                ${t.icon?V`<ha-icon icon=${t.icon}></ha-icon>`:V`<span class="chip-text">${t.label}</span>`}
-              </button>
-            `)}
-        </div>
+      <div class="chips" role="group" aria-label=${this.label??"options"}>
+        ${this.items.map(t=>V`
+            <button
+              class=${Ht({chip:!0,active:!!t.active})}
+              ?disabled=${t.disabled}
+              title=${t.label}
+              aria-label=${t.label}
+              aria-pressed=${t.active?"true":"false"}
+              @click=${()=>this._select(t.value)}
+            >
+              ${t.icon?V`<ha-icon icon=${t.icon}></ha-icon>`:V`<span class="chip-text">${t.label}</span>`}
+            </button>
+          `)}
       </div>
     `}_renderDropdown(){return V`<mt-dropdown
       .items=${this.items}
@@ -609,21 +606,8 @@ function t(t,e,i,s){var a,o=arguments.length,r=o<3?e:null===s?s=Object.getOwnPro
         width: 100%;
         min-width: 0;
       }
-      .row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-        min-width: 0;
-      }
-      .row-label {
-        color: var(--mt-on-surface-variant);
-        font-size: var(--md-sys-typescale-label-large-size, 14px);
-        white-space: nowrap;
-      }
       .chips {
         display: flex;
-        flex: 1;
         align-items: center;
         justify-content: safe center;
         gap: 4px;

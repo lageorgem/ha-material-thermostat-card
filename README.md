@@ -251,7 +251,6 @@ shown. Unlisted values keep their Home Assistant defaults.
 - type: input-select
   entity: input_select.ac_preset
   display: icons
-  label: Preset
   options:
     - value: comfort
       label: Comfort
@@ -260,6 +259,9 @@ shown. Unlisted values keep their Home Assistant defaults.
       icon: mdi:home-export-outline
 ```
 
+> `label` is shown only with `display: dropdown` (as the dropdown's placeholder) and as the
+> control's accessible name — in `icons` mode the chips stand alone with no leading text.
+
 ### `switch-group`
 
 Mutually‑exclusive switches that behave like a selector — picking one turns the others off first,
@@ -267,7 +269,6 @@ then turns on the chosen one. Items use the [`EntityItem`](#entityitem) shape.
 
 ```yaml
 - type: switch-group
-  label: Preset
   display: icons
   entities:
     - { entity: switch.eco, label: Eco, icon: mdi:leaf }

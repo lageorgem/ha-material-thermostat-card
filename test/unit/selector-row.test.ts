@@ -75,20 +75,29 @@ describe('mt-selector-row', () => {
       expect((chips[0] as HTMLButtonElement).disabled).to.be.false;
     });
 
-    it('does not render a row-label when label is unset', async () => {
-      const el = await fixture<MtSelectorRow>(
-        html`<mt-selector-row .items=${items}></mt-selector-row>`
-      );
-      expect(el.shadowRoot!.querySelector('.row-label')).to.equal(null);
-    });
-
-    it('renders a row-label when label is set', async () => {
+    it('never shows the label as text in icons mode (even when set)', async () => {
+      // In icons mode the chips stand alone — the label must not render as a
+      // leading text element next to them.
       const el = await fixture<MtSelectorRow>(
         html`<mt-selector-row .items=${items} label="Mode"></mt-selector-row>`
       );
-      const rowLabel = el.shadowRoot!.querySelector('.row-label');
-      expect(rowLabel).to.not.equal(null);
-      expect(rowLabel!.textContent).to.equal('Mode');
+      expect(el.shadowRoot!.querySelector('.row-label')).to.equal(null);
+      expect(el.shadowRoot!.textContent).to.not.contain('Mode');
+    });
+
+    it('uses the label as the chip group aria-label, defaulting to "options"', async () => {
+      const withLabel = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items} label="Mode"></mt-selector-row>`
+      );
+      expect(withLabel.shadowRoot!.querySelector('.chips')!.getAttribute('aria-label')).to.equal(
+        'Mode'
+      );
+      const noLabel = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items}></mt-selector-row>`
+      );
+      expect(noLabel.shadowRoot!.querySelector('.chips')!.getAttribute('aria-label')).to.equal(
+        'options'
+      );
     });
 
     it('dispatches item-selected with {value} (bubbles+composed) on chip click', async () => {

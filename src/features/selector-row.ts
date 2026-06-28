@@ -36,27 +36,26 @@ export class MtSelectorRow extends LitElement {
    * Render the items as a row of icon chips.
    */
   private _renderIcons(): TemplateResult {
+    // Icons mode shows only the chips — no leading text label. (`label` is used
+    // as the dropdown placeholder, and here as the chip group's aria-label.)
     return html`
-      <div class="row">
-        ${this.label ? html`<span class="row-label">${this.label}</span>` : nothing}
-        <div class="chips" role="group" aria-label=${this.label ?? 'options'}>
-          ${this.items.map(
-            (item) => html`
-              <button
-                class=${classMap({ chip: true, active: !!item.active })}
-                ?disabled=${item.disabled}
-                title=${item.label}
-                aria-label=${item.label}
-                aria-pressed=${item.active ? 'true' : 'false'}
-                @click=${() => this._select(item.value)}
-              >
-                ${item.icon
-                  ? html`<ha-icon icon=${item.icon}></ha-icon>`
-                  : html`<span class="chip-text">${item.label}</span>`}
-              </button>
-            `
-          )}
-        </div>
+      <div class="chips" role="group" aria-label=${this.label ?? 'options'}>
+        ${this.items.map(
+          (item) => html`
+            <button
+              class=${classMap({ chip: true, active: !!item.active })}
+              ?disabled=${item.disabled}
+              title=${item.label}
+              aria-label=${item.label}
+              aria-pressed=${item.active ? 'true' : 'false'}
+              @click=${() => this._select(item.value)}
+            >
+              ${item.icon
+                ? html`<ha-icon icon=${item.icon}></ha-icon>`
+                : html`<span class="chip-text">${item.label}</span>`}
+            </button>
+          `
+        )}
       </div>
     `;
   }
@@ -80,21 +79,8 @@ export class MtSelectorRow extends LitElement {
         width: 100%;
         min-width: 0;
       }
-      .row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-        min-width: 0;
-      }
-      .row-label {
-        color: var(--mt-on-surface-variant);
-        font-size: var(--md-sys-typescale-label-large-size, 14px);
-        white-space: nowrap;
-      }
       .chips {
         display: flex;
-        flex: 1;
         align-items: center;
         justify-content: safe center;
         gap: 4px;
