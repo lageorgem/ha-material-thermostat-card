@@ -186,16 +186,20 @@ describe('theme', () => {
 });
 
 describe('grid', () => {
-  it('constants have exact values', () => {
-    expect(WIDTH_STEP).to.equal(10);
-    expect(MIN_WIDTH_PCT).to.equal(10);
-    expect(MAX_WIDTH_PCT).to.equal(100);
-    expect(GRID_COLUMNS).to.equal(10);
-    expect(TILE_DEFAULT_PCT).to.equal(50);
-    expect(DIAL_MAX_PX).to.equal(320);
-    expect(DIAL_MIN_PX).to.equal(240);
-    expect(WIDE_MIN_PX).to.equal(560);
-    expect(CARD_PADDING_X).to.equal(32);
+  it('layout constants satisfy the grid invariants the layout math relies on', () => {
+    // A row is GRID_COLUMNS columns and each width-step is one column, so a full
+    // row of steps spans exactly 100%. (Asserting relationships, not literals, so
+    // the test fails on an *inconsistent* change rather than any change.)
+    expect(GRID_COLUMNS * WIDTH_STEP).to.equal(MAX_WIDTH_PCT);
+    expect(MIN_WIDTH_PCT).to.equal(WIDTH_STEP); // the narrowest feature is one step
+    expect(MAX_WIDTH_PCT % WIDTH_STEP).to.equal(0); // widths are whole steps
+    // The tile default is a selectable width within range.
+    expect(TILE_DEFAULT_PCT % WIDTH_STEP).to.equal(0);
+    expect(TILE_DEFAULT_PCT).to.be.within(MIN_WIDTH_PCT, MAX_WIDTH_PCT);
+    // Dial sizing: the fixed dial fits, and the side-by-side breakpoint is wider.
+    expect(DIAL_MIN_PX).to.be.lessThan(DIAL_MAX_PX);
+    expect(DIAL_MAX_PX).to.be.lessThan(WIDE_MIN_PX);
+    expect(CARD_PADDING_X).to.be.greaterThan(0);
   });
   it('pctToSpan maps percentage to a 10-column span', () => {
     expect(pctToSpan(100)).to.equal(10);
@@ -209,23 +213,19 @@ describe('grid', () => {
 });
 
 describe('const', () => {
-  it('CARD_VERSION is a non-empty string', () => {
-    expect(CARD_VERSION).to.be.a('string');
-    expect(CARD_VERSION.length).to.be.greaterThan(0);
+  it('CARD_VERSION is a semver string', () => {
+    // Catches a malformed/empty version (release tooling derives the tag from it).
+    expect(CARD_VERSION).to.match(/^\d+\.\d+\.\d+/);
   });
-  it('identifiers are strings', () => {
-    expect(CARD_TYPE).to.be.a('string');
-    expect(EDITOR_TYPE).to.be.a('string');
-    expect(CARD_NAME).to.be.a('string');
-    expect(CARD_DESCRIPTION).to.be.a('string');
+  it('EDITOR_TYPE derives from CARD_TYPE, the registered card tag', () => {
+    expect(CARD_TYPE).to.equal('material-thermostat-card'); // the custom-element name
+    expect(EDITOR_TYPE).to.equal(`${CARD_TYPE}-editor`); // load-bearing relationship
+    expect(CARD_NAME.length).to.be.greaterThan(0);
+    expect(CARD_DESCRIPTION.length).to.be.greaterThan(0);
   });
 });
 
 describe('icons.generated', () => {
-  it('MT_ICONS is a non-empty object', () => {
-    expect(MT_ICONS).to.be.an('object');
-    expect(Object.keys(MT_ICONS).length).to.be.greaterThan(0);
-  });
   it("contains 'swing-vertical-full' with a path string", () => {
     expect(MT_ICONS['swing-vertical-full']).to.be.an('object');
     expect(MT_ICONS['swing-vertical-full'].path).to.be.a('string');

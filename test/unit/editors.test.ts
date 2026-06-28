@@ -1,4 +1,4 @@
-import { fixture, html, expect } from '@open-wc/testing';
+import { fixture, html, expect, aTimeout } from '@open-wc/testing';
 import { makeHass, climateState, entityState, captureEvents } from '../helpers';
 import type { TestHass } from '../helpers';
 
@@ -591,9 +591,26 @@ describe('material-thermostat-card-editor', () => {
     });
   });
 
-  it('connectedCallback mounts (ensureHaComponents) without throwing', async () => {
-    const el = await mount();
-    expect(el.isConnected).to.be.true;
+  it('connectedCallback runs ensureHaComponents (pulls in the HA form stack)', async () => {
+    // Prove the wiring: with the loader stubbed and the memo reset, mounting the
+    // editor must actually invoke ensureHaComponents → loadCardHelpers. (Asserting
+    // el.isConnected alone is vacuous — fixture() always attaches the element.)
+    resetHaComponentsForTest();
+    const origLoader = (window as any).loadCardHelpers;
+    let loaderCalled = false;
+    (window as any).loadCardHelpers = async () => {
+      loaderCalled = true;
+      return { createCardElement: async () => ({ constructor: {} }) };
+    };
+    try {
+      const el = await mount();
+      expect(el.isConnected).to.be.true;
+      await aTimeout(20); // let connectedCallback's ensureHaComponents() resolve
+      expect(loaderCalled).to.equal(true);
+    } finally {
+      (window as any).loadCardHelpers = origLoader;
+      resetHaComponentsForTest();
+    }
   });
 });
 

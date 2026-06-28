@@ -163,19 +163,10 @@ describe('mt-dropdown', () => {
   });
 
   describe('_onDocClick (outside-click handler)', () => {
-    it('closes when a document click lands outside the element', async () => {
-      const el = await fixture<MtDropdown>(
-        html`<mt-dropdown .items=${items}></mt-dropdown>`
-      );
-      trigger(el).click();
-      await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.menu')).to.not.equal(null);
-
-      (el as any)._onDocClick({ composedPath: () => [document.body] });
-      await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
-    });
-
+    // The outside-click → close path is covered by the real-event test below
+    // ('closes on a real document click outside'), which also exercises the
+    // connectedCallback listener wiring; the stubbed-composedPath cases here cover
+    // only the branches a real event can't easily reach (inside / not-open).
     it('stays open when a document click is inside the element', async () => {
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown .items=${items}></mt-dropdown>`

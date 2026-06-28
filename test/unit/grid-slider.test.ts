@@ -124,7 +124,7 @@ describe('mt-grid-slider', () => {
       expect(tip).to.not.equal(null);
       expect(tip!.classList.contains('visible')).to.be.false;
 
-      (el as any)._pressed = true;
+      // Tooltip visibility in interaction mode keys off `_tooltipVisible` only.
       (el as any)._tooltipVisible = true;
       el.requestUpdate();
       await el.updateComplete;

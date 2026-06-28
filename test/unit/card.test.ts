@@ -666,11 +666,12 @@ describe('material-thermostat-card', () => {
       });
     });
 
-    it('handles a single low edge (high null) in changing', async () => {
+    it('resets the high edge when a changing event carries only a low value', async () => {
       const el = await mountDual();
+      (el as any)._selectedHigh = 25; // pre-seed so the reset is actually observable
       (el as any)._onChanging({ detail: { low: 16 } } as CustomEvent);
       expect((el as any)._selectedLow).to.equal(16);
-      expect((el as any)._selectedHigh).to.equal(undefined);
+      expect((el as any)._selectedHigh).to.equal(undefined); // cleared, not left at 25
     });
   });
 
@@ -883,8 +884,11 @@ describe('material-thermostat-card', () => {
       await nextFrame();
       await aTimeout(50);
       await el.updateComplete;
-      // inner width = host width - CARD_PADDING_X (32)
-      expect((el as any)._widthPx).to.be.greaterThan(0);
+      // Verify the documented relationship — inner = observed host width − CARD_PADDING_X
+      // (32) — against the REAL measured width, not just "> 0".
+      const outer = el.getBoundingClientRect().width;
+      expect(outer).to.be.greaterThan(0);
+      expect((el as any)._widthPx).to.be.closeTo(outer - 32, 2);
     });
   });
 

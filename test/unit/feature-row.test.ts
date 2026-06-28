@@ -138,19 +138,35 @@ describe('mt-feature-row', () => {
       expect(child.humiditySensor).to.equal('sensor.h');
     });
 
-    it('comfort row collapses (host hidden) until it has something to show', async () => {
-      // No sensors → comfort hides → the row host carries the hidden attribute.
-      const hass = makeHass({ 'climate.test': climateState({}, 'off') });
+    it('comfort row collapses (host hidden) when the feature reports it is not visible', async () => {
+      // Start visible, then make the climate unavailable so mt-comfort fires
+      // feature-visibility:false — the row must hide IN RESPONSE to that event,
+      // not merely from the initial default (which would pass vacuously).
+      const states = {
+        'climate.test': climateState({ current_temperature: 25 }, 'cool'),
+        'sensor.t': entityState('sensor.t', '25'),
+        'sensor.h': entityState('sensor.h', '50'),
+      };
       const el = await fixture<MtFeatureRow>(
         html`<mt-feature-row
-          .hass=${hass}
+          .hass=${makeHass(states)}
           entityId="climate.test"
           .feature=${{ type: 'comfort' } as FeatureConfig}
+          .feelsLikeTemp=${'sensor.t'}
+          .feelsLikeHumidity=${'sensor.h'}
         ></mt-feature-row>`
       );
       await aTimeout(10);
       await el.updateComplete;
-      expect(el.hasAttribute('hidden')).to.equal(true);
+      expect(el.hasAttribute('hidden')).to.equal(false); // visible first
+
+      el.hass = makeHass({
+        ...states,
+        'climate.test': climateState({ current_temperature: 25 }, 'unavailable'),
+      });
+      await aTimeout(10);
+      await el.updateComplete;
+      expect(el.hasAttribute('hidden')).to.equal(true); // hid in response to the event
     });
 
     it('comfort row un-hides once the feature reports it is visible', async () => {

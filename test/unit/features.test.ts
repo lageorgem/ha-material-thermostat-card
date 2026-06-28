@@ -695,7 +695,10 @@ describe('mt-switch-group', () => {
     expect(hass.__calls[0].data).to.deep.equal({ entity_id: 'switch.a' });
   });
 
-  it('_onSelect handles undefined entities (?? [] fallback) -> only turns on selected', async () => {
+  // Defensive-branch test (not a realistic state): render() returns nothing when
+  // entities is empty, so the @item-selected listener can't normally fire with
+  // entities undefined — this exists only to pin the `?? []` guard in _onSelect.
+  it('_onSelect tolerates undefined entities (?? [] fallback) -> only turns on selected', async () => {
     const hass = makeHass({ 'switch.a': entityState('switch.a', 'on') });
     const el = await fixture<MtSwitchGroup>(
       html`<mt-switch-group
