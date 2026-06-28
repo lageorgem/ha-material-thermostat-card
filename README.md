@@ -16,7 +16,9 @@ gracefully under any Home Assistant theme.
 
 [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=dashboard)
 
-<!-- 📸 Card screenshots go here. Swing-icon previews live in icons/. -->
+<p align="center">
+  <img src="assets/hero.png" alt="Material Thermostat Card cooling, with HVAC + fan selectors and sensor tiles" width="420">
+</p>
 
 ---
 
@@ -119,6 +121,11 @@ visually, or write the YAML directly.
 The dial mirrors the stock thermostat card's controls with a Nest‑style 270° arc (the gap sits at
 the bottom, where the `+/−` live).
 
+<p align="center">
+  <img src="assets/dial-heat.png" alt="Single heat setpoint (orange)" width="280">
+  <img src="assets/dial-heat-cool.png" alt="heat_cool dual setpoint with low/high handles" width="280">
+</p>
+
 | Interaction | Behavior |
 | --- | --- |
 | **Drag** the ring | Set the target temperature; markers follow smoothly |
@@ -172,6 +179,10 @@ feels_like:
 ## Features
 
 Add any number of rows under `features:`. Each entry has a `type` and type‑specific options.
+
+<p align="center">
+  <img src="assets/features.png" alt="A card with HVAC modes, a switch group, a switch list and entity tiles" width="400">
+</p>
 
 | `type` | Controls | Selection behavior |
 | --- | --- | --- |
@@ -333,6 +344,10 @@ A single status line that answers two questions: **does the room feel comfortabl
 **how long until it does** — then, once it is comfortable, **how long until the target temperature is
 reached**. It reuses the [feels‑like sensors](#feels-like-temperature) (no pickers of its own) and can
 be added **only once**.
+
+<p align="center">
+  <img src="assets/comfort.png" alt="Comfort feature: time until the room feels comfortable, with a thermometer icon" width="400">
+</p>
 
 #### How comfort is determined
 
@@ -504,7 +519,7 @@ pointer capture, SVG, the Web Animations API, `ResizeObserver`).
 
 - **Unit / component tests** (`test/unit/`) use [`@web/test-runner`](https://modern-web.dev/docs/test-runner/overview/)
   + [`@open-wc/testing`](https://open-wc.org/docs/testing/testing-package/), with V8 coverage mapped back
-  to the TypeScript sources. Coverage is gated at **95%** (statements / branches / functions / lines).
+  to the TypeScript sources. Coverage is gated at **100%** (statements / branches / functions / lines).
 - **End-to-end tests** (`e2e/`) use [Playwright](https://playwright.dev/) to drive the **built bundle**
   (`dist/material-thermostat-card.js`) against a mock `hass`, exercising full user journeys (mode
   selection, dropdowns, the temperature dial, the switch group, more-info).
