@@ -329,42 +329,75 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
 
 ### `comfort`
 
-A single status line that tells you whether the room **feels comfortable** and, when it doesn't,
-forecasts **how long until it will** — and once it is comfortable, **how long until the target
-temperature is reached**. It needs the [feels‑like sensors](#feels-like-temperature) and can be added
-**only once**.
+A single status line that answers two questions: **does the room feel comfortable right now**, and
+**how long until it does** — then, once it is comfortable, **how long until the target temperature is
+reached**. It reuses the [feels‑like sensors](#feels-like-temperature) (no pickers of its own) and can
+be added **only once**.
 
-Comfort is **calculated, not configured.** It uses the building‑science standard — the **ASHRAE 55 /
-ISO 7730 PMV model** (Fanger's Predicted Mean Vote): comfortable means −0.5 < PMV < +0.5 (≈ 80% of
-people satisfied). PMV folds temperature, humidity, clothing, and activity into one number. Clothing is
-inferred from the **room temperature itself** (dynamic clothing: lighter as it warms — heavy dress at
-~20 °C easing to light dress at ~27 °C), **not the thermostat mode**, so the verdict is the same whether
-you're heating or cooling at a given temperature. The result is a comfort band of roughly **21–27 °C**.
-An ASHRAE absolute‑humidity cap (0.012 humidity ratio) flags a muggy room even when the temperature is
-fine.
+#### How comfort is determined
 
-The forecast uses **only the current session** — history since the climate last turned on (its
-`last_changed`), because earlier data may reflect entirely different settings. It fits a Newton's‑law
-cooling/heating curve by **integration** (robust to the coarse, quantized steps real sensors record),
-so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
-reached**. The forecast is gated on **time coverage**, not sample count (it adapts to the sensor — a
-coarse sensor qualifies with 2–3 readings, a fast one needs many): once the history spans ~6 minutes it
-shows a **rough early estimate** from the real trend, refining to the accurate fit as it converges.
-Times are compact (`7m`, `1h`, `2hr+`); until there's enough coverage it just shows the verdict. The
-ETA is anchored to the last reading and **counts down between updates** (`7m → 6m → 5m`), resolving to
-*"Room should be comfortable soon"* / *"Almost at 16°C"* near zero — so it doesn't sit frozen on a
-coarse sensor that only reports every few minutes.
+Comfort is **calculated, not configured** — there's no `comfort_min`/`comfort_max`. The card uses the
+building‑science standard, the **ASHRAE 55 / ISO 7730 PMV model** (Fanger's *Predicted Mean Vote*),
+which folds **temperature, humidity, clothing, and activity** into one number on the −3 (cold) … 0
+(neutral) … +3 (hot) scale. The room is comfortable when **−0.5 < PMV < +0.5** (≈ 80% of people
+satisfied).
 
-Example lines:
+- **Clothing is inferred from the room temperature itself** — "dynamic clothing": people dress lighter
+  as a space warms (heavy dress ~1.0 clo at ≤ 20 °C easing to light dress ~0.5 clo at ≥ 27 °C) — **not
+  the thermostat mode**. So the verdict is identical whether you're heating or cooling at a given
+  temperature (an idle heater on a mild day won't make the room read "warm"). The result is a comfort
+  band of roughly **21–27 °C**.
+- An **absolute‑humidity cap** (ASHRAE's 0.012 humidity ratio) additionally flags a muggy room as
+  `humid` even when the temperature itself is fine.
 
-- `18m until comfortable` (warming/cooling toward the comfort band)
-- `34m until cooled to 16°C` / `14m until heated to 26°C` (comfortable now, heading to the setpoint)
-- `won't go below 24°C` (comfortable, but the room plateaus short of the setpoint)
-- `Room feels warm` (uncomfortable, not yet enough session history to forecast a time)
+The verdict is one of **comfortable / warm / cool / humid**, which also drives the line's icon and
+colour (warm → heat colour, cool & humid → cool colour, comfortable → green).
+
+#### How the time‑to‑comfortable ETA is calculated
+
+While the room is uncomfortable, the card forecasts when it will become comfortable from the **current
+session's history only** — readings since the climate last turned on (its `last_changed`), because
+older data may reflect entirely different settings.
+
+- It fits a **Newton's‑law heating/cooling curve** to the binding axis (the PMV series heading toward
+  the ±0.5 boundary, or the humidity‑ratio series toward the cap). The fit is recovered by
+  **integration** rather than by differencing consecutive readings, which makes it robust to the coarse,
+  quantized steps real sensors record. Because the model knows the room **slows as it nears its
+  plateau**, the estimate is realistic — and it can honestly report a target it **won't reach**.
+- The forecast is gated on **time coverage, not sample count**, so it adapts to the sensor — a coarse
+  sensor qualifies on 2–3 readings, a fast one needs more. Once history spans **~6 minutes** it shows a
+  **rough early estimate** from the real trend (a straight‑line extrapolation), refining to the accurate
+  curve fit as it converges. Below that coverage it just shows the plain verdict — never a fabricated
+  number.
+- Times are **compact** (`7m`, `1h`, `2hr+`), and the ETA is **anchored to the last reading and counts
+  down between updates** (`7m → 6m → 5m`) so it doesn't sit frozen on a sensor that only reports every
+  few minutes. Near zero it resolves to **"Room should be comfortable soon"**.
+
+This needs Home Assistant's **recorder** to be keeping history for the sensors.
+
+#### Switching to "time until target"
+
+Once the room **is** comfortable, the line switches from time‑to‑comfortable to a Nest‑style **time
+until the target temperature is reached** (enabled with `show_target_eta`). It applies the same
+Newton's‑law fit to the **temperature** series — but the **accurate fit only**, no rough straight‑line
+fallback, because an aggressive setpoint shouldn't be claimed reachable on a guess:
+
+- reachable → **"34m until cooled to 16 °C"** / **"14m until heated to 26 °C"** (also counting down,
+  resolving to **"Almost at 16 °C"** near zero);
+- the room plateaus short of the setpoint → **"won't go below 24 °C"** / **"won't go above …"**;
+- already at the target → the clause is dropped (back to "Room feels comfortable").
+
+Example lines across the lifecycle:
+
+- `Room feels warm` — uncomfortable, not yet ~6 min of session history to forecast a time
+- `18m until comfortable` — warming/cooling toward the comfort band
+- `Room feels comfortable` — in the band (target ETA off, or already reached)
+- `34m until cooled to 16°C` — comfortable, heading to the setpoint
+- `won't go below 24°C` — comfortable, but the room plateaus short of the setpoint
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `show_target_eta` | boolean | `false` | When comfortable, show the time until the target temperature is reached |
+| `show_target_eta` | boolean | `false` | When comfortable, also show the time until the target temperature is reached |
 | `width` | number `10`–`100` | `100` | Width as a percentage of the card |
 
 ```yaml
@@ -376,13 +409,9 @@ features:
     show_target_eta: true
 ```
 
-> Whenever the sensors read, the row shows a verdict — *Room feels comfortable / warm / cool / humid* (a
-> direct reading) — **including when the climate is off** (just without a forecast). The icon reflects
-> the state: a warm room in the heat colour, a cool room in the cool colour, comfortable in green. While
-> uncomfortable it upgrades to *"{time} until comfortable"* once the session history covers ~6 minutes
-> (early estimates are rough and refine over time); once comfortable it switches to the *"{time} until
-> cooled/heated to {target}"* line. The row is hidden only when the feels‑like sensors aren't set or the
-> climate is unavailable. Requires Home Assistant's **recorder** to be keeping history for the sensors.
+> The row shows a verdict **whenever the sensors read — including when the climate is off** (just
+> without a forecast). It is hidden only when the feels‑like sensors aren't set or the climate entity is
+> unavailable/unknown.
 
 ## Layout & responsiveness
 

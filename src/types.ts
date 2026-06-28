@@ -101,8 +101,9 @@ export interface EntityTileFeatureConfig {
 /**
  * The "comfort & time-to-comfortable" feature. Added at most once. Uses the
  * card-level {@link FeelsLikeConfig} sensors to judge comfort scientifically via
- * the ASHRAE 55 / ISO 7730 PMV model (clothing inferred from heating vs cooling)
- * and forecasts, from history since the climate turned on, how long until the
+ * the ASHRAE 55 / ISO 7730 PMV model (clothing inferred from the room
+ * temperature, not the HVAC mode) and forecasts, from history since the climate
+ * turned on, how long until the
  * room feels comfortable — and, optionally, until the target temperature is
  * reached. Comfort is calculated, not configured.
  */
