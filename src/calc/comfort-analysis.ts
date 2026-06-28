@@ -50,6 +50,12 @@ export interface ComfortInput {
   showTargetEta: boolean;
   /** Whether the climate is actively running (forecast only makes sense then). */
   running: boolean;
+  /**
+   * Minutes since the current reading was measured. The forecast ETA is anchored
+   * to the last data point, so subtracting this counts the displayed time down
+   * between (possibly sparse) sensor updates instead of leaving it frozen.
+   */
+  staleMin: number;
   /** Temperature unit symbol for messages, e.g. '°C'. */
   unit: string;
 }
@@ -70,6 +76,8 @@ const HIDDEN: ComfortResult = { visible: false, comfortable: false };
 
 /** Below this gap the target is treated as already reached (no ETA clause). */
 const TARGET_REACHED_EPS = 0.25;
+/** Once the counted-down ETA drops below this, show "…soon" instead of a number. */
+const ETA_SOON_MIN = 1.5;
 
 /**
  * The Nest-style time-to-target line shown while the room is comfortable:
@@ -90,7 +98,9 @@ function targetEta(i: ComfortInput): string | undefined {
   const cooling = i.target < i.tempNow;
   const eta = etaToThreshold(i.tempNow, i.target, fit);
   if (eta != null) {
-    return `${formatDuration(eta)} until ${cooling ? 'cooled' : 'heated'} to ${i.target}${i.unit}`;
+    const remaining = eta - i.staleMin; // count down from the last reading
+    if (remaining < ETA_SOON_MIN) return `Almost at ${i.target}${i.unit}`;
+    return `${formatDuration(remaining)} until ${cooling ? 'cooled' : 'heated'} to ${i.target}${i.unit}`;
   }
 
   // Unreachable: report the plateau, but only when actually moving toward it.
@@ -111,6 +121,10 @@ function targetEta(i: ComfortInput): string | undefined {
  * - **Comfortable + running:** switches to the time until the target setpoint is
  *   reached ("15m until cooled to 24°C"), when enabled and forecastable.
  * - **Not running (climate off):** the plain verdict, no forecast.
+ *
+ * The ETA is anchored to the last reading and counted down by `staleMin`, so it
+ * ticks "7m → 6m → 5m" between (possibly sparse) updates and resolves to "Room
+ * should be comfortable soon" / "Almost at {target}" near zero.
  *
  * Only non-numeric readings hide the row here; the sensors-unset /
  * climate-unavailable cases are gated by the caller.
@@ -172,9 +186,17 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
   }
 
   // Enough coverage: the accurate integral fit if it converges, else a rough
-  // linear extrapolation of the (real) trend.
+  // linear extrapolation of the (real) trend. The ETA is anchored to the last
+  // reading, so it counts down between updates and resolves to "…soon" near zero.
   const fit = newtonFit(series);
   const eta = (fit ? etaToThreshold(metricNow, threshold, fit) : null) ?? linearEta(series, threshold);
-  const line = eta != null ? `${formatDuration(eta)} until comfortable` : verdict;
+  let line = verdict;
+  if (eta != null) {
+    const remaining = eta - i.staleMin;
+    line =
+      remaining < ETA_SOON_MIN
+        ? 'Room should be comfortable soon'
+        : `${formatDuration(remaining)} until comfortable`;
+  }
   return { visible: true, comfortable: false, line, status };
 }

@@ -83,8 +83,11 @@ shows the accurate integral fit or a rough `linearEta` fallback (early estimate 
 a coarse sensor / the transient, refining over time). Uncomfortable → "{t} until
 comfortable"; once comfortable → the Nest-style time to the setpoint ("{t} until
 cooled to 24°C" / "heated to 26°C", gated by `show_target_eta`). Times are compact
-via `formatDuration` ("7m" / "1h" / "2hr+"). Forecast only when `running` (off →
-bare verdict). `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
+via `formatDuration` ("7m" / "1h" / "2hr+") and **count down between readings** —
+the component passes `staleMin` (since the temp sensor's `last_changed`) and
+`analyzeComfort` shows `eta − staleMin`, resolving to "…soon" / "Almost at {target}"
+near zero (a 30 s tick drives it; history is fetched ~60 s). Forecast only when
+`running` (off → bare verdict). `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
 logic is unit‑tested without Lit/hass) returns `{ line, status }` where `status` ∈
 `comfortable|warm|cool|humid` drives the row's icon + colour (warm→heat colour,
 cool/humid→cool colour, comfortable→green). **Comfort is calculated, not configured**

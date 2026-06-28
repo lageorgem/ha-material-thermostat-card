@@ -173,6 +173,14 @@ a plain `{detail}` object has no `stopPropagation`.
   so a coarse sensor / the turn-on transient still gets an early estimate that refines
   over time. `linearEta` self-rejects when moving away / flat (capped at 12 h).
   Forecast only when `running` (passed into `ComfortInput`); off → bare verdict.
+- **ETA counts down between readings (anchored to the last data point).** The
+  forecast ETA is "minutes from the last reading", so the component passes
+  `staleMin` = minutes since the temp sensor's `last_changed` and `analyzeComfort`
+  shows `eta − staleMin` → "7m → 6m → 5m" instead of a frozen value on a sparse
+  sensor. Below `ETA_SOON_MIN` (1.5) → "Room should be comfortable soon" /
+  "Almost at {target}". A 30 s `_tick()` re-`_recompute()`s for the countdown;
+  history is only fetched every `FETCH_MS` (60 s) via `_lastFetchMs` throttle.
+  `Date.now()` in the component is fine (runtime, not Workflow).
 - **Two ETA phases + COMPACT time format.** Uncomfortable → "{t} until comfortable";
   once comfortable → the Nest-style time to the SETPOINT: "{t} until cooled to 24°C"
   / "{t} until heated to 26°C" (or "won't go below/above N°C" when plateauing short),

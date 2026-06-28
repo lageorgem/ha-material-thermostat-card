@@ -409,6 +409,7 @@ describe('calc/comfort-analysis', () => {
     target: null,
     showTargetEta: false,
     running: true,
+    staleMin: 0,
     unit: '°C',
   };
 
@@ -501,6 +502,33 @@ describe('calc/comfort-analysis', () => {
     expect(r.comfortable).to.equal(false);
     expect(r.status).to.equal('warm');
     expect(r.line).to.match(/^\d+m until comfortable$/);
+  });
+
+  it('counts the ETA down as the reading goes stale, then says "soon"', () => {
+    const i = {
+      ...base,
+      tempNow: 40,
+      rhNow: 50,
+      tempSeries: exp(24, 42, 0.03),
+      rhSeries: flat(50),
+    };
+    expect(analyzeComfort({ ...i, staleMin: 0 }).line).to.equal('59m until comfortable');
+    expect(analyzeComfort({ ...i, staleMin: 5 }).line).to.equal('54m until comfortable'); // counted down
+    expect(analyzeComfort({ ...i, staleMin: 1000 }).line).to.equal('Room should be comfortable soon');
+  });
+
+  it('counts the target ETA down too, resolving to "Almost at {target}"', () => {
+    const i = {
+      ...base,
+      tempNow: 25,
+      rhNow: 45,
+      target: 16,
+      showTargetEta: true,
+      tempSeries: exp(14, 28, 0.05),
+      rhSeries: flat(45),
+    };
+    expect(analyzeComfort({ ...i, staleMin: 0 }).line).to.equal('34m until cooled to 16°C');
+    expect(analyzeComfort({ ...i, staleMin: 1000 }).line).to.equal('Almost at 16°C');
   });
 
   it('cooling: forecasts "{time} until comfortable" (PMV → +0.5)', () => {

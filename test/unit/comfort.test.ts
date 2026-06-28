@@ -23,6 +23,8 @@ interface MountOpts {
   noSensors?: boolean;
   /** Epoch-seconds for the climate's last_changed (session start). */
   sessionStartSec?: number;
+  /** Seconds ago the temperature reading last changed (ETA countdown anchor). */
+  tStaleSec?: number;
 }
 
 describe('mt-comfort', () => {
@@ -44,9 +46,13 @@ describe('mt-comfort', () => {
     );
     // The session anchors on the climate's last_changed (since it turned on).
     (climate as any).last_changed = new Date((opts.sessionStartSec ?? baseSec) * 1000).toISOString();
+    const tSensor = entityState(T_SENSOR, opts.tempNow ?? '25');
+    if (opts.tStaleSec != null) {
+      (tSensor as any).last_changed = new Date(Date.now() - opts.tStaleSec * 1000).toISOString();
+    }
     const states: Record<string, any> = {
       [CLIMATE]: climate,
-      [T_SENSOR]: entityState(T_SENSOR, opts.tempNow ?? '25'),
+      [T_SENSOR]: tSensor,
       [H_SENSOR]: entityState(H_SENSOR, opts.rhNow ?? '50'),
     };
     const callWS = sinon.stub().resolves(opts.history ?? {});
@@ -126,6 +132,24 @@ describe('mt-comfort', () => {
       },
     });
     expect(line(el)).to.match(/until comfortable$/);
+  });
+
+  it('shows "comfortable soon" when the ETA has counted down past a very stale reading', async () => {
+    // Cooling history gives an ETA of a few minutes, but the reading is an hour
+    // old → the counted-down ETA is well past zero.
+    const temps: number[] = [];
+    for (let i = 0; i < 16; i++) temps.push(24 + 12 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      tempNow: '32',
+      rhNow: '30',
+      tStaleSec: 60 * 60,
+      history: {
+        [CLIMATE]: pts(Array(16).fill('cool'), baseSec),
+        [T_SENSOR]: pts(temps, baseSec),
+        [H_SENSOR]: pts(Array(16).fill(30), baseSec),
+      },
+    });
+    expect(line(el)).to.equal('Room should be comfortable soon');
   });
 
   it('comfortable: shows the Nest-style time until cooled to the target', async () => {

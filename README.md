@@ -350,7 +350,10 @@ so estimates **slow as the room nears its plateau** and it can honestly say a ta
 reached**. The forecast is gated on **time coverage**, not sample count (it adapts to the sensor — a
 coarse sensor qualifies with 2–3 readings, a fast one needs many): once the history spans ~6 minutes it
 shows a **rough early estimate** from the real trend, refining to the accurate fit as it converges.
-Times are compact (`7m`, `1h`, `2hr+`); until there's enough coverage it just shows the verdict.
+Times are compact (`7m`, `1h`, `2hr+`); until there's enough coverage it just shows the verdict. The
+ETA is anchored to the last reading and **counts down between updates** (`7m → 6m → 5m`), resolving to
+*"Room should be comfortable soon"* / *"Almost at 16°C"* near zero — so it doesn't sit frozen on a
+coarse sensor that only reports every few minutes.
 
 Example lines:
 

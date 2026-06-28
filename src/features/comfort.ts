@@ -11,8 +11,10 @@ import {
   type TS,
 } from '../calc/comfort-analysis';
 
-/** How often the history forecast is refreshed. */
-const REFRESH_MS = 60_000;
+/** How often the displayed ETA is recomputed (drives the live countdown). */
+const TICK_MS = 30_000;
+/** How often fresh history is fetched (between ticks the ETA just counts down). */
+const FETCH_MS = 60_000;
 /**
  * Upper bound on how far back history is fetched — a query-cost guard, not a
  * "lookback". The forecast only ever uses data since the current session began
@@ -64,12 +66,19 @@ export class MtComfort extends LitElement {
 
   private _timer?: number;
   private _fetching = false;
+  private _lastFetchMs = 0;
   /** Last fetched history series, reused for cheap recomputes on hass updates. */
   private _cache?: { tempSeries: TS[]; rhSeries: TS[] };
 
   connectedCallback(): void {
     super.connectedCallback();
-    this._timer = window.setInterval(() => void this._refresh(), REFRESH_MS);
+    this._timer = window.setInterval(() => void this._tick(), TICK_MS);
+  }
+
+  /** Recompute the (counting-down) ETA every tick; fetch fresh history less often. */
+  private async _tick(): Promise<void> {
+    this._recompute(); // cheap: re-evaluates the live countdown, no network
+    if (Date.now() - this._lastFetchMs >= FETCH_MS) await this._refresh();
   }
 
   disconnectedCallback(): void {
@@ -108,6 +117,16 @@ export class MtComfort extends LitElement {
   private _rhNow(): number {
     const raw = this.humiditySensor ? this.hass?.states?.[this.humiditySensor]?.state : undefined;
     return parseFloat(String(raw));
+  }
+
+  /**
+   * Minutes since the temperature reading last changed — the ETA's countdown
+   * anchor (the forecast is relative to that last data point). 0 when unknown.
+   */
+  private _staleMin(): number {
+    const lc = this.tempSensor ? this.hass?.states?.[this.tempSensor]?.last_changed : undefined;
+    const ms = lc ? new Date(lc).getTime() : NaN;
+    return isFinite(ms) ? Math.max(0, (Date.now() - ms) / 60000) : 0;
   }
 
   /** Resolve the relevant target setpoint, or null when at/within the band. */
@@ -169,6 +188,7 @@ export class MtComfort extends LitElement {
         target: running ? this._target(tempNow) : null,
         showTargetEta: running && (this.feature.show_target_eta ?? false),
         running,
+        staleMin: this._staleMin(),
         unit: this.hass.config?.unit_system?.temperature ?? '°C',
       })
     );
@@ -193,6 +213,7 @@ export class MtComfort extends LitElement {
     this._recompute(); // instant: the verdict needs no history
     if (this._fetching || !this._hasReadings() || !this._isRunning()) return;
     this._fetching = true;
+    this._lastFetchMs = Date.now();
     try {
       const now = Date.now();
       // Only forecast from the current session (since the climate turned on),
