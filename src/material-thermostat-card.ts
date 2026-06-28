@@ -189,6 +189,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   private _observeWidth(): void {
     if (this._resizeObserver || typeof ResizeObserver === 'undefined') return;
     this._resizeObserver = new ResizeObserver((entries) => {
+      /* c8 ignore next -- ResizeObserver always delivers the observed entry */
       const outer = entries[0]?.contentRect.width ?? 0;
       const inner = Math.max(0, outer - CARD_PADDING_X);
       if (Math.abs(inner - this._widthPx) >= 1) this._widthPx = inner;

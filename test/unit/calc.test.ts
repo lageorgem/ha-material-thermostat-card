@@ -120,6 +120,15 @@ describe('calc/pmv', () => {
     expect(pmv(24, 50)).to.equal(pmv(24, 50, { tr: 24 }));
   });
 
+  it('drops the latent sweat term at a low metabolic rate (met ≤ 1.0)', () => {
+    // At met 0.8 the metabolic rate (≈46.5 W/m²) is below the 58.15 sweat
+    // threshold, so the sweat-loss term is zero (its else-branch). Result stays
+    // finite and reads colder than the sedentary 1.1-met default.
+    const low = pmv(22, 50, { met: 0.8, clo: 1.0 });
+    expect(Number.isFinite(low)).to.equal(true);
+    expect(low).to.be.lessThan(pmv(22, 50, { met: 1.1, clo: 1.0 }));
+  });
+
   describe('cloForTemp', () => {
     it('infers dynamic clothing from the room temperature, clamped to 0.5–1.0', () => {
       expect(cloForTemp(15)).to.equal(1.0); // cold → winter dress (capped)
@@ -225,10 +234,29 @@ describe('calc/forecast', () => {
       expect(newtonFit(linear)).to.equal(null);
     });
 
-    it('returns null for noisy data with a poor fit', () => {
-      const noisy: Sample[] = [];
-      for (let t = 0; t <= 20; t++) noisy.push({ t, v: t % 2 === 0 ? 20 : 25 });
-      expect(newtonFit(noisy)).to.equal(null);
+    it('returns null when the normal-equations matrix is degenerate (singular)', () => {
+      // A hard square wave makes the [∫v dτ, t] columns effectively collinear →
+      // the 2×2 determinant collapses to ≈0 (the det guard, before k/r²).
+      const square: Sample[] = [];
+      for (let t = 0; t <= 20; t++) square.push({ t, v: t % 2 === 0 ? 20 : 25 });
+      expect(newtonFit(square)).to.equal(null);
+    });
+
+    it('returns null for a converging trend whose fit quality is poor (r² < MIN_FIT_R2)', () => {
+      // Net-downward but strongly oscillating: the integral fit still recovers a
+      // positive rate (k ≈ 0.24), but the scatter drives r² to ≈0.13 — rejected by
+      // the fit-quality guard, NOT the k ≤ 0 or singular-matrix guards.
+      const oscillating: Sample[] = [
+        { t: 0, v: 26 },
+        { t: 2, v: 24 },
+        { t: 4, v: 26 },
+        { t: 6, v: 24 },
+        { t: 8, v: 25.5 },
+        { t: 10, v: 23.8 },
+        { t: 12, v: 25.2 },
+        { t: 14, v: 23.6 },
+      ];
+      expect(newtonFit(oscillating)).to.equal(null);
     });
 
     it('tolerates duplicate timestamps without crashing', () => {
@@ -267,8 +295,9 @@ describe('calc/forecast', () => {
       expect(reachable(24, 24, 24)).to.equal(false); // already at plateau
     });
 
-    it('returns null when the ratio is non-positive', () => {
-      // target on the far side of v0 from the plateau → unreachable.
+    it('returns null when the target is on the far side of the current value', () => {
+      // Cooling toward the ≈24 plateau, but target 31 is above the current 25 —
+      // the wrong direction entirely → never reached.
       expect(etaToThreshold(25, 31, fit)).to.equal(null);
     });
   });
@@ -297,7 +326,9 @@ describe('calc/forecast', () => {
       expect(eta).to.equal(null);
     });
 
-    it('returns null for a flat trend (implausibly far)', () => {
+    it('returns null for a nearly-flat trend (ETA implausibly far off)', () => {
+      // Slope is tiny but non-zero, so the ETA is astronomically large → rejected
+      // by the MAX_LINEAR_ETA_MIN ceiling (not the zero-slope guard).
       const eta = linearEta(
         [
           { t: 0, v: 28 },
@@ -306,6 +337,22 @@ describe('calc/forecast', () => {
         24
       );
       expect(eta).to.equal(null);
+    });
+
+    it('returns null with fewer than two points (no line to fit)', () => {
+      expect(linearEta([{ t: 0, v: 30 }], 26)).to.equal(null);
+    });
+
+    it('returns null for an exactly flat series (zero slope)', () => {
+      expect(
+        linearEta(
+          [
+            { t: 0, v: 28 },
+            { t: 10, v: 28 },
+          ],
+          24
+        )
+      ).to.equal(null);
     });
   });
 });
@@ -685,10 +732,5 @@ describe('calc/comfort-analysis', () => {
     expect(r.line).to.match(/until comfortable$/);
     expect(r.line).to.not.contain('cooled');
     expect(r.line).to.not.contain('target');
-  });
-
-  it('mid-range temperature reads comfortable', () => {
-    const r = analyzeComfort({ ...base, tempNow: 23, rhNow: 45 });
-    expect(r.comfortable).to.equal(true);
   });
 });

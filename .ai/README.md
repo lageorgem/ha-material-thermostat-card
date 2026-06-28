@@ -53,11 +53,13 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # eslint src/**/*.ts
 npm run lint:fix   # eslint --fix
 npm run format     # prettier --write
-npm test           # unit/component tests (real Chrome) + coverage (95% gate)
+npm test           # unit/component tests (real Chrome) + coverage (100% gate)
 npm run test:e2e   # Playwright e2e against the built bundle (build first)
 node tools/gen-icons.mjs   # regenerate the mt: icon set into src/icons.generated.ts
+# Regenerate README screenshots against a real HA instance (token via env):
+HA_URL=https://your.ui.nabu.casa HA_TOKEN=<long-lived-token> node dev/ha-shots.mjs
 ```
 
 Quality gates: `lint`, `typecheck`, `build` + dist-up-to-date, HACS validation
-(`validate.yml`), and the unit + e2e suites with a 95% coverage gate
+(`validate.yml`), and the unit + e2e suites with a 100% coverage gate
 (`test.yml`). See [`testing.md`](testing.md).

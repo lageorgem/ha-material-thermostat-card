@@ -12,6 +12,9 @@ try {
     inherits: true,
     initialValue: 'transparent',
   });
+  // registerProperty succeeds in supported browsers; the catch below only fires
+  // on older engines or on a duplicate registration.
+  /* c8 ignore next 3 */
 } catch {
   // already registered or unsupported — degrades to an instant color change
 }
@@ -49,6 +52,7 @@ function polar(angleDeg: number, r: number): { x: number; y: number } {
 function arcPath(startAngle: number, endAngle: number, r: number): string {
   const start = polar(startAngle, r);
   const end = polar(endAngle, r);
+  /* c8 ignore next -- the sole caller spans the full 270° ring, always > 180° */
   const largeArc = endAngle - startAngle > 180 ? 1 : 0;
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
@@ -460,8 +464,10 @@ export class MtCircularDial extends LitElement {
       this._wipeFrom = null;
     };
     if (!newSeg || !oldSeg) return done();
-    const segLen = parseFloat(newSeg.getAttribute('stroke-dasharray') ?? '0');
-    const segStart = -parseFloat(newSeg.getAttribute('stroke-dashoffset') ?? '0'); // segS × 1000
+    // The rendered segment always carries both dash attributes (set in render),
+    // and we've already returned above when newSeg is absent.
+    const segLen = parseFloat(newSeg.getAttribute('stroke-dasharray')!);
+    const segStart = -parseFloat(newSeg.getAttribute('stroke-dashoffset')!); // segS × 1000
     if (segLen <= 0) return done();
     const opts: KeyframeAnimationOptions = { duration: 460, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
     // New: the exact turn-on draw — the dash grows from zero at the arc start
@@ -558,7 +564,7 @@ export class MtCircularDial extends LitElement {
     const modeIconEl = html`<ha-icon class="mode-icon" icon=${modeIcon}></ha-icon>`;
     const dualSetIconEl = html`<ha-icon
       class="mode-icon"
-      icon=${HVAC_MODE_ICONS[dualActive === 'cool' ? 'cool' : 'heat'] ?? 'mdi:thermostat'}
+      icon=${HVAC_MODE_ICONS[dualActive === 'cool' ? 'cool' : 'heat']}
     ></ha-icon>`;
 
     return html`

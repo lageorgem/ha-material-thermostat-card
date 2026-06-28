@@ -31,3 +31,12 @@ export function ensureHaComponents(): Promise<void> {
   })();
   return _promise;
 }
+
+/**
+ * Reset the memoized loader promise so {@link ensureHaComponents} runs again.
+ * Test-only seam — production calls `ensureHaComponents` once and reuses it.
+ * @internal
+ */
+export function resetHaComponentsForTest(): void {
+  _promise = undefined;
+}

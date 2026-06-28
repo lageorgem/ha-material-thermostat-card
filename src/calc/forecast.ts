@@ -139,7 +139,9 @@ export function newtonFit(samples: Sample[]): NewtonFit | null {
     ssr += (r.y - yh) ** 2;
     sst += (r.y - meanY) ** 2;
   }
-  const r2 = sst === 0 ? 1 : 1 - ssr / sst;
+  // `sst` (the variance of v−v₀) is strictly positive here: a perfectly flat
+  // series yields k = 0 and already returned above, so this never divides by 0.
+  const r2 = 1 - ssr / sst;
   if (r2 < MIN_FIT_R2) return null;
   return { k, asymptote, r2 };
 }
@@ -187,9 +189,8 @@ export function reachable(v0: number, target: number, asymptote: number): boolea
  */
 export function etaToThreshold(v0: number, target: number, fit: NewtonFit): number | null {
   const { k, asymptote: A } = fit;
+  // reachable() guarantees `target` lies strictly between `v0` and the plateau,
+  // so (v0−A)/(target−A) > 1 and ln(ratio)/k > 0 — no further guards needed.
   if (!reachable(v0, target, A)) return null;
-  const ratio = (v0 - A) / (target - A);
-  if (!(ratio > 0)) return null;
-  const t = Math.log(ratio) / k;
-  return t > 0 ? t : null;
+  return Math.log((v0 - A) / (target - A)) / k;
 }

@@ -72,3 +72,16 @@ test('the header more-info button opens more-info for the entity', async ({ page
   await page.locator('material-thermostat-card .more').click();
   await expect.poll(() => page.evaluate(() => (window as any).__moreInfo)).toBe('climate.living_room');
 });
+
+test('the comfort feature shows a verdict from the feels-like sensors', async ({ page }) => {
+  // 24°C / 52% RH reads comfortable; the row renders synchronously from the
+  // shared feels-like sensors (no recorder history needed for the verdict).
+  const comfort = page.locator('mt-comfort');
+  await expect(comfort).toBeVisible();
+  // direct-child span only (avoid the ha-icon stub's nested span via shadow piercing)
+  await expect(comfort.locator('.comfort > span')).toHaveText('Room feels comfortable');
+  await expect(comfort.locator('.comfort ha-icon')).toHaveAttribute(
+    'icon',
+    'mdi:emoticon-happy-outline'
+  );
+});

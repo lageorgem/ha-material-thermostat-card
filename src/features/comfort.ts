@@ -106,17 +106,19 @@ export class MtComfort extends LitElement {
     return this.hass?.states?.[this.entityId];
   }
 
-  /** Current temperature: feels-like sensor, falling back to climate's own. */
+  /**
+   * Current temperature: feels-like sensor, falling back to the climate's own
+   * `current_temperature` when the sensor reads non-numeric. Only ever called
+   * once {@link _hasReadings} has confirmed `tempSensor` is set.
+   */
   private _tempNow(): number {
-    const raw = this.tempSensor ? this.hass?.states?.[this.tempSensor]?.state : undefined;
-    const v = parseFloat(String(raw));
+    const v = parseFloat(String(this.hass?.states?.[this.tempSensor!]?.state));
     return isFinite(v) ? v : Number(this._climate?.attributes?.current_temperature);
   }
 
-  /** Current humidity reading (%). */
+  /** Current humidity reading (%). Called only once `humiditySensor` is set. */
   private _rhNow(): number {
-    const raw = this.humiditySensor ? this.hass?.states?.[this.humiditySensor]?.state : undefined;
-    return parseFloat(String(raw));
+    return parseFloat(String(this.hass?.states?.[this.humiditySensor!]?.state));
   }
 
   /**
@@ -124,16 +126,19 @@ export class MtComfort extends LitElement {
    * anchor (the forecast is relative to that last data point). 0 when unknown.
    */
   private _staleMin(): number {
-    const lc = this.tempSensor ? this.hass?.states?.[this.tempSensor]?.last_changed : undefined;
+    const lc = this.hass?.states?.[this.tempSensor!]?.last_changed;
     const ms = lc ? new Date(lc).getTime() : NaN;
     return isFinite(ms) ? Math.max(0, (Date.now() - ms) / 60000) : 0;
   }
 
-  /** Resolve the relevant target setpoint, or null when at/within the band. */
+  /**
+   * Resolve the relevant target setpoint, or null when at/within the band. Only
+   * called once {@link _hasReadings} has confirmed the climate entity exists.
+   */
   private _target(tempNow: number): number | null {
-    const a = this._climate?.attributes ?? {};
+    const a = this._climate!.attributes;
     if (
-      this._climate?.state === 'heat_cool' &&
+      this._climate!.state === 'heat_cool' &&
       a.target_temp_low != null &&
       a.target_temp_high != null
     ) {
@@ -221,9 +226,11 @@ export class MtComfort extends LitElement {
       const start = Math.max(this._sessionStartMs() ?? 0, now - MAX_SESSION_MS);
       const ids = [this.tempSensor!, this.humiditySensor!];
       const hist = await fetchHistory(this.hass, ids, start, now);
+      // fetchHistory always returns an array for every requested id (empty when
+      // it has no data), so these lookups are never undefined.
       this._cache = {
-        tempSeries: numericSeries(hist[this.tempSensor!] ?? [], start, start),
-        rhSeries: numericSeries(hist[this.humiditySensor!] ?? [], start, start),
+        tempSeries: numericSeries(hist[this.tempSensor!], start, start),
+        rhSeries: numericSeries(hist[this.humiditySensor!], start, start),
       };
       this._recompute();
     } catch {
@@ -248,7 +255,7 @@ export class MtComfort extends LitElement {
   protected render(): TemplateResult | typeof nothing {
     const r = this._result;
     if (!r.visible || !r.line) return nothing;
-    const status = r.status ?? 'comfortable';
+    const status = r.status!; // analyzeComfort always sets a status alongside a visible line
     return html`<div class="comfort" role="status">
       <ha-icon
         icon=${STATUS_ICON[status]}

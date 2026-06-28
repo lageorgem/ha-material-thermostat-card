@@ -242,6 +242,46 @@ describe('mt-circular-dial', () => {
     });
   });
 
+  describe('touch-action (mobile scroll vs. ring drag)', () => {
+    it('the svg allows vertical page scroll while the ring band swallows the gesture', async () => {
+      // Regression: on mobile, swiping over the dial must still scroll the page;
+      // only the ring band (.hit) captures the drag.
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 21;
+      await el.updateComplete;
+      const svg = el.shadowRoot!.querySelector('svg') as SVGSVGElement;
+      expect(getComputedStyle(svg).touchAction).to.equal('pan-y');
+      const hit = el.shadowRoot!.querySelector('.hit') as SVGElement;
+      expect(hit).to.not.equal(null);
+      expect(getComputedStyle(hit).touchAction).to.equal('none');
+    });
+  });
+
+  describe('range-display timer (_bumpRangeDisplay)', () => {
+    it('shows the range, and a second bump clears the prior timer before re-arming', async () => {
+      const el = await mount();
+      el.mode = 'heat_cool';
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      await el.updateComplete;
+
+      (el as any)._bumpRangeDisplay();
+      const firstTimer = (el as any)._rangeTimer;
+      expect((el as any)._showRangeTimer).to.equal(true);
+      expect(firstTimer).to.not.equal(undefined);
+
+      // A second bump must clear the still-pending timer (the `if (_rangeTimer)`
+      // branch) and arm a fresh one.
+      (el as any)._bumpRangeDisplay();
+      expect((el as any)._showRangeTimer).to.equal(true);
+      expect((el as any)._rangeTimer).to.not.equal(firstTimer);
+    });
+  });
+
   describe('geometry helpers', () => {
     it('_angleOf maps min→ARC_START, max→ARC_START+SWEEP, mid→midpoint', async () => {
       const el = await mount();

@@ -729,6 +729,25 @@ describe('material-thermostat-card', () => {
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('ha-card')).to.not.equal(null);
     });
+
+    it('does not reapply the theme when neither themes nor config changed', async () => {
+      const el = track(
+        document.createElement('material-thermostat-card') as MaterialThermostatCard
+      );
+      el.setConfig(baseConfig({ theme: 'my-theme' }));
+      const themes = {
+        themes: { 'my-theme': { 'primary-color': '#abcdef' } },
+        default_theme: 'default',
+      } as any;
+      el.hass = makeHass({ [ENTITY]: climateState() }, { themes });
+      document.body.appendChild(el);
+      await el.updateComplete;
+      // Update hass but keep the SAME themes object reference and don't touch the
+      // config → all three OR-arms are false, so applyThemesOnElement is skipped.
+      el.hass = makeHass({ [ENTITY]: climateState({ current_temperature: 25 }) }, { themes });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('ha-card')).to.not.equal(null);
+    });
   });
 
   describe('more-info', () => {

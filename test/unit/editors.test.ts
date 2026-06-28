@@ -2,7 +2,7 @@ import { fixture, html, expect } from '@open-wc/testing';
 import { makeHass, climateState, entityState, captureEvents } from '../helpers';
 import type { TestHass } from '../helpers';
 
-import { ensureHaComponents } from '../../src/editors/load-ha';
+import { ensureHaComponents, resetHaComponentsForTest } from '../../src/editors/load-ha';
 import '../../src/editor';
 import '../../src/editors/climate-feature-editor';
 import '../../src/editors/input-select-editor';
@@ -39,33 +39,75 @@ function emitInput(node: Element, value: string): void {
 // D) load-ha.ts ensureHaComponents
 // ---------------------------------------------------------------------------
 describe('ensureHaComponents (load-ha)', () => {
-  // The module memoizes a module-level promise so it only runs once. We set a
-  // stub loader BEFORE the first call so the loader branch is taken, then assert
-  // every call resolves (memoized to the same promise).
-  before(() => {
-    let threw = false;
+  const realGet = customElements.get.bind(customElements);
+  let origLoader: any;
+
+  beforeEach(() => {
+    origLoader = (window as any).loadCardHelpers;
+    resetHaComponentsForTest();
+  });
+  afterEach(() => {
+    (customElements as any).get = realGet;
+    (window as any).loadCardHelpers = origLoader;
+    resetHaComponentsForTest();
+  });
+
+  /** Pretend exactly `names` are registered custom elements (others undefined). */
+  function fakeRegistered(names: string[]): void {
+    (customElements as any).get = (n: string) =>
+      names.includes(n) ? class extends HTMLElement {} : undefined;
+  }
+
+  it('resolves immediately when the form components are already registered', async () => {
+    fakeRegistered(['ha-form', 'ha-entity-picker', 'ha-icon-picker']);
+    let loaderCalled = false;
     (window as any).loadCardHelpers = async () => {
-      // Exercise both the createCardElement success path AND the catch by
-      // alternating; first call returns a card whose ctor.getConfigElement runs.
-      if (!threw) {
-        threw = true;
+      loaderCalled = true;
+      return {};
+    };
+    await ensureHaComponents();
+    expect(loaderCalled).to.equal(false); // early return — the loader is never consulted
+  });
+
+  it('returns without loading when loadCardHelpers is unavailable', async () => {
+    fakeRegistered([]); // nothing registered → must consult the loader…
+    delete (window as any).loadCardHelpers; // …but there is none → just return
+    await ensureHaComponents(); // resolves, no throw
+  });
+
+  it('invokes loadCardHelpers to pull in the HA form stack when not registered', async () => {
+    fakeRegistered([]);
+    let createCalled = false;
+    let configCalled = false;
+    (window as any).loadCardHelpers = async () => ({
+      createCardElement: async () => {
+        createCalled = true;
         return {
-          createCardElement: async () => ({
-            constructor: { getConfigElement: async () => ({}) },
-          }),
+          constructor: {
+            getConfigElement: async () => {
+              configCalled = true;
+              return {};
+            },
+          },
         };
-      }
+      },
+    });
+    await ensureHaComponents();
+    expect(createCalled).to.equal(true);
+    expect(configCalled).to.equal(true);
+  });
+
+  it('swallows errors from HA internals (best-effort, never rejects)', async () => {
+    fakeRegistered([]);
+    (window as any).loadCardHelpers = async () => {
       throw new Error('boom');
     };
+    await ensureHaComponents(); // must resolve despite the throw
   });
 
-  it('resolves (taking the loader path) when ha-form is not yet defined', async () => {
-    // ha-form is not registered in the test env, so the loader runs.
-    await ensureHaComponents();
-    expect(customElements.get('ha-form')).to.equal(undefined);
-  });
-
-  it('is idempotent / memoized (subsequent calls return without re-running)', async () => {
+  it('is idempotent — memoizes its promise across calls', async () => {
+    fakeRegistered([]);
+    delete (window as any).loadCardHelpers;
     const a = ensureHaComponents();
     const b = ensureHaComponents();
     expect(a).to.equal(b);
@@ -305,6 +347,19 @@ describe('material-thermostat-card-editor', () => {
       ]);
       // all 9 addable feature types present, none filtered out
       expect(types.length).to.equal(9);
+    });
+
+    it('treats a missing entity state as no attributes (the ?? {} fallback)', async () => {
+      // No state object for the configured entity → attributes default to {} so
+      // the climate selectors (which need hvac/fan/swing arrays) are filtered out,
+      // while the custom/add-once features remain.
+      const el = await mount({ features: [] }, makeHass({}));
+      const types = (el as any)._addableFeatures().map((f: any) => f.type);
+      expect(types).to.not.include('climate-hvac-modes');
+      expect(types).to.not.include('climate-fan-modes');
+      expect(types).to.not.include('climate-swing-modes');
+      expect(types).to.include.members(CUSTOM_TYPES);
+      expect(types).to.include('comfort');
     });
 
     it('the comfort feature may be added only once', async () => {

@@ -3,6 +3,7 @@ import sinon from 'sinon';
 import '../../src/features/comfort';
 import { MtComfort } from '../../src/features/comfort';
 import { makeHass, climateState, entityState } from '../helpers';
+import { climateModeColor } from '../../src/theme';
 import type { ComfortFeatureConfig } from '../../src/types';
 
 const CLIMATE = 'climate.x';
@@ -25,6 +26,16 @@ interface MountOpts {
   sessionStartSec?: number;
   /** Seconds ago the temperature reading last changed (ETA countdown anchor). */
   tStaleSec?: number;
+  /** Extra climate attributes (e.g. heat_cool target_temp_low/high). */
+  climateAttrs?: Record<string, any>;
+  /** Make the recorder fetch reject (simulates the recorder being unavailable). */
+  wsRejects?: boolean;
+  /** Override hass.config (e.g. to drop unit_system). */
+  config?: any;
+  /** Don't set the climate's last_changed (no resolvable session start). */
+  noSessionStart?: boolean;
+  /** Set the climate's last_changed to a raw string (e.g. an invalid date). */
+  sessionStartRaw?: string;
 }
 
 describe('mt-comfort', () => {
@@ -41,11 +52,15 @@ describe('mt-comfort', () => {
   /** Mount mt-comfort and let its async history fetch settle. */
   async function mount(opts: MountOpts = {}): Promise<MtComfort> {
     const climate = climateState(
-      { current_temperature: Number(opts.tempNow ?? 25), temperature: 21 },
+      { current_temperature: Number(opts.tempNow ?? 25), temperature: 21, ...(opts.climateAttrs ?? {}) },
       opts.climateStateStr ?? 'cool'
     );
     // The session anchors on the climate's last_changed (since it turned on).
-    (climate as any).last_changed = new Date((opts.sessionStartSec ?? baseSec) * 1000).toISOString();
+    if (opts.sessionStartRaw !== undefined) {
+      (climate as any).last_changed = opts.sessionStartRaw;
+    } else if (!opts.noSessionStart) {
+      (climate as any).last_changed = new Date((opts.sessionStartSec ?? baseSec) * 1000).toISOString();
+    }
     const tSensor = entityState(T_SENSOR, opts.tempNow ?? '25');
     if (opts.tStaleSec != null) {
       (tSensor as any).last_changed = new Date(Date.now() - opts.tStaleSec * 1000).toISOString();
@@ -55,7 +70,9 @@ describe('mt-comfort', () => {
       [T_SENSOR]: tSensor,
       [H_SENSOR]: entityState(H_SENSOR, opts.rhNow ?? '50'),
     };
-    const callWS = sinon.stub().resolves(opts.history ?? {});
+    const callWS = opts.wsRejects
+      ? sinon.stub().rejects(new Error('recorder unavailable'))
+      : sinon.stub().resolves(opts.history ?? {});
     lastCallWS = callWS;
     const el = document.createElement('mt-comfort') as MtComfort;
     el.entityId = CLIMATE;
@@ -64,7 +81,10 @@ describe('mt-comfort', () => {
       el.tempSensor = T_SENSOR;
       el.humiditySensor = H_SENSOR;
     }
-    el.hass = makeHass(states, { callWS });
+    el.hass = makeHass(states, {
+      callWS,
+      ...(opts.config !== undefined ? { config: opts.config } : {}),
+    });
     document.body.appendChild(el);
     mounted.push(el);
     await el.updateComplete;
@@ -78,6 +98,33 @@ describe('mt-comfort', () => {
     const node = el.shadowRoot!.querySelector('.comfort span');
     return node ? node.textContent!.trim() : null;
   }
+
+  /** The rendered status icon element, or null. */
+  function icon(el: MtComfort): Element | null {
+    return el.shadowRoot!.querySelector('.comfort ha-icon');
+  }
+
+  it('shows the per-status icon and colour — warm/cool reversed from the mode', async () => {
+    // warm → thermometer-HIGH in the HEAT colour (the reverse of what you'd switch on).
+    const warm = await mount({ climateStateStr: 'off', tempNow: '33', rhNow: '45' });
+    expect(icon(warm)!.getAttribute('icon')).to.equal('mdi:thermometer-high');
+    expect(icon(warm)!.getAttribute('style')).to.contain(climateModeColor('heat'));
+
+    // cool → thermometer-LOW in the COOL colour.
+    const cool = await mount({ climateStateStr: 'off', tempNow: '17', rhNow: '40' });
+    expect(icon(cool)!.getAttribute('icon')).to.equal('mdi:thermometer-low');
+    expect(icon(cool)!.getAttribute('style')).to.contain(climateModeColor('cool'));
+
+    // humid → water-percent in the COOL colour.
+    const humid = await mount({ climateStateStr: 'off', tempNow: '24', rhNow: '85' });
+    expect(icon(humid)!.getAttribute('icon')).to.equal('mdi:water-percent');
+    expect(icon(humid)!.getAttribute('style')).to.contain(climateModeColor('cool'));
+
+    // comfortable → happy face in the neutral heat_cool (green) colour.
+    const comf = await mount({ climateStateStr: 'off', tempNow: '24', rhNow: '45' });
+    expect(icon(comf)!.getAttribute('icon')).to.equal('mdi:emoticon-happy-outline');
+    expect(icon(comf)!.getAttribute('style')).to.contain(climateModeColor('heat_cool'));
+  });
 
   it('shows "Room feels comfortable" immediately (no history needed)', async () => {
     const el = await mount({ tempNow: '25', rhNow: '50' });
@@ -180,6 +227,137 @@ describe('mt-comfort', () => {
     // The climate entity is no longer fetched — only the two sensors.
     expect(msg.entity_ids).to.have.members([T_SENSOR, H_SENSOR]);
     expect(msg.entity_ids).to.not.include(CLIMATE);
+  });
+
+  // --- Target resolution from the climate entity (the component's _target) ---
+
+  it('heat_cool above the high setpoint → "until cooled to {high}"', async () => {
+    // 25°C is comfortable and above target_temp_high (22) → cool toward 22.
+    const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2)); // → 20
+    const el = await mount({
+      climateStateStr: 'heat_cool',
+      climateAttrs: { target_temp_low: 18, target_temp_high: 22 },
+      tempNow: '25',
+      rhNow: '45',
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until cooled to 22°C$/);
+  });
+
+  it('heat_cool below the low setpoint → "until heated to {low}"', async () => {
+    // 22°C is comfortable but below target_temp_low (24) → heat toward 24.
+    const temps = Array.from({ length: 16 }, (_, i) => 26 - 5 * Math.exp(-0.05 * i * 2)); // → 26
+    const el = await mount({
+      climateStateStr: 'heat_cool',
+      climateAttrs: { target_temp_low: 24, target_temp_high: 28 },
+      tempNow: '22',
+      rhNow: '45',
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until heated to 24°C$/);
+  });
+
+  it('heat_cool within the band → no target ETA, just the verdict', async () => {
+    const el = await mount({
+      climateStateStr: 'heat_cool',
+      climateAttrs: { target_temp_low: 20, target_temp_high: 27 },
+      tempNow: '24',
+      rhNow: '45',
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('heat_cool without low/high setpoints falls back to the single `temperature`', async () => {
+    // A malformed heat_cool entity (no target_temp_low/high) → _target() drops to
+    // the single setpoint (climateState default 21).
+    const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      climateStateStr: 'heat_cool',
+      tempNow: '24',
+      rhNow: '45',
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until cooled to 21°C$/);
+  });
+
+  it('single-setpoint with no `temperature` attribute → no target ETA clause', async () => {
+    // A cool entity with no setpoint reported → _target() resolves to null.
+    const el = await mount({
+      tempNow: '24',
+      rhNow: '45',
+      climateAttrs: { temperature: undefined },
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('falls back to the climate current_temperature when the sensor is non-numeric', async () => {
+    // The temperature sensor reads "unknown"; the climate reports 25°C → still
+    // judged comfortable from the fallback reading (no crash, row visible).
+    const el = await mount({ tempNow: 'unknown', rhNow: '45' });
+    (el.hass.states[CLIMATE] as any).attributes.current_temperature = 25;
+    (el as any)._recompute();
+    await el.updateComplete;
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  // --- Tick / fetch throttle + error handling ---
+
+  it('recomputes every tick but only refetches past the fetch interval', async () => {
+    const el = await mount({ tempNow: '25', rhNow: '45' });
+    const after = lastCallWS.callCount;
+    // A tick immediately after a fetch: recompute only, no new network call.
+    await (el as any)._tick();
+    expect(lastCallWS.callCount).to.equal(after);
+    // Once the fetch window has elapsed, the next tick refetches.
+    (el as any)._lastFetchMs = Date.now() - 70_000;
+    await (el as any)._tick();
+    expect(lastCallWS.callCount).to.equal(after + 1);
+  });
+
+  it('keeps the instant verdict when the recorder fetch fails', async () => {
+    // callWS rejects (recorder unavailable) → the catch swallows it and the
+    // comfort-now verdict is still shown, just without a forecast.
+    const el = await mount({ tempNow: '33', rhNow: '45', wsRejects: true });
+    expect(lastCallWS.called).to.equal(true);
+    expect(line(el)).to.equal('Room feels warm');
+  });
+
+  it('uses °C when hass.config has no unit_system', async () => {
+    const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      tempNow: '25',
+      rhNow: '45',
+      config: {},
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until cooled to 21°C$/); // °C fallback applied
+  });
+
+  // --- Session-start parsing robustness ---
+
+  it('fetches a bounded window when the climate has no last_changed', async () => {
+    await mount({ tempNow: '25', noSessionStart: true });
+    expect(lastCallWS.called).to.equal(true);
+    const msg = lastCallWS.firstCall.args[0];
+    // Falls back to the MAX_SESSION_MS cap (≈24h) rather than crashing.
+    const span = new Date(msg.end_time).getTime() - new Date(msg.start_time).getTime();
+    expect(span).to.be.closeTo(24 * 3_600_000, 5000);
+  });
+
+  it('tolerates an unparseable last_changed (treated as no session start)', async () => {
+    await mount({ tempNow: '25', sessionStartRaw: 'not-a-date' });
+    expect(lastCallWS.called).to.equal(true);
+    const msg = lastCallWS.firstCall.args[0];
+    const span = new Date(msg.end_time).getTime() - new Date(msg.start_time).getTime();
+    expect(span).to.be.closeTo(24 * 3_600_000, 5000);
   });
 
   it('dispatches feature-visibility and cleans up its timer on disconnect', async () => {

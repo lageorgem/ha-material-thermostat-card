@@ -8,7 +8,7 @@ not used.
 ## Layout
 
 ```
-web-test-runner.config.mjs   unit/component runner config (coverage + 95% threshold)
+web-test-runner.config.mjs   unit/component runner config (coverage + 100% threshold)
 playwright.config.ts         e2e config (drives the built bundle)
 test/
   helpers.ts                 makeHass / climateState / entityState / oncePromise / captureEvents
@@ -23,8 +23,10 @@ e2e/
 - **`@web/test-runner`** + **`@open-wc/testing`** (`fixture`, `html`, `expect`), TypeScript +
   Lit decorators transpiled by **`@web/dev-server-esbuild`** (reads `tsconfig.json`, so
   `experimentalDecorators` + `useDefineForClassFields:false` are honored — required for Lit).
-- **V8 coverage** mapped back to `.ts`. Gated at **95%** (statements/branches/functions/lines) in
-  `coverageConfig.threshold`. Current actual ≈ 99.5%.
+- **V8 coverage** mapped back to `.ts`. Gated at **100%** (statements/branches/functions/lines) in
+  `coverageConfig.threshold`. Genuinely-unreachable defensive code is removed where safe, or marked
+  with a justified `/* c8 ignore */` (module-init `CSS.registerProperty` catch; the `arcPath`
+  large-arc helper whose sole caller always spans 270°; the ResizeObserver empty-entries guard).
 - Run one file while iterating: `npx web-test-runner --files "test/unit/foo.test.ts" --config web-test-runner.config.mjs` (the global coverage % shown for a subset is meaningless — only the full run's number counts).
 - Patterns (see `test/helpers.ts`):
   - Mount: `await fixture(html\`<mt-foo .prop=${x}></mt-foo>\`)`; import the module to register the tag.

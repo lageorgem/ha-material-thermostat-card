@@ -95,6 +95,12 @@
           state: '52',
           attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
         },
+        'sensor.room_temp': {
+          entity_id: 'sensor.room_temp',
+          state: '24',
+          attributes: { friendly_name: 'Room temp', unit_of_measurement: '°C' },
+          last_changed: new Date().toISOString(),
+        },
       };
 
       const hass = {
@@ -107,6 +113,9 @@
           window.__calls.push({ domain, service, data, target });
           return Promise.resolve();
         },
+        // The comfort feature fetches recorder history; return none so it shows
+        // just the (synchronous) comfort verdict.
+        callWS: () => Promise.resolve({}),
       };
 
       await import('../dist/material-thermostat-card.js');
@@ -116,6 +125,7 @@
         type: 'custom:material-thermostat-card',
         entity: 'climate.living_room',
         name: 'Living AC',
+        feels_like: { temperature: 'sensor.room_temp', humidity: 'sensor.humidity' },
         features: [
           { type: 'climate-hvac-modes' },
           { type: 'climate-fan-modes', display: 'dropdown' },
@@ -124,6 +134,7 @@
             { entity: 'switch.boost', label: 'Boost', icon: 'mdi:rocket-launch' },
           ] },
           { type: 'entity-tile', entity: 'sensor.humidity', name: 'Humidity', icon: 'mdi:water-percent' },
+          { type: 'comfort' },
         ],
       });
       document.getElementById('wrap').appendChild(card);
