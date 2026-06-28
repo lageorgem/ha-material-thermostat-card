@@ -76,10 +76,11 @@ regresses `v−v₀` on `[∫v dτ, t]` → `{k, asymptote}` — integration is 
 coarse quantized steps real recorders log, where differencing was pure noise;
 `etaToThreshold` is the closed‑form ETA, `null` when the target is beyond the
 plateau). The forecast uses **only the current session** — history since the
-climate's `last_changed` (`mt-comfort._sessionStartMs`), not a fixed lookback. The
-ETA shows as soon as the fit is trustworthy (`MIN_SPAN_MIN` 5 is a small floor, not
-a fixed delay); the turn-on transient + sensor resolution, not the floor, set how
-soon that is. `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
+climate's `last_changed` (`mt-comfort._sessionStartMs`), not a fixed lookback.
+**Gating is by time coverage** (`MIN_SPAN_MIN` 6, not sample count) so it adapts to
+the sensor; below it the row says "calculating…", above it shows the accurate
+integral fit or a rough `linearEta` fallback (early estimate from a coarse sensor /
+the transient, refining over time). Forecast only when `running` (off → bare verdict). `analyzeComfort` (`calc/comfort-analysis.ts`, **pure** — all
 logic is unit‑tested without Lit/hass) returns `{ line, status }` where `status` ∈
 `comfortable|warm|cool|humid` drives the row's icon + colour (warm→heat colour,
 cool/humid→cool colour, comfortable→green). **Comfort is calculated, not configured**

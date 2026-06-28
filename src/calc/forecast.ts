@@ -36,19 +36,20 @@ export interface NewtonFit {
   r2: number;
 }
 
-/** Minimum samples required before any forecast is attempted. */
+/** Minimum samples required for the accurate (integral) Newton fit. */
 export const MIN_SAMPLES = 4;
 /**
- * Minimum time span (minutes) the samples must cover. This is a small floor to
- * avoid fitting a 1–2 minute blip, NOT a fixed delay: the ETA appears as soon as
- * the fit is trustworthy (k > 0 and r² ≥ {@link MIN_FIT_R2}), which can be well
- * under 10 minutes when the sensor's readings change often enough. A long
- * turn-on transient or a coarse sensor (few recorded changes) may push the first
- * trustworthy fit later — that's the data, not an artificial wait.
+ * Minimum time span (minutes) the samples must cover before any ETA is shown.
+ * This is the primary gate — it adapts to the sensor: a coarse sensor reaches it
+ * with 2–3 readings, a fast one needs many. It guarantees the trend is *real*
+ * (a few minutes of change) rather than a momentary blip, while keeping the ETA
+ * early. Below this span the caller shows "calculating…".
  */
-export const MIN_SPAN_MIN = 5;
+export const MIN_SPAN_MIN = 6;
 /** Minimum fit quality (R² of the integral regression) to trust a fit. */
 export const MIN_FIT_R2 = 0.5;
+/** A linear ETA beyond this (minutes) means the series isn't usefully approaching. */
+const MAX_LINEAR_ETA_MIN = 12 * 60;
 
 /**
  * Ordinary least‑squares fit of `v = slope·t + intercept`.
@@ -141,6 +142,27 @@ export function newtonFit(samples: Sample[]): NewtonFit | null {
   const r2 = sst === 0 ? 1 : 1 - ssr / sst;
   if (r2 < MIN_FIT_R2) return null;
   return { k, asymptote, r2 };
+}
+
+/**
+ * A rough linear extrapolation: minutes until the series reaches `target` at its
+ * recent average rate (ordinary least-squares slope). Less accurate than
+ * {@link newtonFit} — it ignores the slow-down near a plateau, so it tends to
+ * *under*estimate — but it works from as few as two points, giving an early
+ * estimate from a coarse sensor's real trend while a full Newton fit isn't yet
+ * possible (e.g. during the turn-on transient). Returns null when the series
+ * isn't moving toward the target, is flat, or the ETA is implausibly far off.
+ * @param samples the time/value series (minutes / value), chronological
+ * @param target the threshold to reach
+ */
+export function linearEta(samples: Sample[], target: number): number | null {
+  const fit = linregress(samples);
+  if (!fit || fit.slope === 0) return null;
+  const last = samples[samples.length - 1];
+  const tTarget = (target - fit.intercept) / fit.slope;
+  const eta = tTarget - last.t;
+  if (!(eta > 0) || eta > MAX_LINEAR_ETA_MIN) return null;
+  return eta;
 }
 
 /**

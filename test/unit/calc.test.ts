@@ -11,6 +11,7 @@ import {
   linregress,
   newtonFit,
   etaToThreshold,
+  linearEta,
   reachable,
   type Sample,
 } from '../../src/calc/forecast';
@@ -271,6 +272,42 @@ describe('calc/forecast', () => {
       expect(etaToThreshold(25, 31, fit)).to.equal(null);
     });
   });
+
+  describe('linearEta', () => {
+    it('extrapolates a straight cooling trend to the target (works from 2 points)', () => {
+      // 30 → 28 over 10 min = −0.2/min; from 28, reaching 26 takes ~10 more min.
+      const eta = linearEta(
+        [
+          { t: 0, v: 30 },
+          { t: 10, v: 28 },
+        ],
+        26
+      );
+      expect(eta).to.be.closeTo(10, 0.5);
+    });
+
+    it('returns null when the trend is moving away from the target', () => {
+      const eta = linearEta(
+        [
+          { t: 0, v: 26 },
+          { t: 10, v: 27 }, // warming, target 24 is the wrong way
+        ],
+        24
+      );
+      expect(eta).to.equal(null);
+    });
+
+    it('returns null for a flat trend (implausibly far)', () => {
+      const eta = linearEta(
+        [
+          { t: 0, v: 28 },
+          { t: 10, v: 27.999 },
+        ],
+        24
+      );
+      expect(eta).to.equal(null);
+    });
+  });
 });
 
 describe('calc/duration', () => {
@@ -372,6 +409,7 @@ describe('calc/comfort-analysis', () => {
     rhSeries: [],
     target: null,
     showTargetEta: false,
+    running: true,
     unit: '°C',
   };
 
@@ -403,19 +441,70 @@ describe('calc/comfort-analysis', () => {
     expect(analyzeComfort({ ...base, tempNow: 19, rhNow: 45 }).comfortable).to.equal(false);
   });
 
-  it('shows a static verdict when uncomfortable but there is no history to forecast', () => {
+  it('says "calculating…" when running + uncomfortable + not enough coverage yet', () => {
     const warm = analyzeComfort({ ...base, tempNow: 33, rhNow: 50 });
+    expect(warm).to.deep.include({
+      visible: true,
+      comfortable: false,
+      line: 'Room feels warm, calculating…',
+      status: 'warm',
+      calculating: true,
+    });
+
+    // A couple of points spanning < MIN_SPAN_MIN still isn't enough coverage.
+    const tooShort = analyzeComfort({
+      ...base,
+      tempNow: 33,
+      rhNow: 50,
+      tempSeries: [
+        { t: 0, v: 34 },
+        { t: 2, v: 33 },
+      ],
+      rhSeries: [
+        { t: 0, v: 50 },
+        { t: 2, v: 50 },
+      ],
+    });
+    expect(tooShort.calculating).to.equal(true);
+  });
+
+  it('shows a bare verdict (no "calculating") when not running, e.g. climate off', () => {
+    const warm = analyzeComfort({ ...base, running: false, tempNow: 33, rhNow: 50 });
     expect(warm).to.deep.include({ visible: true, comfortable: false, line: 'Room feels warm' });
     expect(warm.status).to.equal('warm');
+    expect(warm.calculating).to.equal(undefined);
 
-    const cool = analyzeComfort({ ...base, tempNow: 18, rhNow: 40 });
-    expect(cool).to.deep.include({ visible: true, comfortable: false, line: 'Room feels cool' });
-    expect(cool.status).to.equal('cool');
+    const cool = analyzeComfort({ ...base, running: false, tempNow: 18, rhNow: 40 });
+    expect(cool.line).to.equal('Room feels cool');
 
     // Comfortable temperature but muggy (humidity ratio over the cap).
-    const humid = analyzeComfort({ ...base, tempNow: 24, rhNow: 85 });
-    expect(humid).to.deep.include({ visible: true, comfortable: false, line: 'Room feels humid' });
+    const humid = analyzeComfort({ ...base, running: false, tempNow: 24, rhNow: 85 });
+    expect(humid.line).to.equal('Room feels humid');
     expect(humid.status).to.equal('humid');
+  });
+
+  it('shows a rough linear ETA before the integral fit converges (coarse/transient data)', () => {
+    // 3 coarse points over 9 min during the turn-on transient: too few for the
+    // integral fit (MIN_SAMPLES 4), but the real downward trend gives a rough ETA.
+    const r = analyzeComfort({
+      ...base,
+      tempNow: 28.2,
+      rhNow: 47,
+      tempSeries: [
+        { t: 0, v: 28.8 },
+        { t: 5, v: 28.5 },
+        { t: 9, v: 28.2 },
+      ],
+      rhSeries: [
+        { t: 0, v: 47 },
+        { t: 5, v: 47 },
+        { t: 9, v: 47 },
+      ],
+    });
+    expect(r.comfortable).to.equal(false);
+    expect(r.status).to.equal('warm');
+    expect(r.calculating).to.not.equal(true);
+    expect(r.line).to.match(/until room feels comfortable$/);
   });
 
   it('cooling: forecasts time until comfortable (PMV → +0.5)', () => {

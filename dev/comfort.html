@@ -149,15 +149,15 @@
       }
 
       // A) Cooling, warm now, SPARSE coarse history (the real-recorder shape) →
-      //    the integral fit still yields "X until comfortable" (warm icon, heat colour).
-      makeCard('Cooling — sparse history (ETA)', {
+      //    a rough ETA appears early via the linear fallback (warm icon, heat colour).
+      makeCard('Cooling — sparse history (rough ETA)', {
         mode: 'cool',
         action: 'cooling',
-        curTemp: 27.8,
+        curTemp: 28.2,
         curHum: 47,
         target: 16,
         tempHist: stepPts([
-          [0, 28.8], [5, 28.5], [9, 28.2], [16, 27.8],
+          [0, 28.8], [5, 28.5], [9, 28.2],
         ]),
       });
 
@@ -181,7 +181,7 @@
         tempHist: expPts(24, 14, 0.05),
       });
 
-      // D) Climate OFF but warm → bare verdict "Room feels warm" (issue 3 + 2).
+      // D) Climate OFF but warm → bare verdict "Room feels warm" (no forecast).
       makeCard('Off — still shows verdict', {
         mode: 'off',
         action: 'off',
@@ -189,6 +189,18 @@
         curHum: 45,
         target: 22,
         tempHist: [],
+      });
+
+      // E) Running, warm, only a couple of minutes of data → "calculating…".
+      makeCard('Warming up — calculating', {
+        mode: 'cool',
+        action: 'cooling',
+        curTemp: 28.7,
+        curHum: 47,
+        target: 16,
+        tempHist: stepPts([
+          [0, 29], [3, 28.7],
+        ]),
       });
     </script>
   </body>

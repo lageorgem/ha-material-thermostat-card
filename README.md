@@ -346,9 +346,10 @@ The forecast uses **only the current session** — history since the climate las
 `last_changed`), because earlier data may reflect entirely different settings. It fits a Newton's‑law
 cooling/heating curve by **integration** (robust to the coarse, quantized steps real sensors record),
 so estimates **slow as the room nears its plateau** and it can honestly say a target **won't be
-reached**. The ETA appears **as soon as the fit is trustworthy** — no fixed delay; how soon depends on
-how often the sensor's reading changes and how quickly the room settles into a steady glide after
-turn‑on (a long start‑up lag or a coarse sensor naturally pushes it later).
+reached**. The forecast is gated on **time coverage**, not sample count (it adapts to the sensor — a
+coarse sensor qualifies with 2–3 readings, a fast one needs many): once the history spans ~6 minutes it
+shows an ETA — a **rough early estimate** from the real trend, refining to the accurate fit as it
+converges — and says **“calculating…”** until then.
 
 Example lines:
 
@@ -374,10 +375,10 @@ features:
 > Whenever the sensors read, the row shows a verdict — *Room feels comfortable / warm / cool / humid* (a
 > direct reading) — **including when the climate is off** (just without a forecast). The icon reflects
 > the state: a warm room in the heat colour, a cool room in the cool colour, comfortable in green. It
-> upgrades to *"…X until room feels comfortable"* only once there's enough current‑session history to
-> forecast a time — a guessed *time* is the inaccurate data it avoids, not the verdict. The row is
-> hidden only when the feels‑like sensors aren't set or the climate is unavailable. Requires Home
-> Assistant's **recorder** to be keeping history for the sensors.
+> upgrades to *"…X until room feels comfortable"* once the session history covers ~6 minutes (showing
+> *"…, calculating…"* until then). Early estimates are rough and refine over time. The row is hidden
+> only when the feels‑like sensors aren't set or the climate is unavailable. Requires Home Assistant's
+> **recorder** to be keeping history for the sensors.
 
 ## Layout & responsiveness
 

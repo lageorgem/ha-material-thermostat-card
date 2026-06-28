@@ -158,7 +158,7 @@ export class MtComfort extends LitElement {
     }
     const tempNow = this._tempNow();
     // Forecasts (time-to-comfortable, target ETA) only make sense while running;
-    // when off, show the bare verdict from the current readings.
+    // when off, analyzeComfort shows the bare verdict from the current readings.
     const running = this._isRunning();
     this._set(
       analyzeComfort({
@@ -168,6 +168,7 @@ export class MtComfort extends LitElement {
         rhSeries: running ? (this._cache?.rhSeries ?? []) : [],
         target: running ? this._target(tempNow) : null,
         showTargetEta: running && (this.feature.show_target_eta ?? false),
+        running,
         unit: this.hass.config?.unit_system?.temperature ?? '°C',
       })
     );

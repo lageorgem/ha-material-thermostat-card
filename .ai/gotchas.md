@@ -162,14 +162,19 @@ a plain `{detail}` object has no `stopPropagation`.
   entity's `last_changed` (it resets when the hvac mode changes, i.e. on turn-on
   or heat↔cool), and history is fetched from there (capped at `MAX_SESSION_MS`
   purely to bound the query). There is **no** `lookback_hours` config and we no
-  longer fetch the climate entity's history (so `lastTurnedOnMs` is gone). The ETA
-  appears as soon as the fit is trustworthy — `MIN_SPAN_MIN` (5) is a small floor,
-  not a fixed delay. The real limiters are the turn-on transient (the first several
-  minutes the room's cooling/heating *accelerates*, which is non-Newtonian → `k<0`
-  → correctly rejected) and the sensor's resolution (recorder logs one point per
-  value-change, so a coarse 0.3° sensor needs ~3 changes ≈ ~15 min to confirm the
-  glide). Don't try to force an earlier ETA by loosening `k>0`/`MIN_FIT_R2` — that
-  just shows a guess during the transient.
+  longer fetch the climate entity's history (so `lastTurnedOnMs` is gone).
+- **ETA gating is by TIME COVERAGE, not sample count, + a rough fallback.** The gate
+  is `MIN_SPAN_MIN` (6 min): it adapts to the sensor (a coarse sensor qualifies with
+  2–3 readings, a fast one needs many — a 2-min blip from a wifi sensor doesn't).
+  Below the span → `analyzeComfort` returns `{calculating:true}` and the row shows
+  "Room feels warm, calculating…". Once covered, it shows the **accurate** integral
+  `newtonFit` ETA if it converges, else a **rough `linearEta`** (straight-line
+  extrapolation of the real trend, works from 2 points) so a coarse sensor / the
+  turn-on transient still gets an early estimate that refines over time. The user
+  explicitly wanted "show it early even if rough, with calculating… until then" —
+  this REVERSES the earlier "hide until accurate" stance. `linearEta` self-rejects
+  when moving away / flat (capped at 12 h). Forecast/calculating only when
+  `running` (passed into `ComfortInput`); when off → bare verdict, no "calculating".
 - **Forecast by INTEGRATION, not differencing (the big issue-4 fix).** Real
   recorders log coarse 0.2–0.3° steps at irregular intervals; estimating `dv/dt`
   by differencing consecutive samples turns that quantization into pure noise

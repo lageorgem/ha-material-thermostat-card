@@ -107,9 +107,9 @@ describe('mt-comfort', () => {
     expect(el.shadowRoot!.querySelector('.comfort')).to.equal(null);
   });
 
-  it('shows a static verdict when uncomfortable but there is no history to forecast', async () => {
+  it('says "calculating…" while running + uncomfortable with no history yet', async () => {
     const el = await mount({ tempNow: '34', rhNow: '60', history: {} });
-    expect(line(el)).to.equal('Room feels warm');
+    expect(line(el)).to.equal('Room feels warm, calculating…');
   });
 
   it('forecasts time until comfortable from cooling history', async () => {

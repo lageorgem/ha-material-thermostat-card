@@ -8,13 +8,18 @@
  * cap (ASHRAE's 0.012 humidity ratio). Clothing is inferred from the room
  * temperature ({@link cloForTemp}), not the HVAC mode, so the verdict is the same
  * whether the thermostat is set to heat or cool. PMV is one scalar covering hot
- * *and* cold, so the "time until comfortable" forecast simply fits the PMV series
- * toward the ±0.5 boundary (or the humidity-ratio series toward the cap when only
+ * *and* cold, so the "time until comfortable" forecast fits the PMV series toward
+ * the ±0.5 boundary (or the humidity-ratio series toward the cap when only
  * humidity is out of range).
+ *
+ * Forecast gating is by **time coverage**, not sample count: once the series
+ * spans `MIN_SPAN_MIN` it shows an ETA — the accurate integral fit when it
+ * converges, otherwise a rough linear extrapolation of the real trend (early /
+ * coarse sensor). Until the span is covered it reports "calculating…".
  */
 import { humidityRatio, HUMIDITY_RATIO_MAX } from './comfort-metrics';
 import { pmv, cloForTemp, PMV_COMFORT_LIMIT } from './pmv';
-import { newtonFit, etaToThreshold } from './forecast';
+import { newtonFit, etaToThreshold, linearEta, MIN_SPAN_MIN } from './forecast';
 import { formatDuration } from './duration';
 import { mergeOnLeft } from './history';
 
@@ -41,6 +46,8 @@ export interface ComfortInput {
   target: number | null;
   /** Whether to append the target-temperature ETA clause. */
   showTargetEta: boolean;
+  /** Whether the climate is actively running (forecast only makes sense then). */
+  running: boolean;
   /** Temperature unit symbol for messages, e.g. '°C'. */
   unit: string;
 }
@@ -55,6 +62,8 @@ export interface ComfortResult {
   line?: string;
   /** The comfort state, which drives the row's icon + colour (iff `visible`). */
   status?: ComfortStatus;
+  /** True while gathering data for the "time until comfortable" forecast. */
+  calculating?: boolean;
 }
 
 const HIDDEN: ComfortResult = { visible: false, comfortable: false };
@@ -88,11 +97,13 @@ function targetClause(i: ComfortInput): string | undefined {
 
 /**
  * Analyze comfort + ETAs into a renderable status line. Always returns a visible
- * verdict for finite readings — "Room feels comfortable/warm/cool/humid" — and
- * upgrades the uncomfortable verdict to "…X until room feels comfortable" once
- * there's enough confident history to forecast a time (a forecast is never
- * guessed from thin data). Only non-numeric readings hide the row here; the
- * climate-off / sensors-unset cases are gated by the caller.
+ * verdict for finite readings — "Room feels comfortable/warm/cool/humid". When
+ * the climate is running and the room is uncomfortable it forecasts the time
+ * until comfortable, gating on **time coverage** (`MIN_SPAN_MIN`): below that it
+ * reports "calculating…"; above it shows the accurate integral fit, or a rough
+ * linear extrapolation of the real trend when the fit hasn't converged yet (e.g.
+ * the turn-on transient or a coarse sensor). Only non-numeric readings hide the
+ * row here; the sensors-unset / climate-unavailable cases are gated by the caller.
  * @param i the comfort input
  */
 export function analyzeComfort(i: ComfortInput): ComfortResult {
@@ -112,11 +123,9 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
     return { visible: true, comfortable: true, line, status: 'comfortable' };
   }
 
-  // Uncomfortable: pick the binding axis and forecast it toward its comfort
-  // boundary. Warmth / cold are temperature-driven (PMV series, each point's
-  // clothing taken from its own temperature); a humidity-only excess forecasts
-  // the humidity ratio toward the cap. Each axis carries a plain-language verdict
-  // to fall back on when there's no usable forecast.
+  // Uncomfortable: pick the binding axis. Warmth / cold are temperature-driven
+  // (PMV series, each point's clothing from its own temperature); a humidity-only
+  // excess forecasts the humidity ratio toward the cap.
   const merged = mergeOnLeft(i.tempSeries, i.rhSeries);
   let series: TS[];
   let metricNow: number;
@@ -139,12 +148,31 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
     status = 'humid';
   }
 
-  // Forecast the time until comfortable when there's enough confident history;
-  // otherwise show the static verdict (a direct reading, never a guessed time).
-  const fit = newtonFit(series);
-  const eta = fit ? etaToThreshold(metricNow, threshold, fit) : null;
   const verdict = `Room feels ${status}`;
-  const base = eta != null ? `${formatDuration(eta)} until room feels comfortable` : verdict;
-  const line = target ? `${base}. ${target}` : base;
-  return { visible: true, comfortable: false, line, status };
+  const withTarget = (base: string): string => (target ? `${base}. ${target}` : base);
+
+  // Not running (e.g. climate off): a bare verdict, no forecast.
+  if (!i.running) return { visible: true, comfortable: false, line: withTarget(verdict), status };
+
+  // Running: gate the forecast on time coverage, not sample count.
+  const span = series.length ? series[series.length - 1].t - series[0].t : 0;
+  if (series.length < 2 || span < MIN_SPAN_MIN) {
+    return { visible: true, comfortable: false, line: `${verdict}, calculating…`, status, calculating: true };
+  }
+
+  // Enough coverage: the accurate integral fit if it converges, else a rough
+  // linear extrapolation of the (real) trend.
+  const fit = newtonFit(series);
+  const eta = (fit ? etaToThreshold(metricNow, threshold, fit) : null) ?? linearEta(series, threshold);
+  if (eta != null) {
+    return {
+      visible: true,
+      comfortable: false,
+      line: withTarget(`${formatDuration(eta)} until room feels comfortable`),
+      status,
+    };
+  }
+
+  // Enough data, but the room isn't heading toward comfort → just the verdict.
+  return { visible: true, comfortable: false, line: withTarget(verdict), status };
 }
