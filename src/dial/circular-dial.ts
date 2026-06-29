@@ -789,8 +789,51 @@ export class MtCircularDial extends LitElement {
               <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.04" />
               <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
+            <!-- A white twin of the halo profile, used to MASK the dither grain to
+                 the halo's shape and intensity (no grain on the flat areas). -->
+            <radialGradient id="mt-glow-mask" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#fff" stop-opacity="0.38" />
+              <stop offset="20%" stop-color="#fff" stop-opacity="0.3" />
+              <stop offset="40%" stop-color="#fff" stop-opacity="0.2" />
+              <stop offset="60%" stop-color="#fff" stop-opacity="0.11" />
+              <stop offset="80%" stop-color="#fff" stop-opacity="0.04" />
+              <stop offset="100%" stop-color="#fff" stop-opacity="0" />
+            </radialGradient>
+            <mask id="mt-grain-mask">
+              <circle cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow-mask)" />
+            </mask>
+            <!-- Fine monochrome noise. Overlaid on the halo it DITHERS the
+                 gradient, breaking the 8-bit banding ("rings") that Chromium shows
+                 on Windows/Android (macOS dithers gradients in its compositor, so
+                 it already looks smooth there). -->
+            <filter
+              id="mt-grain"
+              x="0"
+              y="0"
+              width="100%"
+              height="100%"
+              color-interpolation-filters="sRGB"
+            >
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.9"
+                numOctaves="2"
+                seed="11"
+                stitchTiles="stitch"
+                result="noise"
+              />
+              <feColorMatrix in="noise" type="saturate" values="0" />
+            </filter>
           </defs>
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
+          <circle
+            class="grain"
+            cx=${CENTER}
+            cy=${CENTER}
+            r="150"
+            filter="url(#mt-grain)"
+            mask="url(#mt-grain-mask)"
+          />
           <path class="ring" d=${ringPath} />
           ${this.dual
             ? dualSegs.map(
@@ -1011,8 +1054,21 @@ export class MtCircularDial extends LitElement {
       }
       .glow,
       .ring,
-      .value {
+      .value,
+      .grain {
         pointer-events: none;
+      }
+      /* Dither overlay: fine noise blended over the halo so the gradient doesn't
+         band into rings on platforms whose compositor doesn't dither (Chromium
+         on Windows/Android). overlay blend nudges each pixel ± a hair, breaking
+         the 8-bit steps; the mask keeps it on the halo. --mt-grain-opacity tunes
+         how strong it is. */
+      .grain {
+        mix-blend-mode: overlay;
+        opacity: var(--mt-grain-opacity, 0.4);
+      }
+      .dial.off .grain {
+        opacity: 0;
       }
       .hit {
         fill: none;

@@ -304,6 +304,29 @@ describe('mt-circular-dial', () => {
     });
   });
 
+  describe('halo dither (anti-banding)', () => {
+    it('overlays a masked, filtered noise circle blended over the halo', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      await el.updateComplete;
+      const grain = el.shadowRoot!.querySelector('circle.grain') as SVGElement;
+      expect(grain).to.not.equal(null);
+      expect(grain.getAttribute('filter')).to.equal('url(#mt-grain)');
+      expect(grain.getAttribute('mask')).to.equal('url(#mt-grain-mask)');
+      expect(getComputedStyle(grain).mixBlendMode).to.equal('overlay');
+      // The dither noise filter is defined.
+      expect(el.shadowRoot!.querySelector('filter#mt-grain feTurbulence')).to.not.equal(null);
+    });
+
+    it('hides the grain when the dial is off (no halo to dither)', async () => {
+      const el = await mount();
+      el.mode = 'off';
+      await el.updateComplete;
+      const grain = el.shadowRoot!.querySelector('circle.grain') as SVGElement;
+      expect(getComputedStyle(grain).opacity).to.equal('0');
+    });
+  });
+
   describe('range-display timer (_bumpRangeDisplay)', () => {
     it('shows the range, and a second bump clears the prior timer before re-arming', async () => {
       const el = await mount();

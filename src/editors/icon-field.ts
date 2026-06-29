@@ -70,14 +70,25 @@ export class MtIconField extends LitElement {
   }
 
   /**
-   * Toggle the icon-picker popover. It's anchored right under the pill
-   * (absolute, within this host's stacking context); the editor's feature cards
-   * use `overflow: visible` so it isn't clipped.
+   * Toggle the icon picker. It's anchored right under the pill (absolute, within
+   * this host's stacking context); the editor's feature cards use
+   * `overflow: visible` so it isn't clipped. On open the picker's search box is
+   * focused so the icon segment drops straight into searching (no extra click
+   * into a nested field). HA bundles the icon list at build time, so we reuse its
+   * picker rather than re-implementing the search.
    * @param e the click event
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
     this._open = !this._open;
+    if (this._open) {
+      this.updateComplete.then(() => {
+        const picker = this.shadowRoot?.querySelector('ha-icon-picker') as
+          | (HTMLElement & { focus?: () => void })
+          | null;
+        picker?.focus?.();
+      });
+    }
   }
 
   /** Toggle the "no icon" state (off → '' , on → back to the default). */
@@ -177,20 +188,15 @@ export class MtIconField extends LitElement {
     .seg ha-icon {
       --mdc-icon-size: 20px;
     }
+    /* Bare positioning wrapper — no box chrome, so clicking the icon shows just
+       HA's icon picker (one combobox) directly under the pill, not a nested
+       popup-with-a-dropdown. */
     .popover {
       position: absolute;
       z-index: 30;
       top: calc(100% + 6px);
       left: 0;
-      width: 248px;
-      box-sizing: border-box;
-      padding: 8px;
-      background: var(--md-sys-color-surface-container-high, var(--card-background-color, #fff));
-      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
-      border-radius: 12px;
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.3),
-        0 1px 3px rgba(0, 0, 0, 0.2);
+      width: 256px;
     }
     .popover ha-icon-picker {
       display: block;

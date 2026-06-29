@@ -169,6 +169,16 @@ The halo (`#mt-glow` radialGradient) is a **6-stop falloff from 0.38 at center t
 opacity 0 at the perimeter** — ending at 0 (not 0.02) avoids a faint hard-edged
 disc.
 
+**Anti-banding dither.** An 8-bit gradient bands into concentric "rings" on
+platforms whose compositor doesn't dither (Chromium on Windows/Android; macOS
+dithers automatically, which is why it looks smooth there). To fix it everywhere,
+`circle.grain` overlays fine `feTurbulence` noise (desaturated via
+`feColorMatrix saturate 0`) with `mix-blend-mode: overlay`, masked to the halo's
+shape/intensity by `#mt-grain-mask` (a white twin of the glow gradient). The
+overlay nudges each pixel ± a hair, breaking the 8-bit steps. Strength is
+`--mt-grain-opacity` (default 0.4); hidden when the dial is off. This is the
+standard "grainy gradient" technique (Stripe/Apple).
+
 ## Animations
 
 There are three distinct value-segment animations. **Keep the first two as-is.**

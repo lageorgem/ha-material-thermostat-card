@@ -119,20 +119,29 @@ containers (`--mt-surface-container[-high/-highest]`) fall back to a
 `color-mix` elevation tint over the card background so tiles/lists don't blend in.
 
 The editor's per-row/per-option icon control is **`mt-icon-field`** (`editors/`):
-a compact **pill** with two halves — left opens an `ha-icon-picker` in a popover
-anchored **right under the pill** (`position: absolute`; the feature card uses
-`overflow: visible` so it isn't clipped — do NOT use `position: fixed`, HA's
-editor dialog has a transformed ancestor that breaks viewport coords), right is
-`mdi:cancel` (the explicit "no icon"). Three-state contract: `undefined` = default
-· `''` = no icon · string = custom. Pass `defaultIcon` to preview the would-be
-glyph faded when unset.
+a compact **pill** with two halves — left opens HA's `ha-icon-picker` **bare**
+(no box chrome) anchored right under the pill (`position: absolute`; the feature
+card uses `overflow: visible` so it isn't clipped — do NOT use `position: fixed`,
+HA's editor dialog has a transformed ancestor that breaks viewport coords) and
+**auto-focuses** it so the click drops straight into searching. We reuse HA's
+picker because the MDI icon list is **bundled at build time** (`import("../../build/mdi/iconList.json")`)
+— there is no runtime URL to fetch, so a custom icon search can't be populated.
+Right half is `mdi:cancel` (explicit "no icon"). Three-state contract:
+`undefined` = default · `''` = no icon · string = custom. Pass `defaultIcon` to
+preview the would-be glyph faded when unset.
 
-Title/label inputs in the sub-editors use **`mt-text-field`** (a native `<input>`
-styled as a pill to match `mt-icon-field`), NOT a bare `<ha-textfield>` — a
-standalone `ha-textfield` placed directly in a custom-card editor often never
-upgrades (HA only preloads the picker/form stack), so it renders invisible. List
-items are laid out on two lines: entity picker (with a surface fill + `--mdc-*`
-tweaks to compact it) on top, then the icon pill + title input.
+Entity selection uses a **custom `mt-entity-picker`** (`editors/`), NOT
+`ha-entity-picker` (whose stock combobox is bulky and off-aesthetic). It's a
+rounded pill trigger that opens one dropdown panel = a search box + a filtered,
+domain-restricted list built from `hass.states` (reliable, fully ours). Emits
+`value-changed` (`{value}`) so it's a drop-in for `ha-entity-picker`; supports
+`allowCustom` (a "Use …" row / Enter) for non-existent ids.
+
+Title/label inputs use **`mt-text-field`** (a native `<input>` styled as a pill),
+NOT a bare `<ha-textfield>` — a standalone `ha-textfield` placed directly in a
+custom-card editor often never upgrades (HA only preloads the picker/form stack),
+so it renders invisible. List items are laid out on two lines: `mt-entity-picker`
+on top, then the icon pill + title input.
 
 `mt-dropdown` (`dropdown.ts`) is **self-contained** — built deliberately to avoid
 HA's lazily-loaded `ha-select` (which is inert inside a custom card). It sizes to

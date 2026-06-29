@@ -6,6 +6,7 @@ import './display-toggle';
 import './width-field';
 import './icon-field';
 import './text-field';
+import './entity-picker';
 
 /**
  * Shared editor for features backed by a list of entities: switch group,
@@ -126,14 +127,15 @@ export class MtEntityListEditor extends LitElement {
               return html`<div class="item">
                 <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                 <div class="body">
-                  <ha-entity-picker
+                  <mt-entity-picker
                     .hass=${this.hass}
                     .value=${item.entity ?? ''}
+                    label="Entity"
                     .includeDomains=${this.includeDomains}
-                    allow-custom-entity
+                    .allowCustom=${true}
                     @value-changed=${(e: CustomEvent) =>
                       this._updateItem(index, { entity: e.detail.value })}
-                  ></ha-entity-picker>
+                  ></mt-entity-picker>
                   <div class="row2">
                     <mt-icon-field
                       .hass=${this.hass}
@@ -173,20 +175,6 @@ export class MtEntityListEditor extends LitElement {
       flex-direction: column;
       gap: 12px;
       padding: 4px 0;
-    }
-    /* Compact the HA entity combobox toward the pill look: surface fill, no
-       underline, rounded. Its height is fixed by HA internals, but the fill and
-       shape make it sit cohesively with the icon pill + title input below. */
-    ha-entity-picker {
-      display: block;
-      --mdc-text-field-fill-color: var(
-        --md-sys-color-surface-container-high,
-        var(--secondary-background-color)
-      );
-      --mdc-text-field-idle-line-color: transparent;
-      --mdc-text-field-hover-line-color: transparent;
-      --mdc-text-field-focused-line-color: var(--md-sys-color-primary, var(--primary-color));
-      --mdc-shape-small: 12px;
     }
     .field {
       display: flex;

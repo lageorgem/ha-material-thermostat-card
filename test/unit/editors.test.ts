@@ -1019,7 +1019,7 @@ describe('mt-input-select-editor', () => {
 
   it('entity-picker value falls back to "" when feature.entity is undefined', async () => {
     const el = await mount({ type: 'input-select' } as InputSelectFeatureConfig);
-    const picker = el.shadowRoot!.querySelector('ha-entity-picker') as any;
+    const picker = el.shadowRoot!.querySelector('mt-entity-picker') as any;
     expect(picker.value).to.equal('');
   });
 
@@ -1069,7 +1069,7 @@ describe('mt-input-select-editor', () => {
   it('entity-picker change -> feature-changed {entity}', async () => {
     const el = await mount({ type: 'input-select', entity: '' });
     const cap = captureEvents('feature-changed');
-    emitValueChanged(el.shadowRoot!.querySelector('ha-entity-picker')!, 'input_select.x');
+    emitValueChanged(el.shadowRoot!.querySelector('mt-entity-picker')!, 'input_select.x');
     cap.stop();
     expect((cap.events[0].detail as any).feature.entity).to.equal('input_select.x');
   });
@@ -1273,7 +1273,7 @@ describe('mt-entity-list-editor', () => {
     const el = await mount({
       feature: { type: 'switch-group', entities: [{}] },
     });
-    const picker = el.shadowRoot!.querySelector('.item ha-entity-picker') as any;
+    const picker = el.shadowRoot!.querySelector('.item mt-entity-picker') as any;
     expect(picker.value).to.equal('');
   });
 
@@ -1383,7 +1383,7 @@ describe('mt-entity-list-editor', () => {
     const el = await mount({
       feature: { type: 'switch-group', entities: [{ entity: 'switch.x' }] },
     });
-    const picker = el.shadowRoot!.querySelector('.item ha-entity-picker') as Element;
+    const picker = el.shadowRoot!.querySelector('.item mt-entity-picker') as Element;
     const cap1 = captureEvents('feature-changed');
     emitValueChanged(picker, 'switch.y');
     cap1.stop();

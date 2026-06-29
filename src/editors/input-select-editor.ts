@@ -7,6 +7,7 @@ import './display-toggle';
 import './width-field';
 import './icon-field';
 import './text-field';
+import './entity-picker';
 
 /**
  * Editor for the `input_select` feature: entity picker, optional row label,
@@ -89,14 +90,14 @@ export class MtInputSelectEditor extends LitElement {
     const display = this.feature.display ?? 'icons';
     return html`
       <div class="editor">
-        <ha-entity-picker
+        <mt-entity-picker
           .hass=${this.hass}
           .value=${this.feature.entity ?? ''}
           .includeDomains=${['input_select']}
           label="Input select entity"
-          allow-custom-entity
+          .allowCustom=${true}
           @value-changed=${(e: CustomEvent) => this._emit({ entity: e.detail.value })}
-        ></ha-entity-picker>
+        ></mt-entity-picker>
 
         <mt-text-field
           label="Row label (optional)"
@@ -162,17 +163,9 @@ export class MtInputSelectEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
-    ha-entity-picker {
+    mt-entity-picker {
       display: block;
       width: 100%;
-      --mdc-text-field-fill-color: var(
-        --md-sys-color-surface-container-high,
-        var(--secondary-background-color)
-      );
-      --mdc-text-field-idle-line-color: transparent;
-      --mdc-text-field-hover-line-color: transparent;
-      --mdc-text-field-focused-line-color: var(--md-sys-color-primary, var(--primary-color));
-      --mdc-shape-small: 12px;
     }
     .field {
       display: flex;
