@@ -4,6 +4,7 @@ import {
   HVAC_MODE_ICONS,
   fanIcon,
   swingIcon,
+  presetIcon,
   prettyLabel,
   orderValues,
 } from '../../src/theme';
@@ -145,6 +146,26 @@ describe('theme', () => {
     it('default → swap-vertical', () => {
       expect(swingIcon('diagonal')).to.equal('mdi:swap-vertical');
       expect(swingIcon('')).to.equal('mdi:swap-vertical');
+    });
+  });
+
+  describe('presetIcon', () => {
+    it('maps the common presets to their icons', () => {
+      expect(presetIcon('none')).to.equal('mdi:cancel');
+      expect(presetIcon('off')).to.equal('mdi:cancel');
+      expect(presetIcon('eco')).to.equal('mdi:leaf');
+      expect(presetIcon('Away')).to.equal('mdi:home-export-outline');
+      expect(presetIcon('home')).to.equal('mdi:home');
+      expect(presetIcon('sleep')).to.equal('mdi:power-sleep');
+      expect(presetIcon('night')).to.equal('mdi:power-sleep');
+      expect(presetIcon('boost')).to.equal('mdi:rocket-launch');
+      expect(presetIcon('turbo')).to.equal('mdi:rocket-launch');
+      expect(presetIcon('comfort')).to.equal('mdi:sofa');
+      expect(presetIcon('activity')).to.equal('mdi:run-fast');
+    });
+    it('default → tune-variant', () => {
+      expect(presetIcon('manual')).to.equal('mdi:tune-variant');
+      expect(presetIcon('')).to.equal('mdi:tune-variant');
     });
   });
 

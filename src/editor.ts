@@ -34,12 +34,14 @@ const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes' },
   { type: 'climate-fan-modes', label: 'Climate fan modes' },
   { type: 'climate-swing-modes', label: 'Climate swing modes' },
+  { type: 'climate-preset-modes', label: 'Climate preset modes' },
   { type: 'comfort', label: 'Comfort & time to comfortable' },
   { type: 'input-select', label: 'Input select' },
   { type: 'switch-group', label: 'Switch group' },
   { type: 'switch-list', label: 'Switch list' },
   { type: 'button-list', label: 'Button list' },
   { type: 'entity-tile', label: 'Entity tile' },
+  { type: 'sensor-list', label: 'Sensor list' },
 ];
 
 /** The climate selector types and the entity attribute that exposes each. */
@@ -47,6 +49,7 @@ const CLIMATE_FEATURE_ATTR: Partial<Record<FeatureType, string>> = {
   'climate-hvac-modes': 'hvac_modes',
   'climate-fan-modes': 'fan_modes',
   'climate-swing-modes': 'swing_modes',
+  'climate-preset-modes': 'preset_modes',
 };
 
 /** Custom feature types that may be added at most once. */
@@ -64,6 +67,7 @@ function defaultFeature(type: FeatureType): FeatureConfig {
     case 'switch-list':
       return { type, entities: [] };
     case 'button-list':
+    case 'sensor-list':
       return { type, items: [] };
     case 'entity-tile':
       return { type, entity: '' };
@@ -78,12 +82,14 @@ const FEATURE_LABELS: Record<FeatureType, string> = {
   'climate-hvac-modes': 'Climate HVAC modes',
   'climate-fan-modes': 'Climate fan modes',
   'climate-swing-modes': 'Climate swing modes',
+  'climate-preset-modes': 'Climate preset modes',
   comfort: 'Comfort & time to comfortable',
   'input-select': 'Input select',
   'switch-group': 'Switch group',
   'switch-list': 'Switch list',
   'button-list': 'Button list',
   'entity-tile': 'Entity tile',
+  'sensor-list': 'Sensor list',
 };
 
 @customElement(EDITOR_TYPE)
@@ -368,13 +374,16 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     switch (feature.type) {
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
-      case 'climate-swing-modes': {
+      case 'climate-swing-modes':
+      case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
             ? 'hvac'
             : feature.type === 'climate-fan-modes'
               ? 'fan'
-              : 'swing';
+              : feature.type === 'climate-preset-modes'
+                ? 'preset'
+                : 'swing';
         inner = html`<mt-climate-feature-editor
           .hass=${this.hass}
           .entityId=${this._config.entity}
@@ -425,6 +434,15 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           .feature=${feature}
           @feature-changed=${onChange}
         ></mt-entity-tile-editor>`;
+        break;
+      case 'sensor-list':
+        inner = html`<mt-entity-list-editor
+          .hass=${this.hass}
+          .feature=${feature}
+          itemsKey="items"
+          .includeDomains=${['sensor', 'binary_sensor']}
+          @feature-changed=${onChange}
+        ></mt-entity-list-editor>`;
         break;
       case 'comfort':
         inner = html`<mt-comfort-editor

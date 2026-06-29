@@ -50,14 +50,14 @@ gracefully under any Home Assistant theme.
 ## Highlights
 
 - 🎯 **Draggable circular dial** (custom SVG) — drag, tap, `+/−`, or keyboard; themed by HVAC mode/action.
-- 🔀 **Dual setpoint** for `heat_cool` (two handles).
+- 🔀 **Dual setpoint** for `heat_cool` (two handles) with **+/− buttons** that adjust the selected setpoint (tap a handle to select; defaults to the one nearest the current temperature).
 - 🌡️ Current‑temperature marker, with an optional **"show current as primary"** big number.
 - 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
-- 🧩 Climate **HVAC / fan / swing** selectors as an **icon row** or **dropdown**.
+- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row** or **dropdown**.
 - ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from the visual editor.
-- 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**.
+- 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.
 - 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
 - 📐 **Percentage widths** that fill and wrap correctly at any card size, with a side‑by‑side wide mode.
 - 🌬️ A bundled **`mt:` AC swing icon set**, searchable in the icon picker.
@@ -189,11 +189,13 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | `climate-hvac-modes` | the card's climate entity | sets the **HVAC mode** |
 | `climate-fan-modes` | the card's climate entity | sets the **fan mode** |
 | `climate-swing-modes` | the card's climate entity | sets the **swing mode** |
+| `climate-preset-modes` | the card's climate entity | sets the **preset** (eco / away / …) |
 | `input-select` | an `input_select` entity | selects an option |
 | `switch-group` | a list of switches | **mutually exclusive** — turns the others **off**, then the chosen one **on** |
 | `switch-list` | a list of switches | each toggles **independently** (several can be on) |
 | `button-list` | buttons / scenes / scripts | each **pressed** independently |
 | `entity-tile` | one sensor / switch / button | a rounded tile that runs a tap action |
+| `sensor-list` | a list of sensors | read‑only rows of icon + title + value (à la the Google Home app) |
 | `comfort` | the feels‑like sensors | a status line: comfort + time‑to‑comfortable / time‑to‑target (**add once**) |
 
 ### Common feature options
@@ -203,7 +205,7 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` | `icons` | Render the selector as an icon row or a dropdown |
 | `width` | **all** feature types | number `10`–`100` (step 10) | `100` (selectors/lists) · `50` (tiles) | Width as a **percentage of the card** — see [Layout](#layout--responsiveness) |
 
-### Climate selectors (HVAC / fan / swing)
+### Climate selectors (HVAC / fan / swing / preset)
 
 ```yaml
 features:
@@ -297,9 +299,24 @@ Independent presses for buttons, scenes, or scripts. **Note:** the key is `items
     - { entity: scene.movie, label: Movie, icon: mdi:movie }
 ```
 
+### `sensor-list`
+
+Read‑only rows of an (optional) icon, a customizable title, and the entity's current value —
+matching the Google Home app's sensor list. A lighter alternative to a stack of `entity-tile`s
+when you just want to read several values. Uses `items` (not `entities`).
+
+```yaml
+- type: sensor-list
+  label: Sensors
+  items:
+    - { entity: sensor.indoor_temperature, label: Indoor Temperature }
+    - { entity: sensor.indoor_humidity, label: Indoor Humidity, icon: mdi:water-percent }
+    - { entity: sensor.outdoor_temperature, label: Outdoor }
+```
+
 #### `EntityItem`
 
-Used by `switch-group.entities`, `switch-list.entities`, and `button-list.items`:
+Used by `switch-group.entities`, `switch-list.entities`, `button-list.items`, and `sensor-list.items`:
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |

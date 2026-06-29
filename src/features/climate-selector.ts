@@ -2,10 +2,10 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureDisplay, OptionOverride, SelectorItem } from '../types';
-import { HVAC_MODE_ICONS, fanIcon, swingIcon, prettyLabel, orderValues } from '../theme';
+import { HVAC_MODE_ICONS, fanIcon, swingIcon, presetIcon, prettyLabel, orderValues } from '../theme';
 import './selector-row';
 
-export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing';
+export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset';
 
 /**
  * Renders the climate HVAC / fan / swing selector. The available options come
@@ -56,6 +56,10 @@ export class MtClimateSelector extends LitElement {
       values = state.attributes.fan_modes ?? [];
       active = state.attributes.fan_mode;
       defaultIcon = (v) => fanIcon(v);
+    } else if (this.kind === 'preset') {
+      values = state.attributes.preset_modes ?? [];
+      active = state.attributes.preset_mode;
+      defaultIcon = (v) => presetIcon(v);
     } else {
       values = state.attributes.swing_modes ?? [];
       active = state.attributes.swing_mode;
@@ -84,6 +88,8 @@ export class MtClimateSelector extends LitElement {
       this.hass.callService('climate', 'set_hvac_mode', { entity_id, hvac_mode: value });
     } else if (this.kind === 'fan') {
       this.hass.callService('climate', 'set_fan_mode', { entity_id, fan_mode: value });
+    } else if (this.kind === 'preset') {
+      this.hass.callService('climate', 'set_preset_mode', { entity_id, preset_mode: value });
     } else {
       this.hass.callService('climate', 'set_swing_mode', { entity_id, swing_mode: value });
     }

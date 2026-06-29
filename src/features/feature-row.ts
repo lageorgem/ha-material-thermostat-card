@@ -8,6 +8,7 @@ import './switch-group';
 import './switch-list';
 import './button-list';
 import './entity-tile';
+import './sensor-list';
 import './comfort';
 
 /**
@@ -53,13 +54,16 @@ export class MtFeatureRow extends LitElement {
     switch (feature.type) {
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
-      case 'climate-swing-modes': {
+      case 'climate-swing-modes':
+      case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
             ? 'hvac'
             : feature.type === 'climate-fan-modes'
               ? 'fan'
-              : 'swing';
+              : feature.type === 'climate-preset-modes'
+                ? 'preset'
+                : 'swing';
         return html`<mt-climate-selector
           .hass=${this.hass}
           entityId=${this.entityId}
@@ -99,6 +103,12 @@ export class MtFeatureRow extends LitElement {
         ></mt-button-list>`;
       case 'entity-tile':
         return html`<mt-entity-tile .hass=${this.hass} .config=${feature}></mt-entity-tile>`;
+      case 'sensor-list':
+        return html`<mt-sensor-list
+          .hass=${this.hass}
+          .items=${feature.items}
+          .label=${feature.label}
+        ></mt-sensor-list>`;
       case 'comfort':
         return html`<mt-comfort
           .hass=${this.hass}

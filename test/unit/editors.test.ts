@@ -289,11 +289,13 @@ describe('material-thermostat-card-editor', () => {
       { type: 'climate-hvac-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-hvac-modes' }) },
       { type: 'climate-fan-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-fan-modes' }) },
       { type: 'climate-swing-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-swing-modes' }) },
+      { type: 'climate-preset-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-preset-modes' }) },
       { type: 'input-select', check: (f) => expect(f).to.deep.equal({ type: 'input-select', entity: '' }) },
       { type: 'switch-group', check: (f) => expect(f).to.deep.equal({ type: 'switch-group', entities: [] }) },
       { type: 'switch-list', check: (f) => expect(f).to.deep.equal({ type: 'switch-list', entities: [] }) },
       { type: 'button-list', check: (f) => expect(f).to.deep.equal({ type: 'button-list', items: [] }) },
       { type: 'entity-tile', check: (f) => expect(f).to.deep.equal({ type: 'entity-tile', entity: '' }) },
+      { type: 'sensor-list', check: (f) => expect(f).to.deep.equal({ type: 'sensor-list', items: [] }) },
       { type: 'comfort', check: (f) => expect(f).to.deep.equal({ type: 'comfort', show_target_eta: false }) },
     ];
 
@@ -333,9 +335,10 @@ describe('material-thermostat-card-editor', () => {
       'switch-list',
       'button-list',
       'entity-tile',
+      'sensor-list',
     ];
 
-    it('entity exposing hvac+fan+swing → all 3 climate types + the 5 custom types', async () => {
+    it('entity exposing hvac+fan+swing → those 3 climate types + the 6 custom types', async () => {
       const el = await mount({ features: [] });
       const types = (el as any)._addableFeatures().map((f: any) => f.type);
       expect(types).to.include.members([
@@ -345,8 +348,35 @@ describe('material-thermostat-card-editor', () => {
         'comfort',
         ...CUSTOM_TYPES,
       ]);
-      // all 9 addable feature types present, none filtered out
-      expect(types.length).to.equal(9);
+      // preset modes aren't exposed by this entity → not offered
+      expect(types).to.not.include('climate-preset-modes');
+      // 3 climate + comfort + 6 custom = 10 addable types, none else
+      expect(types.length).to.equal(10);
+    });
+
+    it('offers climate-preset-modes only when the entity exposes preset_modes', async () => {
+      const without = await mount({ features: [] });
+      expect((without as any)._addableFeatures().map((f: any) => f.type)).to.not.include(
+        'climate-preset-modes'
+      );
+      const withPreset = await mount(
+        { features: [] },
+        makeHass({
+          'climate.test': climateState({ preset_modes: ['none', 'eco', 'away'] }),
+        })
+      );
+      const types = (withPreset as any)._addableFeatures().map((f: any) => f.type);
+      expect(types).to.include('climate-preset-modes');
+      // and it's unique: once added, it's no longer offered
+      const added = await mount(
+        { features: [{ type: 'climate-preset-modes' }] },
+        makeHass({
+          'climate.test': climateState({ preset_modes: ['none', 'eco', 'away'] }),
+        })
+      );
+      expect((added as any)._addableFeatures().map((f: any) => f.type)).to.not.include(
+        'climate-preset-modes'
+      );
     });
 
     it('treats a missing entity state as no attributes (the ?? {} fallback)', async () => {
@@ -499,6 +529,13 @@ describe('material-thermostat-card-editor', () => {
       );
     });
 
+    it('climate-preset-modes -> kind=preset', async () => {
+      const el = await expand('climate-preset-modes');
+      expect((el.shadowRoot!.querySelector('mt-climate-feature-editor') as any).kind).to.equal(
+        'preset'
+      );
+    });
+
     it('input-select -> mt-input-select-editor', async () => {
       const el = await expand('input-select', { entity: '' });
       expect(el.shadowRoot!.querySelector('mt-input-select-editor')).to.not.equal(null);
@@ -527,6 +564,13 @@ describe('material-thermostat-card-editor', () => {
     it('entity-tile -> mt-entity-tile-editor', async () => {
       const el = await expand('entity-tile', { entity: '' });
       expect(el.shadowRoot!.querySelector('mt-entity-tile-editor')).to.not.equal(null);
+    });
+
+    it('sensor-list -> mt-entity-list-editor (itemsKey items)', async () => {
+      const el = await expand('sensor-list', { items: [] });
+      const ed = el.shadowRoot!.querySelector('mt-entity-list-editor') as any;
+      expect(ed).to.not.equal(null);
+      expect(ed.itemsKey).to.equal('items');
     });
 
     it('comfort -> mt-comfort-editor, reflecting feels-like configured state', async () => {
@@ -620,7 +664,7 @@ describe('material-thermostat-card-editor', () => {
 describe('mt-climate-feature-editor', () => {
   /** Mount the climate feature editor. */
   async function mount(
-    kind: 'hvac' | 'fan' | 'swing',
+    kind: 'hvac' | 'fan' | 'swing' | 'preset',
     feature: any = { type: 'climate-hvac-modes' },
     states: Record<string, any> = { 'climate.test': climateState() }
   ): Promise<MtClimateFeatureEditor> {
@@ -657,6 +701,15 @@ describe('mt-climate-feature-editor', () => {
   it('_values() returns swing_modes for kind=swing', async () => {
     const el = await mount('swing');
     expect((el as any)._values()).to.deep.equal(['off', 'vertical', 'horizontal', 'both']);
+  });
+
+  it('_values() returns preset_modes for kind=preset', async () => {
+    const el = await mount(
+      'preset',
+      { type: 'climate-preset-modes' },
+      { 'climate.test': climateState({ preset_modes: ['none', 'eco', 'away'] }) }
+    );
+    expect((el as any)._values()).to.deep.equal(['none', 'eco', 'away']);
   });
 
   it('_values() empty when no state -> renders the hint', async () => {

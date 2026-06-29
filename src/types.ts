@@ -7,11 +7,13 @@ export type FeatureType =
   | 'climate-hvac-modes'
   | 'climate-fan-modes'
   | 'climate-swing-modes'
+  | 'climate-preset-modes'
   | 'input-select'
   | 'switch-group'
   | 'switch-list'
   | 'button-list'
   | 'entity-tile'
+  | 'sensor-list'
   | 'comfort';
 
 /**
@@ -58,6 +60,10 @@ export interface ClimateSwingFeatureConfig extends BaseSelectorFeature, OrderedO
   type: 'climate-swing-modes';
 }
 
+export interface ClimatePresetFeatureConfig extends BaseSelectorFeature, OrderedOptions {
+  type: 'climate-preset-modes';
+}
+
 export interface InputSelectFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'input-select';
   entity: string;
@@ -80,6 +86,19 @@ export interface SwitchListFeatureConfig {
 
 export interface ButtonListFeatureConfig {
   type: 'button-list';
+  label?: string;
+  items: EntityItem[];
+  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
+  width?: number;
+}
+
+/**
+ * A list of sensor rows (icon + customizable title + current value), à la the
+ * Google Home app. Lighter than {@link EntityTileFeatureConfig} when you just
+ * want to read several values stacked in a list.
+ */
+export interface SensorListFeatureConfig {
+  type: 'sensor-list';
   label?: string;
   items: EntityItem[];
   /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
@@ -119,11 +138,13 @@ export type FeatureConfig =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
   | ClimateSwingFeatureConfig
+  | ClimatePresetFeatureConfig
   | InputSelectFeatureConfig
   | SwitchGroupFeatureConfig
   | SwitchListFeatureConfig
   | ButtonListFeatureConfig
   | EntityTileFeatureConfig
+  | SensorListFeatureConfig
   | ComfortFeatureConfig;
 
 /**

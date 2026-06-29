@@ -97,6 +97,20 @@ export function fanIcon(value: string): string {
   return 'mdi:fan';
 }
 
+/** Heuristic icon for a climate preset value (eco/away/home/…). */
+export function presetIcon(value: string): string {
+  const v = value.toLowerCase();
+  if (v === 'none' || v === 'off') return 'mdi:cancel';
+  if (v.includes('eco')) return 'mdi:leaf';
+  if (v.includes('away')) return 'mdi:home-export-outline';
+  if (v.includes('home')) return 'mdi:home';
+  if (v.includes('sleep') || v.includes('night')) return 'mdi:power-sleep';
+  if (v.includes('boost') || v.includes('turbo')) return 'mdi:rocket-launch';
+  if (v.includes('comfort')) return 'mdi:sofa';
+  if (v.includes('activity')) return 'mdi:run-fast';
+  return 'mdi:tune-variant';
+}
+
 /** Heuristic icon for a swing mode value. */
 export function swingIcon(value: string): string {
   const v = value.toLowerCase();

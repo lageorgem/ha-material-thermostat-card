@@ -269,6 +269,62 @@ describe('mt-climate-selector', () => {
     });
   });
 
+  describe('kind: preset', () => {
+    it('builds items from preset_modes, active = preset_mode, presetIcon defaults', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({
+          preset_modes: ['none', 'eco', 'away', 'boost'],
+          preset_mode: 'eco',
+        }),
+      });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="preset"
+        ></mt-climate-selector>`
+      );
+      const items = rowItems(el);
+      expect(items.map((i) => i.value)).to.deep.equal(['none', 'eco', 'away', 'boost']);
+      expect(items.find((i) => i.value === 'eco')!.active).to.be.true;
+      expect(items.find((i) => i.value === 'none')!.active).to.be.false;
+      // presetIcon heuristics
+      expect(items.find((i) => i.value === 'none')!.icon).to.equal('mdi:cancel');
+      expect(items.find((i) => i.value === 'eco')!.icon).to.equal('mdi:leaf');
+      expect(items.find((i) => i.value === 'away')!.icon).to.equal('mdi:home-export-outline');
+      expect(items.find((i) => i.value === 'boost')!.icon).to.equal('mdi:rocket-launch');
+    });
+
+    it('falls back to [] when preset_modes is missing', async () => {
+      const hass = makeHass({ 'climate.test': climateState({ preset_modes: undefined }) });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="preset"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)).to.equal(null);
+    });
+
+    it('_onSelect calls climate.set_preset_mode', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ preset_modes: ['none', 'eco'], preset_mode: 'none' }),
+      });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="preset"
+        ></mt-climate-selector>`
+      );
+      selectValue(el, 'eco');
+      expect(hass.__calls).to.have.lengthOf(1);
+      expect(hass.__calls[0]).to.deep.include({ domain: 'climate', service: 'set_preset_mode' });
+      expect(hass.__calls[0].data).to.deep.equal({ entity_id: 'climate.test', preset_mode: 'eco' });
+    });
+  });
+
   describe('overrides', () => {
     it('overrides label, overrides icon, and hides options', async () => {
       const hass = makeHass({ 'climate.test': climateState() });

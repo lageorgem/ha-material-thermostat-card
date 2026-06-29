@@ -87,6 +87,22 @@ describe('mt-feature-row', () => {
       expect(child.kind).to.equal('swing');
     });
 
+    it('climate-preset-modes -> mt-climate-selector kind=preset', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ preset_modes: ['none', 'eco'] }),
+      });
+      const el = await mount(hass, { type: 'climate-preset-modes' });
+      const child = el.shadowRoot!.querySelector('mt-climate-selector') as any;
+      expect(child).to.not.equal(null);
+      expect(child.kind).to.equal('preset');
+    });
+
+    it('sensor-list -> mt-sensor-list', async () => {
+      const hass = makeHass({ 'sensor.x': entityState('sensor.x', '1') });
+      const el = await mount(hass, { type: 'sensor-list', items: [{ entity: 'sensor.x' }] });
+      expect(el.shadowRoot!.querySelector('mt-sensor-list')).to.not.equal(null);
+    });
+
     it('input-select -> mt-input-select', async () => {
       const hass = makeHass({});
       const el = await mount(hass, { type: 'input-select', entity: 'input_select.x' });

@@ -198,8 +198,8 @@ describe('mt-circular-dial', () => {
       expect(texts[0].textContent!.trim()).to.equal('18.0');
       expect(texts[1].textContent!.trim()).to.equal('24.0');
       expect(dual!.querySelector('.dash')!.textContent!.trim()).to.equal('–');
-      // no +/- step buttons in dual mode
-      expect(sr.querySelectorAll('.step').length).to.equal(0);
+      // +/- step buttons are shown in dual mode too (they adjust the selected setpoint)
+      expect(sr.querySelectorAll('.step').length).to.equal(2);
     });
 
     it('falls back low→min and high→max when lowValue/highValue unset', async () => {
@@ -1276,6 +1276,178 @@ describe('mt-circular-dial', () => {
       expect(changed.events.length).to.equal(1);
       expect((changed.events[0].detail as any).value).to.equal(20);
       changed.stop();
+    });
+  });
+
+  describe('dual +/- buttons and setpoint selection', () => {
+    it('shows the +/- buttons and they adjust the setpoint nearest the current temp', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 19; // nearest the low setpoint
+      await el.updateComplete;
+      expect((el as any)._selSide).to.equal('low');
+      const buttons = el.shadowRoot!.querySelectorAll('.step');
+      expect(buttons.length).to.equal(2);
+      const p = oncePromise(el, 'value-changed');
+      (buttons[1] as HTMLButtonElement).click(); // +
+      expect((await p).detail).to.deep.equal({ low: 18.5, high: 24 });
+    });
+
+    it('- steps the high setpoint when the current temp is nearer it', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 23; // nearest the high setpoint
+      await el.updateComplete;
+      expect((el as any)._selSide).to.equal('high');
+      const buttons = el.shadowRoot!.querySelectorAll('.step');
+      const p = oncePromise(el, 'value-changed');
+      (buttons[0] as HTMLButtonElement).click(); // -
+      expect((await p).detail).to.deep.equal({ low: 18, high: 23.5 });
+    });
+
+    it('_selSide falls back to low when there is no current temperature', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = undefined;
+      await el.updateComplete;
+      expect((el as any)._selSide).to.equal('low');
+    });
+
+    it('clamps a stepped low setpoint to stay a step below high', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 23.5;
+      el.highValue = 24;
+      await el.updateComplete;
+      (el as any)._selected = 'low';
+      const p = oncePromise(el, 'value-changed');
+      (el as any)._step(1); // 23.5→24, clamped to high - step = 23.5
+      expect((await p).detail).to.deep.equal({ low: 23.5, high: 24 });
+    });
+
+    it('clamps a stepped high setpoint to stay a step above low', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 18.5;
+      await el.updateComplete;
+      (el as any)._selected = 'high';
+      const p = oncePromise(el, 'value-changed');
+      (el as any)._step(-1); // 18.5→18, clamped to low + step = 18.5
+      expect((await p).detail).to.deep.equal({ low: 18, high: 18.5 });
+    });
+
+    it('highlights the selected setpoint dot and number', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 19; // low selected
+      await el.updateComplete;
+      const sr = el.shadowRoot!;
+      const setDots = sr.querySelectorAll('.o-dot.setpoint');
+      expect(setDots[0].classList.contains('sel')).to.be.true; // low
+      expect(setDots[1].classList.contains('sel')).to.be.false; // high
+      const selNum = sr.querySelector('.o-label .num.sel');
+      expect(selNum).to.not.equal(null);
+      expect(selNum!.textContent!.trim()).to.equal('18°');
+    });
+
+    it('grabbing a handle selects it for the +/- buttons', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 19; // default selection = low
+      await el.updateComplete;
+      const { svg } = svgGeometry(el);
+      stubCapture(svg);
+      const handles = el.shadowRoot!.querySelectorAll('.handle');
+      (handles[1] as HTMLElement).dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 0,
+          clientY: 0,
+          pointerId: 9,
+          pointerType: 'touch',
+          bubbles: true,
+          composed: true,
+        })
+      );
+      expect((el as any)._selected).to.equal('high');
+    });
+  });
+
+  describe('dual current-label de-overlap', () => {
+    it('insets the current label when it would collide with a setpoint label', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 23.9; // angle ≈ the high setpoint → collide
+      await el.updateComplete;
+      const inset = el.shadowRoot!.querySelector('.o-label.inset');
+      expect(inset).to.not.equal(null);
+      expect(inset!.querySelector('.num.current')).to.not.equal(null);
+    });
+
+    it('does not inset the current label when it is clear of both setpoints', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 28;
+      el.current = 23; // well clear of both
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.o-label.inset')).to.equal(null);
+    });
+
+    it('never insets when the current temp is the primary number', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 23.9;
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.o-label.inset')).to.equal(null);
     });
   });
 

@@ -4,6 +4,7 @@ import type { HomeAssistant } from 'custom-card-helpers';
 import type {
   ClimateFanFeatureConfig,
   ClimateModesFeatureConfig,
+  ClimatePresetFeatureConfig,
   ClimateSwingFeatureConfig,
   OptionOverride,
 } from '../types';
@@ -14,7 +15,8 @@ import './width-field';
 type ClimateFeature =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
-  | ClimateSwingFeatureConfig;
+  | ClimateSwingFeatureConfig
+  | ClimatePresetFeatureConfig;
 
 /**
  * Per-option editor for the climate selectors. Lets the user override the
@@ -25,7 +27,7 @@ type ClimateFeature =
 export class MtClimateFeatureEditor extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property() entityId!: string;
-  @property() kind!: 'hvac' | 'fan' | 'swing';
+  @property() kind!: 'hvac' | 'fan' | 'swing' | 'preset';
   @property({ attribute: false }) feature!: ClimateFeature;
 
   /** The underlying option values from the entity attributes. */
@@ -34,6 +36,7 @@ export class MtClimateFeatureEditor extends LitElement {
     if (!a) return [];
     if (this.kind === 'hvac') return a.hvac_modes ?? [];
     if (this.kind === 'fan') return a.fan_modes ?? [];
+    if (this.kind === 'preset') return a.preset_modes ?? [];
     return a.swing_modes ?? [];
   }
 

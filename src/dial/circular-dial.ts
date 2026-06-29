@@ -33,6 +33,7 @@ const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 135 — bottom-right (= max)
 const OVERLAP_DEG = 18; // angular gap under which setpoint icon + current temp merge
 const SIDE_GUARD_DEG = 26; // a numeric marker this close to 3/9 o'clock crowds the centre readout
 const TAP_SLOP_PX = 10; // movement past this turns a ring press from a tap into a scroll/scrub
+const LABEL_COLLIDE_DEG = 18; // current label this close to a setpoint label → nudge it inward
 
 /**
  * Convert a polar angle (0° = top, increasing clockwise) to an SVG point.
@@ -89,6 +90,8 @@ export class MtCircularDial extends LitElement {
   @state() private _dragLow = 0;
   @state() private _dragHigh = 0;
   @state() private _activeHandle: 'low' | 'high' | null = null;
+  /** Dual mode: which setpoint the +/- buttons adjust (null → nearest to current). */
+  @state() private _selected: 'low' | 'high' | null = null;
   /** Ring-tap tracking: the press origin and whether it may still resolve to a tap. */
   private _pressX = 0;
   private _pressY = 0;
@@ -126,6 +129,18 @@ export class MtCircularDial extends LitElement {
     if (this.current > this._displayHigh) return 'cool';
     if (this.current < this._displayLow) return 'heat';
     return null;
+  }
+
+  /**
+   * Dual mode: the setpoint the +/- buttons adjust — the explicitly selected one,
+   * else the setpoint nearest the current temperature (the sensible default).
+   */
+  private get _selSide(): 'low' | 'high' {
+    if (this._selected) return this._selected;
+    if (this.current == null) return 'low';
+    return Math.abs(this.current - this._displayLow) <= Math.abs(this.current - this._displayHigh)
+      ? 'low'
+      : 'high';
   }
 
   /** The mode that drives the dial's color (the active sub-mode in dual). */
@@ -381,6 +396,7 @@ export class MtCircularDial extends LitElement {
         this._activeHandle =
           Math.abs(v - this._dragLow) <= Math.abs(v - this._dragHigh) ? 'low' : 'high';
       }
+      this._selected = this._activeHandle; // grabbing a handle selects it for +/-
     } else {
       this._dragValue = startValue;
     }
@@ -412,8 +428,10 @@ export class MtCircularDial extends LitElement {
       const lo = this._displayLow;
       const hi = this._displayHigh;
       if (Math.abs(v - lo) <= Math.abs(v - hi)) {
+        this._selected = 'low'; // tapping near a setpoint selects it for +/-
         this._emit('value-changed', { low: Math.min(v, hi - this.step), high: hi });
       } else {
+        this._selected = 'high';
         this._emit('value-changed', { low: lo, high: Math.max(v, lo + this.step) });
       }
     } else {
@@ -449,11 +467,28 @@ export class MtCircularDial extends LitElement {
   };
 
   /**
-   * Step the single target temperature.
+   * Step the target temperature. In dual mode this nudges the selected setpoint
+   * (kept on its side of the other by a step); otherwise the single target.
    * @param delta number of steps (±1)
    */
   private _step(delta: number): void {
     if (this.disabled) return;
+    if (this.dual) {
+      if (this._selSide === 'low') {
+        const low = Math.min(
+          this._roundToStep(this._displayLow + delta * this.step),
+          this._displayHigh - this.step
+        );
+        this._emit('value-changed', { low, high: this._displayHigh });
+      } else {
+        const high = Math.max(
+          this._roundToStep(this._displayHigh + delta * this.step),
+          this._displayLow + this.step
+        );
+        this._emit('value-changed', { low: this._displayLow, high });
+      }
+      return;
+    }
     this._emit('value-changed', { value: this._roundToStep(this.value + delta * this.step) });
   }
 
@@ -503,10 +538,14 @@ export class MtCircularDial extends LitElement {
    * A label that orbits to its angle but stays upright (counter-rotated).
    * @param angle angle in degrees
    * @param content the label content
+   * @param inset pull the label toward the centre (to clear a colliding label)
    */
-  private _labelOrbit(angle: number, content: TemplateResult): TemplateResult {
+  private _labelOrbit(angle: number, content: TemplateResult, inset = false): TemplateResult {
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
-      <div class="o-label" style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
+      <div
+        class=${classMap({ 'o-label': true, inset })}
+        style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}
+      >
         ${content}
       </div>
     </div>`;
@@ -624,6 +663,17 @@ export class MtCircularDial extends LitElement {
     const spAngle = this._angleOf(this._displayValue);
     const curAngle = showCurrent ? this._angleOf(this.current!) : 0;
     const overlap = !this.dual && showCurrent && !isOff && Math.abs(spAngle - curAngle) < OVERLAP_DEG;
+
+    // Dual marker geometry + the +/- selection / current-label de-overlap.
+    const lowAngle = this._angleOf(this._displayLow);
+    const highAngle = this._angleOf(this._displayHigh);
+    const selSide = this.dual ? this._selSide : null;
+    const curCollides =
+      this.dual &&
+      showCurrent &&
+      !this.showCurrentAsPrimary &&
+      (Math.abs(curAngle - lowAngle) < LABEL_COLLIDE_DEG ||
+        Math.abs(curAngle - highAngle) < LABEL_COLLIDE_DEG);
 
     const ringPath = arcPath(ARC_START, ARC_START + SWEEP, RADIUS);
 
@@ -756,26 +806,30 @@ export class MtCircularDial extends LitElement {
         <div class="markers">
           ${this.dual
             ? html`
-                ${this._dotOrbit(this._angleOf(this._displayLow), 'setpoint')}
-                ${this._dotOrbit(this._angleOf(this._displayHigh), 'setpoint')}
+                ${this._dotOrbit(lowAngle, `setpoint${selSide === 'low' ? ' sel' : ''}`)}
+                ${this._dotOrbit(highAngle, `setpoint${selSide === 'high' ? ' sel' : ''}`)}
                 ${showCurrent ? this._dotOrbit(curAngle, 'current') : nothing}
                 ${this._labelOrbit(
-                  this._angleOf(this._displayLow),
+                  lowAngle,
                   collapsedDual && dualActive === 'heat' && !this.showCurrentAsPrimary
                     ? dualSetIconEl
-                    : html`<span class="num">${this._fmtCompact(this._displayLow)}°</span>`
+                    : html`<span class="num ${selSide === 'low' ? 'sel' : ''}"
+                        >${this._fmtCompact(this._displayLow)}°</span
+                      >`
                 )}
                 ${this._labelOrbit(
-                  this._angleOf(this._displayHigh),
+                  highAngle,
                   collapsedDual && dualActive === 'cool' && !this.showCurrentAsPrimary
                     ? dualSetIconEl
-                    : html`<span class="num">${this._fmtCompact(this._displayHigh)}°</span>`
+                    : html`<span class="num ${selSide === 'high' ? 'sel' : ''}"
+                        >${this._fmtCompact(this._displayHigh)}°</span
+                      >`
                 )}
                 ${showCurrent && !this.showCurrentAsPrimary
-                  ? this._labelOrbit(curAngle, currentLabel)
+                  ? this._labelOrbit(curAngle, currentLabel, curCollides)
                   : nothing}
-                ${this._handleOrbit(this._angleOf(this._displayLow), 'low')}
-                ${this._handleOrbit(this._angleOf(this._displayHigh), 'high')}
+                ${this._handleOrbit(lowAngle, 'low')}
+                ${this._handleOrbit(highAngle, 'high')}
               `
             : html`
                 ${this._dotOrbit(spAngle, 'setpoint')}
@@ -804,7 +858,7 @@ export class MtCircularDial extends LitElement {
         </div>
 
         ${this.dual ? this._renderDualCenter() : this._renderSingleCenter()}
-        ${this.dual ? nothing : this._renderAdjust()}
+        ${this._renderAdjust()}
       </div>
     `;
   }
@@ -1027,6 +1081,14 @@ export class MtCircularDial extends LitElement {
       .o-dot.setpoint {
         width: clamp(9px, 4.4cqi, 14px);
         height: clamp(9px, 4.4cqi, 14px);
+        transition:
+          box-shadow var(--mt-motion-dur) var(--mt-motion-ease),
+          transform var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      /* The setpoint the +/- buttons act on (dual mode): a ring in the dial color
+         around the dot makes the active handle obvious. */
+      .o-dot.setpoint.sel {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--dial-color) 70%, transparent);
       }
       .o-dot.current {
         width: clamp(7px, 3.1cqi, 10px);
@@ -1037,7 +1099,13 @@ export class MtCircularDial extends LitElement {
         position: absolute;
         left: 50%;
         top: 18.75%; /* (160-100)/320 — just inside the ring */
-        transition: transform var(--mt-motion-dur) var(--mt-motion-ease);
+        transition:
+          transform var(--mt-motion-dur) var(--mt-motion-ease),
+          top var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      /* Pulled toward the centre to clear a setpoint label it would overlap. */
+      .o-label.inset {
+        top: 31.25%; /* (160-60)/320 — an inner ring, below the setpoint labels */
       }
       .o-label .num {
         font-size: clamp(8px, 4.6cqi, var(--md-sys-typescale-title-medium-size, 16px));
@@ -1048,6 +1116,10 @@ export class MtCircularDial extends LitElement {
       }
       .o-label .num.current {
         color: var(--mt-on-surface-variant);
+      }
+      /* The selected setpoint's number, tinted to match its highlighted dot. */
+      .o-label .num.sel {
+        color: var(--dial-color);
       }
       /* Merged marker: temperature stays anchored at its angle; the mode icon
          hangs to its left, vertically centered. */
