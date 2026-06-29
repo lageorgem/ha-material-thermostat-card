@@ -664,6 +664,22 @@ describe('calc/comfort-analysis', () => {
     expect(r.line).to.match(/^won't go below 2[34]°C$/);
   });
 
+  it('comfortable + plateau essentially at the setpoint → no "won\'t go below" (just comfortable)', () => {
+    // Cooling settles right around the 24° setpoint (within the allowance), so it
+    // must NOT read "won't go below 24°" — that's just "the target is reached".
+    const r = analyzeComfort({
+      ...base,
+      tempNow: 25,
+      rhNow: 45,
+      target: 24,
+      showTargetEta: true,
+      tempSeries: exp(24.4, 28, 0.06, 24, 2), // settles just above the 24° setpoint
+      rhSeries: flat(45),
+    });
+    expect(r.comfortable).to.equal(true);
+    expect(r.line).to.equal('Room feels comfortable');
+  });
+
   it("comfortable + target unreachable → won't go above the plateau", () => {
     // Comfortable now (22.5°C, below the plateau) but the heater plateaus at
     // ~23°C and the target setpoint is 25°C → "won't go above 23°C".

@@ -76,6 +76,12 @@ const HIDDEN: ComfortResult = { visible: false, comfortable: false };
 
 /** Below this gap the target is treated as already reached (no ETA clause). */
 const TARGET_REACHED_EPS = 0.25;
+/**
+ * A forecast plateau this close to the setpoint counts as "reaches the target" —
+ * so we don't show a nonsensical "won't go below/above 25°" when the room is set
+ * to 25° and simply settles there (allows for sensor/forecast noise).
+ */
+const TARGET_PLATEAU_EPS = 0.5;
 /** Once the counted-down ETA drops below this, show "…soon" instead of a number. */
 const ETA_SOON_MIN = 1.5;
 
@@ -106,6 +112,9 @@ function targetEta(i: ComfortInput): string | undefined {
   // Unreachable: report the plateau, but only when actually moving toward it.
   const towardTarget = (i.target - i.tempNow) * (fit.asymptote - i.tempNow) > 0;
   if (!towardTarget) return undefined;
+  // A plateau that's basically at the setpoint isn't worth flagging — "won't go
+  // below 25°" when you set 25° (or it settles at 25.4°) just reads as a bug.
+  if (Math.abs(fit.asymptote - i.target) <= TARGET_PLATEAU_EPS) return undefined;
   const plateau = Math.round(fit.asymptote);
   return `won't go ${cooling ? 'below' : 'above'} ${plateau}${i.unit}`;
 }

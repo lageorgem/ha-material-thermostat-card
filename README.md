@@ -14,7 +14,7 @@ gracefully under any Home Assistant theme.
 [![codecov](https://codecov.io/gh/lageorgem/ha-material-thermostat-card/branch/main/graph/badge.svg)](https://codecov.io/gh/lageorgem/ha-material-thermostat-card)
 [![License: MIT](https://img.shields.io/github/license/lageorgem/ha-material-thermostat-card)](LICENSE)
 
-[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=dashboard)
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=plugin)
 
 <p align="center">
   <img src="assets/hero.png" alt="Material Thermostat Card cooling, with HVAC + fan selectors and sensor tiles" width="420">
