@@ -857,13 +857,27 @@ describe('mt-climate-feature-editor', () => {
       ]);
     });
 
-    it('icon="" prunes an existing override that becomes empty', async () => {
+    it('icon="" is kept as an explicit "no icon" override', async () => {
       const el = await mount('hvac', {
         type: 'climate-hvac-modes',
         options: [{ value: 'heat', icon: 'mdi:fire' }],
       });
       const cap = captureEvents('feature-changed');
       (el as any)._setOverride('heat', { icon: '' });
+      cap.stop();
+      // '' = "no icon" — meaningful, so the override persists
+      expect((cap.events[0].detail as any).feature.options).to.deep.equal([
+        { value: 'heat', icon: '' },
+      ]);
+    });
+
+    it('icon=undefined reverts to the default (prunes the override)', async () => {
+      const el = await mount('hvac', {
+        type: 'climate-hvac-modes',
+        options: [{ value: 'heat', icon: 'mdi:fire' }],
+      });
+      const cap = captureEvents('feature-changed');
+      (el as any)._setOverride('heat', { icon: undefined });
       cap.stop();
       expect((cap.events[0].detail as any).feature.options).to.deep.equal([]);
     });
@@ -1121,7 +1135,7 @@ describe('mt-input-select-editor', () => {
       ]);
     });
 
-    it('updates existing + prunes when emptied', async () => {
+    it('keeps icon="" (no icon) but prunes on icon=undefined (revert to default)', async () => {
       const el = await mount(
         {
           type: 'input-select',
@@ -1132,8 +1146,12 @@ describe('mt-input-select-editor', () => {
       );
       const cap = captureEvents('feature-changed');
       (el as any)._setOverride('away', { icon: '' });
+      expect((cap.events[0].detail as any).feature.options).to.deep.equal([
+        { value: 'away', icon: '' },
+      ]);
+      (el as any)._setOverride('away', { icon: undefined });
       cap.stop();
-      expect((cap.events[0].detail as any).feature.options).to.deep.equal([]);
+      expect((cap.events[1].detail as any).feature.options).to.deep.equal([]);
     });
 
     it('hide toggle on/off', async () => {
@@ -1155,13 +1173,13 @@ describe('mt-input-select-editor', () => {
       cap1.stop();
       expect((cap1.events[0].detail as any).feature.options[0].label).to.equal('Casa');
 
-      const optIcon = el.shadowRoot!.querySelector('.opt ha-icon-picker') as Element;
+      const optIcon = el.shadowRoot!.querySelector('.opt mt-icon-field') as Element;
       const cap2 = captureEvents('feature-changed');
       emitValueChanged(optIcon, 'mdi:home');
       cap2.stop();
       expect((cap2.events[0].detail as any).feature.options[0].icon).to.equal('mdi:home');
 
-      const optIcon2 = el.shadowRoot!.querySelector('.opt ha-icon-picker') as Element;
+      const optIcon2 = el.shadowRoot!.querySelector('.opt mt-icon-field') as Element;
       const cap3 = captureEvents('feature-changed');
       emitValueChanged(optIcon2, undefined);
       cap3.stop();
@@ -1319,12 +1337,25 @@ describe('mt-entity-list-editor', () => {
     expect((cap.events[0].detail as any).feature.entities[0].entity).to.equal('switch.x');
   });
 
-  it('_updateItem prunes empty label/icon', async () => {
+  it('_updateItem prunes an empty label but keeps icon="" as "no icon"', async () => {
     const el = await mount({
       feature: { type: 'switch-group', entities: [{ entity: 'switch.x', label: 'L', icon: 'i' }] },
     });
     const cap = captureEvents('feature-changed');
     (el as any)._updateItem(0, { label: '', icon: '' });
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.entities[0]).to.deep.equal({
+      entity: 'switch.x',
+      icon: '',
+    });
+  });
+
+  it('_updateItem with icon=undefined reverts to the default (prunes the key)', async () => {
+    const el = await mount({
+      feature: { type: 'switch-group', entities: [{ entity: 'switch.x', icon: '' }] },
+    });
+    const cap = captureEvents('feature-changed');
+    (el as any)._updateItem(0, { icon: undefined });
     cap.stop();
     expect((cap.events[0].detail as any).feature.entities[0]).to.deep.equal({ entity: 'switch.x' });
   });
@@ -1345,14 +1376,14 @@ describe('mt-entity-list-editor', () => {
     cap2.stop();
     expect((cap2.events[0].detail as any).feature.entities[0].label).to.equal('Lamp');
 
-    const iconPicker = el.shadowRoot!.querySelector('.item ha-icon-picker') as Element;
+    const iconPicker = el.shadowRoot!.querySelector('.item mt-icon-field') as Element;
     const cap3 = captureEvents('feature-changed');
     emitValueChanged(iconPicker, 'mdi:lamp');
     cap3.stop();
     expect((cap3.events[0].detail as any).feature.entities[0].icon).to.equal('mdi:lamp');
 
     const cap4 = captureEvents('feature-changed');
-    emitValueChanged(iconPicker, undefined); // coerces to '' -> pruned
+    emitValueChanged(iconPicker, undefined); // undefined -> revert to default (pruned)
     cap4.stop();
     expect((cap4.events[0].detail as any).feature.entities[0].icon).to.equal(undefined);
   });

@@ -4,6 +4,7 @@ import type { HomeAssistant } from 'custom-card-helpers';
 import type { EntityItem, FeatureConfig } from '../types';
 import './display-toggle';
 import './width-field';
+import './icon-field';
 
 /**
  * Shared editor for features backed by a list of entities: switch group,
@@ -56,7 +57,8 @@ export class MtEntityListEditor extends LitElement {
     const items = [...this._items];
     const merged: EntityItem = { ...items[index], ...patch };
     if (merged.label === '') delete merged.label;
-    if (merged.icon === '') delete merged.icon;
+    // `undefined` = unset (use the default icon); '' = explicit "no icon" (kept).
+    if (merged.icon === undefined) delete merged.icon;
     items[index] = merged;
     this._setItems(items);
   }
@@ -134,12 +136,12 @@ export class MtEntityListEditor extends LitElement {
                 .value=${item.label ?? ''}
                 @input=${(e: any) => this._updateItem(index, { label: e.target.value })}
               ></ha-textfield>
-              <ha-icon-picker
+              <mt-icon-field
                 .hass=${this.hass}
-                .value=${item.icon ?? ''}
+                .value=${item.icon}
                 @value-changed=${(e: CustomEvent) =>
-                  this._updateItem(index, { icon: e.detail.value ?? '' })}
-              ></ha-icon-picker>
+                  this._updateItem(index, { icon: e.detail.value })}
+              ></mt-icon-field>
               <button class="del" title="Remove" @click=${() => this._removeItem(index)}>
                 <ha-icon icon="mdi:close"></ha-icon>
               </button>
@@ -183,7 +185,7 @@ export class MtEntityListEditor extends LitElement {
     }
     .item {
       display: grid;
-      grid-template-columns: auto 2fr 1.4fr auto auto;
+      grid-template-columns: auto 2fr 1.4fr 104px auto;
       align-items: center;
       gap: 8px;
     }
@@ -196,8 +198,8 @@ export class MtEntityListEditor extends LitElement {
     .handle ha-icon {
       --mdc-icon-size: 20px;
     }
-    ha-icon-picker {
-      width: 56px;
+    mt-icon-field {
+      min-width: 0;
     }
     .del {
       width: 40px;

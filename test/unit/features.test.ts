@@ -352,6 +352,25 @@ describe('mt-climate-selector', () => {
       expect(items.find((i) => i.value === 'off')!.icon).to.equal('mdi:power');
     });
 
+    it('an explicit "no icon" override (icon: "") suppresses the default → renders the label chip', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+          .options=${[{ value: 'cool', icon: '' }]}
+        ></mt-climate-selector>`
+      );
+      // the item carries no icon...
+      const cool = rowItems(el).find((i) => i.value === 'cool')!;
+      expect(cool.icon).to.equal('');
+      // ...so its chip shows the label text instead of an <ha-icon>
+      const coolChip = chips(el).find((c) => c.getAttribute('aria-label') === 'Cool')!;
+      expect(coolChip.querySelector('ha-icon')).to.equal(null);
+      expect(coolChip.querySelector('.chip-text')!.textContent!.trim()).to.equal('Cool');
+    });
+
     it('_overrideMap handles undefined options (?? [] fallback)', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
       const el = await fixture<MtClimateSelector>(

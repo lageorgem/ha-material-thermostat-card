@@ -11,6 +11,7 @@ import type {
 import { prettyLabel, orderValues } from '../theme';
 import './display-toggle';
 import './width-field';
+import './icon-field';
 
 type ClimateFeature =
   | ClimateModesFeatureConfig
@@ -90,7 +91,8 @@ export class MtClimateFeatureEditor extends LitElement {
     const idx = options.findIndex((o) => o.value === value);
     const merged: OptionOverride = { ...(idx >= 0 ? options[idx] : { value }), ...patch };
     if (merged.label === '') delete merged.label;
-    if (merged.icon === '') delete merged.icon;
+    // `undefined` = unset (use the default icon); '' = explicit "no icon" (kept).
+    if (merged.icon === undefined) delete merged.icon;
     if (!merged.hide) delete merged.hide;
 
     const meaningful = merged.label !== undefined || merged.icon !== undefined || !!merged.hide;
@@ -153,13 +155,13 @@ export class MtClimateFeatureEditor extends LitElement {
           .placeholder=${prettyLabel(value)}
           @input=${(e: any) => this._setOverride(value, { label: e.target.value })}
         ></ha-textfield>
-        <ha-icon-picker
+        <mt-icon-field
           class="opt-icon"
           .hass=${this.hass}
-          .value=${ov?.icon ?? ''}
+          .value=${ov?.icon}
           @value-changed=${(e: CustomEvent) =>
-            this._setOverride(value, { icon: e.detail.value ?? '' })}
-        ></ha-icon-picker>
+            this._setOverride(value, { icon: e.detail.value })}
+        ></mt-icon-field>
         <button
           class="opt-hide ${hidden ? 'on' : ''}"
           aria-label=${hidden ? 'Show option' : 'Hide option'}
@@ -196,7 +198,7 @@ export class MtClimateFeatureEditor extends LitElement {
     }
     .opt {
       display: grid;
-      grid-template-columns: auto minmax(60px, 1fr) 2fr auto auto;
+      grid-template-columns: auto minmax(60px, 1fr) 2fr 104px auto;
       align-items: center;
       gap: 8px;
     }
@@ -216,8 +218,8 @@ export class MtClimateFeatureEditor extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    ha-icon-picker {
-      width: 56px;
+    .opt-icon {
+      min-width: 0;
     }
     .opt-hide {
       width: 40px;
