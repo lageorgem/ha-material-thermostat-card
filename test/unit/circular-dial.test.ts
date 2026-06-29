@@ -242,10 +242,11 @@ describe('mt-circular-dial', () => {
     });
   });
 
-  describe('touch-action (mobile scroll vs. ring drag)', () => {
-    it('the svg allows vertical page scroll while the ring band swallows the gesture', async () => {
-      // Regression: on mobile, swiping over the dial must still scroll the page;
-      // only the ring band (.hit) captures the drag.
+  describe('touch-action (mobile scroll vs. drag)', () => {
+    it('the svg and ring band allow vertical page scroll; only a handle swallows the gesture', async () => {
+      // Regression: on mobile a swipe over the dial (incl. the ring band) must
+      // still scroll the page; scrubbing is done by dragging a setpoint handle,
+      // which is the only element that claims the gesture (touch-action: none).
       const el = await mount();
       el.mode = 'cool';
       el.min = 10;
@@ -256,7 +257,17 @@ describe('mt-circular-dial', () => {
       expect(getComputedStyle(svg).touchAction).to.equal('pan-y');
       const hit = el.shadowRoot!.querySelector('.hit') as SVGElement;
       expect(hit).to.not.equal(null);
-      expect(getComputedStyle(hit).touchAction).to.equal('none');
+      expect(getComputedStyle(hit).touchAction).to.equal('pan-y');
+      const handle = el.shadowRoot!.querySelector('.handle') as HTMLElement;
+      expect(handle).to.not.equal(null);
+      expect(getComputedStyle(handle).touchAction).to.equal('none');
+    });
+
+    it('clips the dial so rotated marker layers do not add horizontal overflow', async () => {
+      const el = await mount();
+      await el.updateComplete;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(getComputedStyle(dial).overflow).to.equal('hidden');
     });
   });
 
@@ -970,6 +981,301 @@ describe('mt-circular-dial', () => {
       const dual = await dualP;
       expect(dual.detail.low).to.equal(15);
       expect(dual.detail.high).to.equal(23);
+    });
+  });
+
+  describe('tap-to-set on the ring (touch)', () => {
+    /**
+     * Build a touch PointerEvent.
+     * @param type event name
+     * @param x clientX
+     * @param y clientY
+     */
+    function touch(type: string, x: number, y: number): PointerEvent {
+      return new PointerEvent(type, {
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        pointerType: 'touch',
+        bubbles: true,
+        composed: true,
+      });
+    }
+
+    it('a touch tap on the ring sets the temperature without dragging', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.value = 15;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changing = captureEvents('value-changing');
+      const changed = captureEvents('value-changed');
+      const topX = cx;
+      const topY = cy - RADIUS * scale;
+
+      svg.dispatchEvent(touch('pointerdown', topX, topY));
+      // a touch press only arms a tap — no drag, nothing emitted yet
+      expect((el as any)._dragging).to.be.false;
+      expect((el as any)._tapArmed).to.be.true;
+      expect(changing.events.length).to.equal(0);
+
+      svg.dispatchEvent(touch('pointerup', topX, topY));
+      expect((el as any)._tapArmed).to.be.false;
+      expect(changing.events.length).to.equal(0);
+      expect(changed.events.length).to.equal(1);
+      expect((changed.events[0].detail as any).value).to.equal(20); // mid of [10,30]
+
+      changing.stop();
+      changed.stop();
+    });
+
+    it('a touch swipe past the slop cancels the tap (the page scrolls instead)', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 21;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changed = captureEvents('value-changed');
+      const topX = cx;
+      const topY = cy - RADIUS * scale;
+
+      svg.dispatchEvent(touch('pointerdown', topX, topY));
+      expect((el as any)._tapArmed).to.be.true;
+      // move well past the 10px slop -> the press is a scroll, not a tap
+      svg.dispatchEvent(touch('pointermove', topX, topY + 40));
+      expect((el as any)._tapArmed).to.be.false;
+      expect((el as any)._dragging).to.be.false;
+      svg.dispatchEvent(touch('pointerup', topX, topY + 40));
+      expect(changed.events.length).to.equal(0);
+
+      changed.stop();
+    });
+
+    it('a touch tap in dual mode moves the nearer setpoint (low, near min)', async () => {
+      const el = await mount();
+      el.mode = 'heat_cool';
+      el.dual = true;
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 14;
+      el.highValue = 26;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changed = captureEvents('value-changed');
+      // tap near min (value ~10) -> closer to the low setpoint (14)
+      const t = ((225 - 90) * Math.PI) / 180;
+      const x = cx + RADIUS * scale * Math.cos(t);
+      const y = cy + RADIUS * scale * Math.sin(t);
+
+      svg.dispatchEvent(touch('pointerdown', x, y));
+      svg.dispatchEvent(touch('pointerup', x, y));
+      expect(changed.events.length).to.equal(1);
+      const d = changed.events[0].detail as any;
+      expect(d.low).to.equal(10);
+      expect(d.high).to.equal(26);
+
+      changed.stop();
+    });
+
+    it('a touch tap in dual mode moves the nearer setpoint (high, near max)', async () => {
+      const el = await mount();
+      el.mode = 'heat_cool';
+      el.dual = true;
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 14;
+      el.highValue = 26;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changed = captureEvents('value-changed');
+      const t = ((135 - 90) * Math.PI) / 180; // near max (value ~30) -> nearer high (26)
+      const x = cx + RADIUS * scale * Math.cos(t);
+      const y = cy + RADIUS * scale * Math.sin(t);
+
+      svg.dispatchEvent(touch('pointerdown', x, y));
+      svg.dispatchEvent(touch('pointerup', x, y));
+      const d = changed.events[0].detail as any;
+      expect(d.low).to.equal(14);
+      expect(d.high).to.equal(30);
+
+      changed.stop();
+    });
+
+    it('a touch press off the ring (center) does not arm a tap', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      await el.updateComplete;
+      const { svg, cx, cy } = svgGeometry(el);
+      stubCapture(svg);
+      svg.dispatchEvent(touch('pointerdown', cx, cy));
+      expect((el as any)._tapArmed).to.be.false;
+    });
+  });
+
+  describe('handle drag (setpoint scrub)', () => {
+    /**
+     * Build a PointerEvent with an explicit pointer id/type.
+     * @param type event name
+     * @param x clientX
+     * @param y clientY
+     * @param id pointerId
+     */
+    function pe(type: string, x: number, y: number, id = 2): PointerEvent {
+      return new PointerEvent(type, {
+        clientX: x,
+        clientY: y,
+        pointerId: id,
+        pointerType: 'touch',
+        bubbles: true,
+        composed: true,
+      });
+    }
+
+    it('single: grabbing the handle drags the value (no jump on grab, commits on release)', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.value = 15;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changing = captureEvents('value-changing');
+      const changed = captureEvents('value-changed');
+      const handle = el.shadowRoot!.querySelector('.handle') as HTMLElement;
+      expect(handle).to.not.equal(null);
+
+      // grab the handle -> drag begins, value unchanged
+      handle.dispatchEvent(pe('pointerdown', cx, cy));
+      expect((el as any)._dragging).to.be.true;
+      expect(changing.events.length).to.equal(0);
+
+      // drag to the top of the ring -> mid value 20 (events arrive on the svg via capture)
+      svg.dispatchEvent(pe('pointermove', cx, cy - RADIUS * scale));
+      expect((changing.events[changing.events.length - 1].detail as any).value).to.equal(20);
+
+      svg.dispatchEvent(pe('pointerup', cx, cy - RADIUS * scale));
+      expect((el as any)._dragging).to.be.false;
+      expect(changed.events.length).to.equal(1);
+      expect((changed.events[0].detail as any).value).to.equal(20);
+
+      changing.stop();
+      changed.stop();
+    });
+
+    it('dual: the grabbed handle is dragged (not the one nearest the pointer)', async () => {
+      const el = await mount();
+      el.mode = 'heat_cool';
+      el.dual = true;
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.lowValue = 14;
+      el.highValue = 26;
+      await el.updateComplete;
+      const handles = el.shadowRoot!.querySelectorAll('.handle');
+      expect(handles.length).to.equal(2);
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changing = captureEvents('value-changing');
+
+      // grab the HIGH handle (2nd in DOM order)
+      (handles[1] as HTMLElement).dispatchEvent(pe('pointerdown', cx, cy, 3));
+      expect((el as any)._activeHandle).to.equal('high');
+
+      // drag it toward min: high follows but clamps to low + step (never crosses low)
+      const t = ((225 - 90) * Math.PI) / 180;
+      const x = cx + RADIUS * scale * Math.cos(t);
+      const y = cy + RADIUS * scale * Math.sin(t);
+      svg.dispatchEvent(pe('pointermove', x, y, 3));
+      const last = changing.events[changing.events.length - 1].detail as any;
+      expect(last.low).to.equal(14);
+      expect(last.high).to.equal(14.5); // clamped to low + step
+
+      changing.stop();
+    });
+
+    it('a disabled dial ignores a handle grab', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.disabled = true;
+      await el.updateComplete;
+      const { svg } = svgGeometry(el);
+      stubCapture(svg);
+      (el as any)._onHandlePointerDown(
+        { clientX: 0, clientY: 0, pointerId: 1, preventDefault() {}, stopPropagation() {} },
+        null
+      );
+      expect((el as any)._dragging).to.be.false;
+    });
+  });
+
+  describe('pointer cancel', () => {
+    it('disarms a pending tap when the browser takes the gesture over (scroll)', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.value = 21;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changed = captureEvents('value-changed');
+      const init = {
+        clientX: cx,
+        clientY: cy - RADIUS * scale,
+        pointerId: 1,
+        pointerType: 'touch',
+        bubbles: true,
+        composed: true,
+      };
+      svg.dispatchEvent(new PointerEvent('pointerdown', init));
+      expect((el as any)._tapArmed).to.be.true;
+      svg.dispatchEvent(new PointerEvent('pointercancel', init));
+      expect((el as any)._tapArmed).to.be.false;
+      expect((el as any)._dragging).to.be.false;
+      expect(changed.events.length).to.equal(0);
+      changed.stop();
+    });
+
+    it('ends an in-progress (mouse) drag on cancel, committing the last value', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 10;
+      el.max = 30;
+      el.step = 0.5;
+      el.value = 15;
+      await el.updateComplete;
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      const changed = captureEvents('value-changed');
+      const init = {
+        clientX: cx,
+        clientY: cy - RADIUS * scale,
+        pointerId: 1,
+        bubbles: true,
+        composed: true,
+      };
+      // mouse press (pointerType '' is not 'touch') scrubs immediately -> value 20
+      svg.dispatchEvent(new PointerEvent('pointerdown', init));
+      expect((el as any)._dragging).to.be.true;
+      svg.dispatchEvent(new PointerEvent('pointercancel', init));
+      expect((el as any)._dragging).to.be.false;
+      expect(changed.events.length).to.equal(1);
+      expect((changed.events[0].detail as any).value).to.equal(20);
+      changed.stop();
     });
   });
 

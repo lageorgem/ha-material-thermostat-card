@@ -32,6 +32,7 @@ const SWEEP = 270; // total degrees the range spans
 const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 135 — bottom-right (= max)
 const OVERLAP_DEG = 18; // angular gap under which setpoint icon + current temp merge
 const SIDE_GUARD_DEG = 26; // a numeric marker this close to 3/9 o'clock crowds the centre readout
+const TAP_SLOP_PX = 10; // movement past this turns a ring press from a tap into a scroll/scrub
 
 /**
  * Convert a polar angle (0° = top, increasing clockwise) to an SVG point.
@@ -88,6 +89,10 @@ export class MtCircularDial extends LitElement {
   @state() private _dragLow = 0;
   @state() private _dragHigh = 0;
   @state() private _activeHandle: 'low' | 'high' | null = null;
+  /** Ring-tap tracking: the press origin and whether it may still resolve to a tap. */
+  private _pressX = 0;
+  private _pressY = 0;
+  private _tapArmed = false;
   /** While a mode-color change wipes across the ring: the outgoing color. */
   @state() private _wipeFrom: string | null = null;
   /** Tracks the last applied dial color to detect mode-color changes. */
@@ -281,45 +286,105 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
-   * Begin a press on the ring. The markers animate toward the pointer (the
-   * same easing as +/- and taps), giving a smooth follow during a drag.
+   * Begin a press on the ring. On touch we only ARM a tap and let the gesture
+   * bubble (so a swipe scrolls the page) — the dial is scrubbed by dragging a
+   * setpoint handle, or set directly by a tap. Mouse/pen has no scroll gesture
+   * to honor, so a ring press scrubs immediately.
    * @param e pointer event
    */
   private _onPointerDown = (e: PointerEvent): void => {
     if (this.disabled || !this._isRingHit(e.clientX, e.clientY)) return;
-    e.preventDefault();
-    this._svg.setPointerCapture(e.pointerId);
-    // Seed the drag setpoints from the values shown BEFORE flipping `_dragging`:
-    // the `_display*` getters return the drag state once dragging, so reading
-    // them after would seed from the (stale) drag defaults instead of low/high.
-    const startLow = this._displayLow;
-    const startHigh = this._displayHigh;
-    this._dragging = true;
-    const v = this._valueFromPoint(e.clientX, e.clientY);
-    if (this.dual) {
-      this._dragLow = startLow;
-      this._dragHigh = startHigh;
-      this._activeHandle =
-        Math.abs(v - this._dragLow) <= Math.abs(v - this._dragHigh) ? 'low' : 'high';
+    this._pressX = e.clientX;
+    this._pressY = e.clientY;
+    if (e.pointerType === 'touch') {
+      this._tapArmed = true;
+      return;
     }
-    this._emitFromValue(v);
+    this._beginDrag(e, null);
+    this._emitFromValue(this._valueFromPoint(e.clientX, e.clientY));
   };
 
   /**
-   * Update the value while pressed.
+   * Track the press: cancel a pending tap once it moves past the slop (it's a
+   * scroll/scrub, not a tap), and feed live values while dragging.
    * @param e pointer event
    */
   private _onPointerMove = (e: PointerEvent): void => {
+    if (this._tapArmed && this._movedPastSlop(e)) this._tapArmed = false;
     if (!this._dragging) return;
     this._emitFromValue(this._valueFromPoint(e.clientX, e.clientY));
   };
 
   /**
-   * Commit the interaction.
+   * Commit the interaction: a clean tap sets the temperature at that point; a
+   * drag commits its final value.
    * @param e pointer event
    */
   private _onPointerUp = (e: PointerEvent): void => {
+    if (this._tapArmed) {
+      this._tapArmed = false;
+      this._commitTap(e);
+      return;
+    }
     if (!this._dragging) return;
+    this._endDrag(e);
+  };
+
+  /**
+   * The browser took the gesture over (e.g. to scroll the page): it was never a
+   * tap, so disarm — and end any in-progress drag at its last (already
+   * optimistically shown) value.
+   * @param e pointer event
+   */
+  private _onPointerCancel = (e: PointerEvent): void => {
+    this._tapArmed = false;
+    if (this._dragging) this._endDrag(e);
+  };
+
+  /**
+   * Whether the pointer has moved beyond the tap slop since the press began.
+   * @param e pointer event
+   */
+  private _movedPastSlop(e: PointerEvent): boolean {
+    return Math.hypot(e.clientX - this._pressX, e.clientY - this._pressY) > TAP_SLOP_PX;
+  }
+
+  /**
+   * Begin a drag — a ring scrub (mouse/pen) or a setpoint-handle grab. Claims
+   * the pointer so it tracks the finger anywhere on the dial, and seeds the drag
+   * state from the values shown BEFORE flipping `_dragging` (the `_display*`
+   * getters switch to the drag state once dragging).
+   * @param e pointer event
+   * @param handle the dual setpoint to drag, or null to pick the nearest
+   */
+  private _beginDrag(e: PointerEvent, handle: 'low' | 'high' | null): void {
+    e.preventDefault();
+    this._svg.setPointerCapture(e.pointerId);
+    this._tapArmed = false;
+    const startLow = this._displayLow;
+    const startHigh = this._displayHigh;
+    const startValue = this._displayValue;
+    this._dragging = true;
+    if (this.dual) {
+      this._dragLow = startLow;
+      this._dragHigh = startHigh;
+      if (handle) {
+        this._activeHandle = handle;
+      } else {
+        const v = this._valueFromPoint(e.clientX, e.clientY);
+        this._activeHandle =
+          Math.abs(v - this._dragLow) <= Math.abs(v - this._dragHigh) ? 'low' : 'high';
+      }
+    } else {
+      this._dragValue = startValue;
+    }
+  }
+
+  /**
+   * Commit and clear a drag.
+   * @param e pointer event
+   */
+  private _endDrag(e: PointerEvent): void {
     this._svg.releasePointerCapture(e.pointerId);
     this._dragging = false;
     if (this.dual) {
@@ -328,7 +393,40 @@ export class MtCircularDial extends LitElement {
     } else {
       this._emit('value-changed', { value: this._dragValue });
     }
-  };
+  }
+
+  /**
+   * Set the temperature from a tap on the ring: the single setpoint, or the
+   * nearer of the two dual setpoints (kept on its side of the other by a step).
+   * @param e pointer event
+   */
+  private _commitTap(e: PointerEvent): void {
+    const v = this._valueFromPoint(e.clientX, e.clientY);
+    if (this.dual) {
+      const lo = this._displayLow;
+      const hi = this._displayHigh;
+      if (Math.abs(v - lo) <= Math.abs(v - hi)) {
+        this._emit('value-changed', { low: Math.min(v, hi - this.step), high: hi });
+      } else {
+        this._emit('value-changed', { low: lo, high: Math.max(v, lo + this.step) });
+      }
+    } else {
+      this._emit('value-changed', { value: v });
+    }
+  }
+
+  /**
+   * Begin dragging a setpoint handle. Stops the press from also arming a ring
+   * tap, then starts a drag of that setpoint (grabbing it doesn't change the
+   * value — the first move does).
+   * @param e pointer event
+   * @param handle the dual setpoint to drag, or null in single mode
+   */
+  private _onHandlePointerDown(e: PointerEvent, handle: 'low' | 'high' | null): void {
+    if (this.disabled) return;
+    e.stopPropagation();
+    this._beginDrag(e, handle);
+  }
 
   /**
    * Keyboard control for accessibility (single mode only).
@@ -405,6 +503,23 @@ export class MtCircularDial extends LitElement {
       <div class="o-label" style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
         ${content}
       </div>
+    </div>`;
+  }
+
+  /**
+   * An invisible, generously-sized drag target that orbits to a setpoint's
+   * angle. Grabbing it is the only way touch scrubs the dial (a swipe anywhere
+   * else scrolls the page); it `touch-action: none`s the gesture so the drag is
+   * never interrupted by a scroll.
+   * @param angle angle in degrees
+   * @param handle the dual setpoint this grabs (null in single mode)
+   */
+  private _handleOrbit(angle: number, handle: 'low' | 'high' | null): TemplateResult {
+    return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
+      <div
+        class="handle"
+        @pointerdown=${(e: PointerEvent) => this._onHandlePointerDown(e, handle)}
+      ></div>
     </div>`;
   }
 
@@ -583,7 +698,7 @@ export class MtCircularDial extends LitElement {
           @pointerdown=${this._onPointerDown}
           @pointermove=${this._onPointerMove}
           @pointerup=${this._onPointerUp}
-          @pointercancel=${this._onPointerUp}
+          @pointercancel=${this._onPointerCancel}
           @keydown=${this._onKeyDown}
         >
           <defs>
@@ -653,6 +768,8 @@ export class MtCircularDial extends LitElement {
                 ${showCurrent && !this.showCurrentAsPrimary
                   ? this._labelOrbit(curAngle, currentLabel)
                   : nothing}
+                ${this._handleOrbit(this._angleOf(this._displayLow), 'low')}
+                ${this._handleOrbit(this._angleOf(this._displayHigh), 'high')}
               `
             : html`
                 ${this._dotOrbit(spAngle, 'setpoint')}
@@ -676,6 +793,7 @@ export class MtCircularDial extends LitElement {
                         ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl)}
                         ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
                       `}
+                ${this._handleOrbit(spAngle, null)}
               `}
         </div>
 
@@ -772,6 +890,8 @@ export class MtCircularDial extends LitElement {
            (container-type below) reports zero intrinsic width, so without this
            the shrink-to-fit host would collapse to ~0 and the dial vanishes. */
         width: 100%;
+        /* no grey flash when a tap lands on the dial (mobile WebKit/Blink) */
+        -webkit-tap-highlight-color: transparent;
       }
       .dial {
         position: relative;
@@ -782,18 +902,26 @@ export class MtCircularDial extends LitElement {
         transition: --dial-color var(--mt-motion-dur) var(--mt-motion-ease);
         /* let inner text/markers scale with the dial via cqi units */
         container-type: inline-size;
+        /* The orbiting marker layers are full-size squares rotated to ride the
+           arc; a rotated square's corners poke past the dial box. Clip them here
+           so they don't add page-level horizontal overflow on mobile (the corners
+           are empty, so nothing visible is lost). */
+        overflow: hidden;
       }
       svg {
         display: block; /* avoid inline baseline gap that offsets the SVG vs marker overlays */
         width: 100%;
         height: 100%;
-        /* Let a vertical swipe scroll the page (the dial fills a lot of phone
-           height); only the ring band itself (.hit) swallows the gesture to drag.
-           Where SVG touch-action is honoured the ring drags in any direction; if
-           not, side-of-ring drags fall back to scrolling — the top of the arc and
-           the +/- buttons still adjust. */
+        /* A swipe over the dial scrolls the page; a tap on the ring sets the
+           temperature; scrubbing is done by dragging a setpoint handle (which
+           claims its own gesture). */
         touch-action: pan-y;
         outline: none;
+        /* the dial is tap/drag controlled — no text selection or grey tap flash */
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
       }
       .glow,
       .ring,
@@ -806,11 +934,35 @@ export class MtCircularDial extends LitElement {
         stroke-width: 50;
         stroke-linecap: butt;
         pointer-events: stroke;
-        /* the ring band claims the touch so dragging it doesn't scroll the page */
-        touch-action: none;
+        /* a swipe here scrolls the page (pan-y); a tap sets the temperature —
+           the gesture is only swallowed when dragging a setpoint handle */
+        touch-action: pan-y;
         cursor: pointer;
       }
       .dial.disabled .hit {
+        cursor: default;
+      }
+      /* Invisible, finger-sized drag target centered on a setpoint dot. It rides
+         the ring via the same orbit/rotate as the markers. Dragging it scrubs
+         the dial; touch-action:none keeps a scroll from interrupting the drag. */
+      .handle {
+        position: absolute;
+        left: 50%;
+        top: 9.375%; /* on the ring centerline, like .o-dot */
+        width: clamp(34px, 16cqi, 48px);
+        height: clamp(34px, 16cqi, 48px);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        pointer-events: auto;
+        touch-action: none;
+        cursor: grab;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .handle:active {
+        cursor: grabbing;
+      }
+      .dial.disabled .handle {
+        pointer-events: none;
         cursor: default;
       }
       .ring {
