@@ -36,8 +36,13 @@ export class MtIconField extends LitElement {
 
   /** Whether the icon search panel is open. */
   @state() private _open = false;
+  /** Anchor the panel to its right edge (grow leftward) near the viewport edge. */
+  @state() private _alignRight = false;
   /** The browsable icon list (lazy-loaded on first open). */
   @state() private _icons: SearchItem[] = [];
+
+  /** The panel's width (keep in sync with `.panel { width }`). */
+  private static readonly PANEL_WIDTH = 256;
 
   /** Whether the explicit "no icon" state is selected. */
   private get _none(): boolean {
@@ -82,6 +87,13 @@ export class MtIconField extends LitElement {
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
+    if (!this._open) {
+      // Left-align by default; flip to right-anchored (grow leftward) when a
+      // left-anchored panel would spill past the viewport's right edge — which
+      // in the narrow editor causes the whole dialog to scroll horizontally.
+      const r = this.getBoundingClientRect();
+      this._alignRight = r.left + MtIconField.PANEL_WIDTH > window.innerWidth - 8;
+    }
     this._open = !this._open;
     if (this._open && this._icons.length === 0) {
       loadIconItems().then((items) => {
@@ -135,7 +147,7 @@ export class MtIconField extends LitElement {
         </button>
       </div>
       ${this._open
-        ? html`<div class="panel">
+        ? html`<div class=${classMap({ panel: true, right: this._alignRight })}>
             <mt-search-panel
               .items=${this._icons}
               .value=${this.value || ''}
@@ -210,6 +222,12 @@ export class MtIconField extends LitElement {
       box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.3),
         0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    /* Anchored to the right edge of the pill so it grows leftward (used near the
+       viewport's right edge to avoid horizontal overflow/scroll). */
+    .panel.right {
+      left: auto;
+      right: 0;
     }
   `;
 }

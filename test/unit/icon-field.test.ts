@@ -184,6 +184,38 @@ describe('mt-icon-field', () => {
     });
   });
 
+  describe('panel alignment', () => {
+    /** Stub the pill's position so `_toggle` can decide the panel anchor. */
+    const stubRect = (el: MtIconField, left: number): void => {
+      el.getBoundingClientRect = () =>
+        ({
+          left,
+          width: 80,
+          right: left + 80,
+          top: 0,
+          bottom: 40,
+          height: 40,
+          x: left,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    };
+
+    it('left-aligns by default when the panel fits within the viewport', async () => {
+      const el = await mount();
+      stubRect(el, 10);
+      await openIcons(el);
+      expect(el.shadowRoot!.querySelector('.panel')!.classList.contains('right')).to.be.false;
+    });
+
+    it('right-anchors (grows leftward) near the viewport right edge', async () => {
+      const el = await mount();
+      stubRect(el, window.innerWidth - 40); // a left-anchored 256px panel would overflow
+      await openIcons(el);
+      expect(el.shadowRoot!.querySelector('.panel')!.classList.contains('right')).to.be.true;
+    });
+  });
+
   describe('outside-click handling', () => {
     it('a document click outside closes an open panel', async () => {
       const el = await mount(undefined);

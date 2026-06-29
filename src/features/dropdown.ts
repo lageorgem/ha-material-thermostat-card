@@ -292,11 +292,9 @@ export class MtDropdown extends LitElement {
         min-width: 0;
         flex: 1;
       }
-      /* Title is the prominent line (bolder + larger), the value sits below it a
-         touch smaller and lighter — matching the Google Home tiles. */
       .tile .title {
-        font-size: var(--md-sys-typescale-title-medium-size, 16px);
-        font-weight: 600;
+        font-size: var(--md-sys-typescale-label-medium-size, 13px);
+        font-weight: 500;
         color: var(--mt-on-surface-variant);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -306,8 +304,8 @@ export class MtDropdown extends LitElement {
         color: currentColor;
       }
       .tile .value {
-        font-size: var(--md-sys-typescale-body-medium-size, 14px);
-        font-weight: 400;
+        font-size: var(--md-sys-typescale-body-large-size, 16px);
+        font-weight: 500;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

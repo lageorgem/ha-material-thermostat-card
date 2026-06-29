@@ -231,10 +231,11 @@ export class MtGridSlider extends LitElement {
       height: 36px;
       width: 100%;
       outline: none;
-      transition: box-shadow 180ms ease-in-out;
     }
-    :host(:focus-visible) {
-      box-shadow: 0 0 0 2px var(--primary-color);
+    /* Keyboard focus: a soft ring on the handle only — NOT a box around the whole
+       control, which read as a stray colored band over the editor background. */
+    :host(:focus-visible) .handle::after {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 45%, transparent);
     }
     .container {
       position: relative;
