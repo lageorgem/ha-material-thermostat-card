@@ -132,22 +132,28 @@ export class MtComfort extends LitElement {
   }
 
   /**
-   * Resolve the relevant target setpoint, or null when at/within the band. Only
-   * called once {@link _hasReadings} has confirmed the climate entity exists.
+   * Resolve the relevant target setpoint, or null when there's no sensible
+   * forecast toward one — at/within the heat_cool band, or a single setpoint
+   * the active mode can't drive the room toward (a `cool` setpoint above the
+   * current temp, or a `heat` setpoint below it — there's nothing to cool/heat,
+   * so the row just shows the comfort verdict). auto/dry/fan_only can move
+   * either way, so their target is kept. Only called once {@link _hasReadings}
+   * has confirmed the climate entity exists.
+   * @param tempNow the current temperature reading
    */
   private _target(tempNow: number): number | null {
-    const a = this._climate!.attributes;
-    if (
-      this._climate!.state === 'heat_cool' &&
-      a.target_temp_low != null &&
-      a.target_temp_high != null
-    ) {
+    const c = this._climate!;
+    const a = c.attributes;
+    if (c.state === 'heat_cool' && a.target_temp_low != null && a.target_temp_high != null) {
       if (tempNow < a.target_temp_low) return Number(a.target_temp_low);
       if (tempNow > a.target_temp_high) return Number(a.target_temp_high);
       return null; // within band
     }
     const t = Number(a.temperature);
-    return isFinite(t) ? t : null;
+    if (!isFinite(t)) return null;
+    if (c.state === 'cool' && tempNow <= t) return null; // already at/below — nothing to cool
+    if (c.state === 'heat' && tempNow >= t) return null; // already at/above — nothing to heat
+    return t;
   }
 
   /**

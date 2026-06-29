@@ -297,6 +297,46 @@ describe('mt-comfort', () => {
     expect(line(el)).to.equal('Room feels comfortable');
   });
 
+  it('cool with the setpoint above the current temp → no target ETA (nothing to cool toward)', async () => {
+    // Comfortable at 24°C, cool mode, setpoint 26 (above current) → no cooling
+    // demand, so it must NOT flip to a nonsensical "won't go above 26°C".
+    const el = await mount({
+      climateStateStr: 'cool',
+      tempNow: '24',
+      rhNow: '45',
+      climateAttrs: { temperature: 26 },
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('heat with the setpoint below the current temp → no target ETA (nothing to heat toward)', async () => {
+    const el = await mount({
+      climateStateStr: 'heat',
+      tempNow: '24',
+      rhNow: '45',
+      climateAttrs: { temperature: 22 },
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('heat with the setpoint above the current temp → "until heated to {target}"', async () => {
+    // 24°C comfortable, heat mode, heating toward 30 → forecast reaching 26 en route.
+    const temps = Array.from({ length: 16 }, (_, i) => 30 - 6 * Math.exp(-0.05 * i * 2)); // 24 → 30
+    const el = await mount({
+      climateStateStr: 'heat',
+      tempNow: '24',
+      rhNow: '45',
+      climateAttrs: { temperature: 26 },
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until heated to 26°C$/);
+  });
+
   it('falls back to the climate current_temperature when the sensor is non-numeric', async () => {
     // The temperature sensor reads "unknown"; the climate reports 25°C → still
     // judged comfortable from the fallback reading (no crash, row visible).
