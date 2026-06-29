@@ -863,7 +863,7 @@ export class MtCircularDial extends LitElement {
         </div>
 
         ${this.dual ? this._renderDualCenter() : this._renderSingleCenter()}
-        ${this._renderAdjust()}
+        ${this._renderPresetIcon()} ${this._renderAdjust()}
       </div>
     `;
   }
@@ -879,7 +879,11 @@ export class MtCircularDial extends LitElement {
       : nothing;
   }
 
-  /** The preset icon shown under the number (e.g. the eco leaf), if configured. */
+  /**
+   * The preset icon (e.g. the eco leaf), if configured. Positioned absolutely
+   * just above the +/- controls and horizontally centered — like Google Home —
+   * so it doesn't shift the centered temperature off the dial's true center.
+   */
   private _renderPresetIcon(): TemplateResult | typeof nothing {
     return this.presetIcon
       ? html`<ha-icon class="preset-icon" icon=${this.presetIcon}></ha-icon>`
@@ -898,7 +902,6 @@ export class MtCircularDial extends LitElement {
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
-        ${this._renderPresetIcon()}
       </div>
     `;
   }
@@ -924,7 +927,6 @@ export class MtCircularDial extends LitElement {
             <span class="value-text">${this._fmt(this._displayHigh, this._precision)}</span>
             <span class="unit">${this.unit}</span>
           </div>
-          ${this._renderPresetIcon()}
         </div>
       `;
     }
@@ -941,7 +943,6 @@ export class MtCircularDial extends LitElement {
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
-        ${this._renderPresetIcon()}
       </div>
     `;
   }
@@ -1177,11 +1178,17 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface-variant);
         font-weight: 500;
       }
-      /* Preset icon under the number (à la Google Home's eco leaf). */
+      /* Preset icon (à la Google Home's eco leaf) — pinned just above the +/-
+         controls and horizontally centered, so it never shifts the temperature
+         off the dial's true center. */
       .preset-icon {
-        margin-top: 4px;
+        position: absolute;
+        left: 50%;
+        top: 70%;
+        transform: translate(-50%, -50%);
         --mdc-icon-size: clamp(14px, 7cqi, 22px);
         color: var(--mt-on-surface-variant);
+        pointer-events: none;
       }
       .temp {
         display: flex;
@@ -1192,18 +1199,21 @@ export class MtCircularDial extends LitElement {
         align-items: center;
         gap: 6px;
       }
+      /* The heat/cool range packs two numbers + a dash + unit across the dial, so
+         it is sized well below the single-mode hero number — even while being
+         actively changed — and shrinks a touch more once it settles. */
       .temp.dual .value-text {
-        font-size: clamp(14px, 10cqi, 32px);
+        font-size: clamp(13px, 7cqi, 24px);
       }
       .temp.dual .dash {
-        font-size: clamp(14px, 10cqi, 32px);
+        font-size: clamp(13px, 7cqi, 24px);
         color: var(--mt-on-surface-variant);
       }
       /* At rest (not dragging / >5s after a change) the range shrinks so it isn't
          oversized when it's just sitting there idle. */
       .temp.dual.settled .value-text,
       .temp.dual.settled .dash {
-        font-size: clamp(12px, 6cqi, 22px);
+        font-size: clamp(12px, 5.5cqi, 20px);
       }
       /* A numeric marker near 3/9 o'clock crowds the centre readout — shrink and
          allow the value/unit to wrap so the orbiting labels don't overlap it. */

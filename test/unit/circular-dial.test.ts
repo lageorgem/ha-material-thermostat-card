@@ -104,14 +104,17 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
     });
 
-    it('renders the preset icon under the number when set', async () => {
+    it('renders the preset icon above the controls (outside .center) when set', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.presetIcon = 'mdi:leaf';
       await el.updateComplete;
-      const icon = el.shadowRoot!.querySelector('.center .preset-icon');
+      const icon = el.shadowRoot!.querySelector('.preset-icon');
       expect(icon).to.not.equal(null);
       expect(icon!.getAttribute('icon')).to.equal('mdi:leaf');
+      // It must NOT live inside .center, so it never shifts the centered
+      // temperature off the dial's true center.
+      expect(el.shadowRoot!.querySelector('.center .preset-icon')).to.equal(null);
     });
 
     it('omits the preset icon when unset', async () => {
