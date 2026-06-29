@@ -789,49 +789,8 @@ export class MtCircularDial extends LitElement {
               <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.04" />
               <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
-            <!-- DITHER the halo. An 8-bit gradient bands into "rings" on platforms
-                 whose compositor doesn't dither (Chromium on Windows/Android;
-                 macOS dithers automatically). We bake fine noise INTO the glow:
-                 add a tiny ± grey perturbation to the colour channels (alpha
-                 untouched), which — because the glow is premultiplied — shifts the
-                 displayed luminance directly, breaking the bands. All in one
-                 filter (no mix-blend-mode, which proved unreliable on Android). -->
-            <filter
-              id="mt-glow-dither"
-              x="0"
-              y="0"
-              width="100%"
-              height="100%"
-              color-interpolation-filters="sRGB"
-            >
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.9"
-                numOctaves="2"
-                seed="11"
-                stitchTiles="stitch"
-                result="noise"
-              />
-              <feColorMatrix
-                in="noise"
-                type="matrix"
-                values="0.12 0 0 0 -0.06
-                        0.12 0 0 0 -0.06
-                        0.12 0 0 0 -0.06
-                        0 0 0 0 0"
-                result="grain"
-              />
-              <feComposite in="SourceGraphic" in2="grain" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" />
-            </filter>
           </defs>
-          <circle
-            class="glow"
-            cx=${CENTER}
-            cy=${CENTER}
-            r="150"
-            fill="url(#mt-glow)"
-            filter="url(#mt-glow-dither)"
-          />
+          <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <path class="ring" d=${ringPath} />
           ${this.dual
             ? dualSegs.map(

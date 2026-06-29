@@ -304,17 +304,14 @@ describe('mt-circular-dial', () => {
     });
   });
 
-  describe('halo dither (anti-banding)', () => {
-    it('bakes a noise-dither filter into the glow circle', async () => {
+  describe('halo', () => {
+    it('renders the glow as a plain radial-gradient circle (no filter)', async () => {
       const el = await mount();
       el.mode = 'cool';
       await el.updateComplete;
       const glow = el.shadowRoot!.querySelector('circle.glow') as SVGElement;
-      expect(glow.getAttribute('filter')).to.equal('url(#mt-glow-dither)');
-      // The dither filter generates noise and composites it onto the glow.
-      const filter = el.shadowRoot!.querySelector('filter#mt-glow-dither')!;
-      expect(filter.querySelector('feTurbulence')).to.not.equal(null);
-      expect(filter.querySelector('feComposite[operator="arithmetic"]')).to.not.equal(null);
+      expect(glow.getAttribute('fill')).to.equal('url(#mt-glow)');
+      expect(glow.getAttribute('filter')).to.equal(null);
     });
   });
 

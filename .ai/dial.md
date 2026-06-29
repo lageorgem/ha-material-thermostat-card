@@ -169,19 +169,13 @@ dimmed halo. `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only'
 
 The halo (`#mt-glow` radialGradient) is a **6-stop falloff from 0.38 at center to
 opacity 0 at the perimeter** — ending at 0 (not 0.02) avoids a faint hard-edged
-disc.
-
-**Anti-banding dither.** An 8-bit gradient bands into concentric "rings" on
-platforms whose compositor doesn't dither (Chromium on Windows/Android; macOS
-dithers automatically, which is why it looks smooth there). We bake the dither
-INTO the glow via the `#mt-glow-dither` filter applied to `circle.glow`:
-`feTurbulence` (fractalNoise) → `feColorMatrix` produces a tiny ± grey
-perturbation in the COLOUR channels (alpha untouched) → `feComposite`
-`operator="arithmetic"` adds it to the gradient. Because the glow is
-premultiplied, perturbing the colour channels (not alpha) shifts the *displayed*
-luminance directly, breaking the steps. All in one filter — **no mix-blend-mode**
-(an earlier blend-mode grain overlay had no visible effect on Android). Tune
-amplitude via the feColorMatrix coefficients (currently `0.12 … -0.06` ≈ ±0.06).
+disc. It's a **plain gradient with no dither filter**: dark 8-bit radial
+gradients band into faint "rings" on some platforms (Chromium on Windows/Android
+don't dither; macOS does), but both attempted fixes — a masked `mix-blend-mode`
+noise overlay, then an in-filter `feTurbulence` perturbation baked into the glow
+— either had no effect on Android or introduced *more* visible rings on macOS, so
+they were reverted. Treat this as a known platform limitation; don't re-add a
+dither without verifying on both macOS and Android.
 
 ## Animations
 
