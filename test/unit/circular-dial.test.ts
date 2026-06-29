@@ -1564,6 +1564,44 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       expect((el as any)._dualActive).to.equal(null);
     });
+
+    it("honours an active 'cool' mode over the in-band geometry", async () => {
+      // The unit reports it's cooling (hvac_action → mode 'cool') while the temp
+      // sits inside the band; the dial must show cooling, not idle.
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21; // within band → geometry alone would say idle (null)
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal('cool');
+      expect((el as any)._effectiveMode).to.equal('cool');
+      expect((el as any)._dialColor).to.equal(climateModeColor('cool'));
+    });
+
+    it("honours an active 'heat' mode over the in-band geometry", async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21;
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal('heat');
+      expect((el as any)._effectiveMode).to.equal('heat');
+    });
+
+    it("falls back to geometry when the mode carries no action (idle 'heat_cool')", async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 28; // above high → geometry says cooling
+      await el.updateComplete;
+      expect((el as any)._dualActive).to.equal('cool');
+    });
   });
 
   describe('_demandSensible getter (single-mode demand direction)', () => {

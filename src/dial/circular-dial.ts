@@ -116,7 +116,13 @@ export class MtCircularDial extends LitElement {
    * otherwise idle (within range).
    */
   private get _dualActive(): 'cool' | 'heat' | null {
-    if (!this.dual || this.current == null) return null;
+    if (!this.dual) return null;
+    // Prefer the real HVAC action (passed in as `mode`): a unit that reports it's
+    // cooling/heating wins over the current-vs-setpoint inference, so the dial
+    // reflects what it's actually doing even when the temp sits inside the band.
+    if (this.mode === 'cool') return 'cool';
+    if (this.mode === 'heat') return 'heat';
+    if (this.current == null) return null;
     if (this.current > this._displayHigh) return 'cool';
     if (this.current < this._displayLow) return 'heat';
     return null;
