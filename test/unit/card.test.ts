@@ -294,6 +294,62 @@ describe('material-thermostat-card', () => {
     });
   });
 
+  describe('preset icon under the dial number', () => {
+    const presetState = (preset_mode?: string) =>
+      climateState({ preset_modes: ['none', 'eco', 'away'], preset_mode });
+
+    it('is undefined when the preset-modes feature is not configured', async () => {
+      const el = track(await mount(baseConfig(), { [ENTITY]: presetState('eco') }));
+      expect(dial(el).presetIcon).to.equal(undefined);
+    });
+
+    it('shows the heuristic preset icon when the feature is configured', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-preset-modes' }] }), {
+          [ENTITY]: presetState('eco'),
+        })
+      );
+      expect(dial(el).presetIcon).to.equal('mdi:leaf');
+    });
+
+    it('is undefined for the "none"/empty preset', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-preset-modes' }] }), {
+          [ENTITY]: presetState('none'),
+        })
+      );
+      expect(dial(el).presetIcon).to.equal(undefined);
+      const el2 = track(
+        await mount(baseConfig({ features: [{ type: 'climate-preset-modes' }] }), {
+          [ENTITY]: presetState(undefined),
+        })
+      );
+      expect(dial(el2).presetIcon).to.equal(undefined);
+    });
+
+    it('honors a per-option icon override, and "" suppresses it', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [{ type: 'climate-preset-modes', options: [{ value: 'eco', icon: 'mdi:sprout' }] }],
+          }),
+          { [ENTITY]: presetState('eco') }
+        )
+      );
+      expect(dial(el).presetIcon).to.equal('mdi:sprout');
+
+      const el2 = track(
+        await mount(
+          baseConfig({
+            features: [{ type: 'climate-preset-modes', options: [{ value: 'eco', icon: '' }] }],
+          }),
+          { [ENTITY]: presetState('eco') }
+        )
+      );
+      expect(dial(el2).presetIcon).to.equal(undefined);
+    });
+  });
+
   describe('_isDual', () => {
     it('true when heat_cool with low+high present', async () => {
       const el = track(

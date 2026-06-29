@@ -33,9 +33,6 @@ export class MtIconField extends LitElement {
 
   /** Whether the icon-picker popover is open. */
   @state() private _open = false;
-  /** Fixed-position coordinates of the open popover (viewport px). */
-  @state() private _px = 0;
-  @state() private _py = 0;
 
   /** Whether the explicit "no icon" state is selected. */
   private get _none(): boolean {
@@ -73,19 +70,13 @@ export class MtIconField extends LitElement {
   }
 
   /**
-   * Toggle the icon-picker popover. The popover is fixed-positioned (anchored to
-   * the pill's viewport rect) so it escapes the editor's `overflow: hidden`
-   * feature cards instead of being clipped inside them.
+   * Toggle the icon-picker popover. It's anchored right under the pill
+   * (absolute, within this host's stacking context); the editor's feature cards
+   * use `overflow: visible` so it isn't clipped.
    * @param e the click event
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
-    if (!this._open) {
-      const r = this.getBoundingClientRect();
-      const width = 248;
-      this._px = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-      this._py = r.bottom + 6;
-    }
     this._open = !this._open;
   }
 
@@ -123,11 +114,7 @@ export class MtIconField extends LitElement {
         </button>
       </div>
       ${this._open
-        ? html`<div
-            class="popover"
-            role="dialog"
-            style="left:${this._px}px;top:${this._py}px"
-          >
+        ? html`<div class="popover" role="dialog">
             <ha-icon-picker
               .hass=${this.hass}
               .label=${this.label}
@@ -191,8 +178,10 @@ export class MtIconField extends LitElement {
       --mdc-icon-size: 20px;
     }
     .popover {
-      position: fixed;
+      position: absolute;
       z-index: 30;
+      top: calc(100% + 6px);
+      left: 0;
       width: 248px;
       box-sizing: border-box;
       padding: 8px;

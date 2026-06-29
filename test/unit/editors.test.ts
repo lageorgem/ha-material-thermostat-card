@@ -29,12 +29,6 @@ function emitValueChanged(node: Element, value: unknown): void {
   );
 }
 
-/** Drive an ha-textfield's @input handler. */
-function emitInput(node: Element, value: string): void {
-  (node as any).value = value;
-  node.dispatchEvent(new Event('input'));
-}
-
 // ---------------------------------------------------------------------------
 // D) load-ha.ts ensureHaComponents
 // ---------------------------------------------------------------------------
@@ -751,20 +745,20 @@ describe('mt-climate-feature-editor', () => {
     expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(4);
   });
 
-  it('Title textfield @input sets the feature label', async () => {
+  it('Title field sets the feature label', async () => {
     const el = await mount('fan', { type: 'climate-fan-modes' });
     const cap = captureEvents('feature-changed');
-    const titleTf = el.shadowRoot!.querySelector('.editor > ha-textfield') as Element;
-    emitInput(titleTf, 'Fan speed');
+    const titleTf = el.shadowRoot!.querySelector('.editor > mt-text-field') as Element;
+    emitValueChanged(titleTf, 'Fan speed');
     cap.stop();
     expect((cap.events[0].detail as any).feature.label).to.equal('Fan speed');
   });
 
-  it('Title textfield emptied prunes the label to undefined', async () => {
+  it('Title field emptied prunes the label to undefined', async () => {
     const el = await mount('fan', { type: 'climate-fan-modes', label: 'Fan speed' });
     const cap = captureEvents('feature-changed');
-    const titleTf = el.shadowRoot!.querySelector('.editor > ha-textfield') as Element;
-    emitInput(titleTf, '');
+    const titleTf = el.shadowRoot!.querySelector('.editor > mt-text-field') as Element;
+    emitValueChanged(titleTf, '');
     cap.stop();
     expect((cap.events[0].detail as any).feature.label).to.equal(undefined);
   });
@@ -939,11 +933,11 @@ describe('mt-climate-feature-editor', () => {
       ]);
     });
 
-    it('option label textfield @input drives _setOverride', async () => {
+    it('option label field drives _setOverride', async () => {
       const el = await mount('fan', { type: 'climate-fan-modes' });
       const cap = captureEvents('feature-changed');
       const tf = el.shadowRoot!.querySelector('.opt .opt-label') as Element;
-      emitInput(tf, 'Quiet');
+      emitValueChanged(tf, 'Quiet');
       cap.stop();
       const opt = (cap.events[0].detail as any).feature.options[0];
       expect(opt.label).to.equal('Quiet');
@@ -1083,8 +1077,8 @@ describe('mt-input-select-editor', () => {
   it('label input non-empty -> feature-changed {label}', async () => {
     const el = await withOptions();
     const cap = captureEvents('feature-changed');
-    const tf = el.shadowRoot!.querySelector('ha-textfield') as Element; // first textfield = row label
-    emitInput(tf, 'Mode');
+    const tf = el.shadowRoot!.querySelector('mt-text-field') as Element; // first = row label
+    emitValueChanged(tf, 'Mode');
     cap.stop();
     expect((cap.events[0].detail as any).feature.label).to.equal('Mode');
   });
@@ -1092,8 +1086,8 @@ describe('mt-input-select-editor', () => {
   it('label input empty -> {label: undefined}', async () => {
     const el = await withOptions();
     const cap = captureEvents('feature-changed');
-    const tf = el.shadowRoot!.querySelector('ha-textfield') as Element;
-    emitInput(tf, '');
+    const tf = el.shadowRoot!.querySelector('mt-text-field') as Element;
+    emitValueChanged(tf, '');
     cap.stop();
     expect((cap.events[0].detail as any).feature.label).to.equal(undefined);
   });
@@ -1191,10 +1185,10 @@ describe('mt-input-select-editor', () => {
 
     it('option label/icon/hide controls in a rendered row drive _setOverride', async () => {
       const el = await withOptions();
-      // row label textfields are within .opt; first .opt textfield
-      const optTf = el.shadowRoot!.querySelectorAll('.opt ha-textfield')[0] as Element;
+      // per-option label fields are within .opt; first .opt label field
+      const optTf = el.shadowRoot!.querySelectorAll('.opt mt-text-field')[0] as Element;
       const cap1 = captureEvents('feature-changed');
-      emitInput(optTf, 'Casa');
+      emitValueChanged(optTf, 'Casa');
       cap1.stop();
       expect((cap1.events[0].detail as any).feature.options[0].label).to.equal('Casa');
 
@@ -1310,10 +1304,10 @@ describe('mt-entity-list-editor', () => {
   it('label input -> {label} (empty -> undefined)', async () => {
     const el = await mount({ feature: { type: 'switch-group', entities: [] } });
     const cap = captureEvents('feature-changed');
-    const tf = el.shadowRoot!.querySelector('ha-textfield') as Element; // row label
-    emitInput(tf, 'Lights');
+    const tf = el.shadowRoot!.querySelector('mt-text-field') as Element; // row label
+    emitValueChanged(tf, 'Lights');
     expect((cap.events[0].detail as any).feature.label).to.equal('Lights');
-    emitInput(tf, '');
+    emitValueChanged(tf, '');
     cap.stop();
     expect((cap.events[1].detail as any).feature.label).to.equal(undefined);
   });
@@ -1395,9 +1389,9 @@ describe('mt-entity-list-editor', () => {
     cap1.stop();
     expect((cap1.events[0].detail as any).feature.entities[0].entity).to.equal('switch.y');
 
-    const labelTf = el.shadowRoot!.querySelector('.item ha-textfield') as Element;
+    const labelTf = el.shadowRoot!.querySelector('.item mt-text-field') as Element;
     const cap2 = captureEvents('feature-changed');
-    emitInput(labelTf, 'Lamp');
+    emitValueChanged(labelTf, 'Lamp');
     cap2.stop();
     expect((cap2.events[0].detail as any).feature.entities[0].label).to.equal('Lamp');
 

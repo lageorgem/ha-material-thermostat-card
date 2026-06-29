@@ -104,8 +104,16 @@ collapsed↔range flip, picks up the *currently animating* inherited value. The
 range band stroke (gray↔green) and the demand band opacity (1↔0) transition via
 the `.value` CSS transition. The mode **wipe is skipped for dual**.
 
+**Mode/preset readout.** The normal HVAC mode label is **not** shown above the
+number (the HVAC chips already show it, à la Google Home) — `_renderStatus()`
+emits the `.mode` line **only when `disabled`** (to surface "Unavailable").
+`_renderPresetIcon()` shows the `presetIcon` prop (the active preset's glyph, e.g.
+the eco leaf) under the number; the card computes it from the configured
+`climate-preset-modes` feature (override icon wins, `''` suppresses, else the
+`presetIcon()` heuristic) and only for a meaningful preset (not none/off).
+
 **Center readout** (`_renderDualCenter` gated by `_showRange`): shows the
-"Heat/Cool" **range** (low – high) while dragging, for **5s after a setpoint
+range (low – high) while dragging, for **5s after a setpoint
 changes** (`_bumpRangeDisplay` 5s timer, armed in `updated()` — guarded by
 `_prevLow/_prevHigh` so the initial set doesn't arm it), or while idle. Otherwise
 it **collapses** to the active sub-mode label ("Cooling"/"Heating") + the

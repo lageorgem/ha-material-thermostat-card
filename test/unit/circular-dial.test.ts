@@ -64,7 +64,7 @@ function stubCapture(svg: SVGSVGElement): void {
 
 describe('mt-circular-dial', () => {
   describe('rendering — single mode', () => {
-    it('renders the center value-text, unit and mode label (default single mode)', async () => {
+    it('renders the center value-text and unit, but no mode label (single mode)', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.modeLabel = 'Cooling';
@@ -78,7 +78,8 @@ describe('mt-circular-dial', () => {
       expect(valueText).to.not.equal(null);
       expect(valueText!.textContent!.trim()).to.equal('21.0');
       expect(sr.querySelector('.unit')!.textContent!.trim()).to.equal('°C');
-      expect(sr.querySelector('.mode')!.textContent!.trim()).to.equal('Cooling');
+      // The HVAC chips already show the mode (à la Google Home) — no label here.
+      expect(sr.querySelector('.mode')).to.equal(null);
       // single-mode center is not the dual readout
       expect(sr.querySelector('.temp.dual')).to.equal(null);
       expect(sr.querySelector('.dash')).to.equal(null);
@@ -86,12 +87,38 @@ describe('mt-circular-dial', () => {
       expect(sr.querySelectorAll('.step').length).to.equal(2);
     });
 
-    it('omits the mode label element when modeLabel is empty', async () => {
+    it('shows the status label only when disabled/unavailable', async () => {
       const el = await mount();
       el.mode = 'cool';
-      el.modeLabel = '';
+      el.modeLabel = 'Unavailable';
+      el.disabled = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')!.textContent!.trim()).to.equal('Unavailable');
+    });
+
+    it('omits the mode label element when not disabled (even with a modeLabel)', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.modeLabel = 'Cool';
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
+    });
+
+    it('renders the preset icon under the number when set', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.presetIcon = 'mdi:leaf';
+      await el.updateComplete;
+      const icon = el.shadowRoot!.querySelector('.center .preset-icon');
+      expect(icon).to.not.equal(null);
+      expect(icon!.getAttribute('icon')).to.equal('mdi:leaf');
+    });
+
+    it('omits the preset icon when unset', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.preset-icon')).to.equal(null);
     });
 
     it('shows the current temp as primary when showCurrentAsPrimary is set', async () => {
@@ -217,7 +244,7 @@ describe('mt-circular-dial', () => {
       expect(texts[1].textContent!.trim()).to.equal('30.0');
     });
 
-    it('renders the dual mode label when modeLabel is set', async () => {
+    it('hides the mode label in the dual range view, but shows it when disabled', async () => {
       const el = await mount();
       el.mode = 'heat_cool';
       el.dual = true;
@@ -225,9 +252,15 @@ describe('mt-circular-dial', () => {
       el.highValue = 24;
       el.modeLabel = 'Auto';
       await el.updateComplete;
-      const mode = el.shadowRoot!.querySelector('.center .mode');
-      expect(mode).to.not.equal(null);
-      expect(mode!.textContent!.trim()).to.equal('Auto');
+      // Enabled: the range readout carries no mode label (the chips show it).
+      expect(el.shadowRoot!.querySelector('.center .mode')).to.equal(null);
+      // Disabled/unavailable: the status surfaces.
+      el.modeLabel = 'Unavailable';
+      el.disabled = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .mode')!.textContent!.trim()).to.equal(
+        'Unavailable'
+      );
     });
 
     it('renders a current dot when current is in range (dual)', async () => {
@@ -2072,7 +2105,7 @@ describe('mt-circular-dial', () => {
       expect(sr.querySelector('.dash')).to.equal(null);
     });
 
-    it('idle (current in range) shows the range: modeLabel + low – high with a dash', async () => {
+    it('idle (current in range) shows the range: low – high with a dash, no mode label', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -2083,7 +2116,8 @@ describe('mt-circular-dial', () => {
       el.current = 21; // idle
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Heat/Cool');
+      // No mode label in the range readout when enabled (chips show the mode).
+      expect(sr.querySelector('.center .mode')).to.equal(null);
       const dual = sr.querySelector('.temp.dual');
       expect(dual).to.not.equal(null);
       const texts = dual!.querySelectorAll('.value-text');

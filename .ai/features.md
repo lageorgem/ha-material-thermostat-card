@@ -119,11 +119,20 @@ containers (`--mt-surface-container[-high/-highest]`) fall back to a
 `color-mix` elevation tint over the card background so tiles/lists don't blend in.
 
 The editor's per-row/per-option icon control is **`mt-icon-field`** (`editors/`):
-a compact **pill** with two halves — left opens an `ha-icon-picker` in a
-`position: fixed` popover (fixed so it escapes the feature card's `overflow:hidden`),
-right is `mdi:cancel` (the explicit "no icon"). Same three-state contract as before:
-`undefined` = default · `''` = no icon · string = custom. Pass `defaultIcon` to
-preview the would-be glyph faded when unset.
+a compact **pill** with two halves — left opens an `ha-icon-picker` in a popover
+anchored **right under the pill** (`position: absolute`; the feature card uses
+`overflow: visible` so it isn't clipped — do NOT use `position: fixed`, HA's
+editor dialog has a transformed ancestor that breaks viewport coords), right is
+`mdi:cancel` (the explicit "no icon"). Three-state contract: `undefined` = default
+· `''` = no icon · string = custom. Pass `defaultIcon` to preview the would-be
+glyph faded when unset.
+
+Title/label inputs in the sub-editors use **`mt-text-field`** (a native `<input>`
+styled as a pill to match `mt-icon-field`), NOT a bare `<ha-textfield>` — a
+standalone `ha-textfield` placed directly in a custom-card editor often never
+upgrades (HA only preloads the picker/form stack), so it renders invisible. List
+items are laid out on two lines: entity picker (with a surface fill + `--mdc-*`
+tweaks to compact it) on top, then the icon pill + title input.
 
 `mt-dropdown` (`dropdown.ts`) is **self-contained** — built deliberately to avoid
 HA's lazily-loaded `ha-select` (which is inert inside a custom card). It sizes to

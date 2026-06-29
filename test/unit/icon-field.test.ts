@@ -109,18 +109,17 @@ describe('mt-icon-field', () => {
   });
 
   describe('icon picker popover', () => {
-    it('clicking the icon segment opens a fixed-position popover with the picker', async () => {
+    it('clicking the icon segment opens a popover anchored under the pill', async () => {
       const el = await mount('mdi:fire');
       iconSeg(el).click();
       await el.updateComplete;
-      expect(popover(el)).to.not.equal(null);
+      const pop = popover(el)!;
+      expect(pop).to.not.equal(null);
       expect(iconSeg(el).getAttribute('aria-expanded')).to.equal('true');
       expect(picker(el)).to.not.equal(null);
       expect(picker(el).value).to.equal('mdi:fire');
-      // Anchored in the viewport (left clamped to ≥ 8px).
-      const left = parseFloat(popover(el)!.style.left);
-      expect(left).to.be.at.least(8);
-      expect(popover(el)!.style.top).to.not.equal('');
+      // Absolutely positioned within the field (no viewport/fixed coordinates).
+      expect(getComputedStyle(pop).position).to.equal('absolute');
     });
 
     it('opens with an empty picker when currently "no icon"', async () => {

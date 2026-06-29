@@ -55,6 +55,7 @@ gracefully under any Home Assistant theme.
 - 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
+- 🏠 **Google‑Home‑style dial**: no mode label cluttering the number (the HVAC chips show the mode), and the active **preset icon** (e.g. the eco leaf) under the temperature when the preset‑modes feature is added.
 - 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row** or **dropdown**, each with an optional **title**.
 - ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, plus a custom title).
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.

@@ -76,6 +76,8 @@ export class MtCircularDial extends LitElement {
   @property({ type: Number }) current?: number;
   @property() mode = 'off';
   @property() modeLabel = '';
+  /** Optional preset icon shown under the temperature (e.g. the eco leaf). */
+  @property() presetIcon?: string;
   @property() unit = '°C';
   @property({ type: Boolean }) showCurrentAsPrimary = false;
   @property({ type: Boolean }) disabled = false;
@@ -863,6 +865,24 @@ export class MtCircularDial extends LitElement {
     `;
   }
 
+  /**
+   * The mode/status line above the number. The HVAC mode chips already show the
+   * mode (à la Google Home), so this is shown only to surface an
+   * unavailable/disabled state — never the normal "Cool"/"Heat"/"Dry" label.
+   */
+  private _renderStatus(): TemplateResult | typeof nothing {
+    return this.disabled && this.modeLabel
+      ? html`<div class="mode">${this.modeLabel}</div>`
+      : nothing;
+  }
+
+  /** The preset icon shown under the number (e.g. the eco leaf), if configured. */
+  private _renderPresetIcon(): TemplateResult | typeof nothing {
+    return this.presetIcon
+      ? html`<ha-icon class="preset-icon" icon=${this.presetIcon}></ha-icon>`
+      : nothing;
+  }
+
   /** Center readout for single mode. */
   private _renderSingleCenter(): TemplateResult {
     const target = this._displayValue;
@@ -870,11 +890,12 @@ export class MtCircularDial extends LitElement {
     const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
-        ${this.modeLabel ? html`<div class="mode">${this.modeLabel}</div>` : nothing}
+        ${this._renderStatus()}
         <div class="temp">
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
+        ${this._renderPresetIcon()}
       </div>
     `;
   }
@@ -889,13 +910,14 @@ export class MtCircularDial extends LitElement {
     if (this._showRange) {
       return html`
         <div class=${classMap({ center: true, tight: this._centerTight })}>
-          ${this.modeLabel ? html`<div class="mode">${this.modeLabel}</div>` : nothing}
+          ${this._renderStatus()}
           <div class="temp dual">
             <span class="value-text">${this._fmt(this._displayLow, this._precision)}</span>
             <span class="dash">–</span>
             <span class="value-text">${this._fmt(this._displayHigh, this._precision)}</span>
             <span class="unit">${this.unit}</span>
           </div>
+          ${this._renderPresetIcon()}
         </div>
       `;
     }
@@ -913,6 +935,7 @@ export class MtCircularDial extends LitElement {
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
+        ${this._renderPresetIcon()}
       </div>
     `;
   }
@@ -1153,6 +1176,12 @@ export class MtCircularDial extends LitElement {
         font-size: clamp(10px, 5cqi, var(--md-sys-typescale-title-medium-size, 16px));
         color: var(--mt-on-surface-variant);
         font-weight: 500;
+      }
+      /* Preset icon under the number (à la Google Home's eco leaf). */
+      .preset-icon {
+        margin-top: 4px;
+        --mdc-icon-size: clamp(14px, 7cqi, 22px);
+        color: var(--mt-on-surface-variant);
       }
       .temp {
         display: flex;

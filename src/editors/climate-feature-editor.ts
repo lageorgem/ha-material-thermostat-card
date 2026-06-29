@@ -19,6 +19,7 @@ import {
 import './display-toggle';
 import './width-field';
 import './icon-field';
+import './text-field';
 
 type ClimateFeature =
   | ClimateModesFeatureConfig
@@ -129,11 +130,11 @@ export class MtClimateFeatureEditor extends LitElement {
     const display = this.feature.display ?? 'icons';
     return html`
       <div class="editor">
-        <ha-textfield
+        <mt-text-field
           label="Title (optional)"
           .value=${this.feature.label ?? ''}
-          @input=${(e: any) => this._emit({ label: e.target.value || undefined })}
-        ></ha-textfield>
+          @value-changed=${(e: CustomEvent) => this._emit({ label: e.detail.value || undefined })}
+        ></mt-text-field>
 
         <div class="field">
           <span class="field-label">Display</span>
@@ -173,13 +174,12 @@ export class MtClimateFeatureEditor extends LitElement {
       <div class="opt">
         <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
         <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
-        <ha-textfield
+        <mt-text-field
           class="opt-label"
-          label="Label"
+          label=${prettyLabel(value)}
           .value=${ov?.label ?? ''}
-          .placeholder=${prettyLabel(value)}
-          @input=${(e: any) => this._setOverride(value, { label: e.target.value })}
-        ></ha-textfield>
+          @value-changed=${(e: CustomEvent) => this._setOverride(value, { label: e.detail.value })}
+        ></mt-text-field>
         <mt-icon-field
           class="opt-icon"
           .hass=${this.hass}
@@ -206,9 +206,6 @@ export class MtClimateFeatureEditor extends LitElement {
       flex-direction: column;
       gap: 12px;
       padding: 4px 0;
-    }
-    ha-textfield {
-      width: 100%;
     }
     .field {
       display: flex;

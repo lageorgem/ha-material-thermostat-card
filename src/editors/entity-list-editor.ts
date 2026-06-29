@@ -5,6 +5,7 @@ import type { EntityItem, FeatureConfig } from '../types';
 import './display-toggle';
 import './width-field';
 import './icon-field';
+import './text-field';
 
 /**
  * Shared editor for features backed by a list of entities: switch group,
@@ -96,11 +97,11 @@ export class MtEntityListEditor extends LitElement {
     const display = (this.feature as any).display ?? 'icons';
     return html`
       <div class="editor">
-        <ha-textfield
+        <mt-text-field
           label="Row label (optional)"
           .value=${(this.feature as any).label ?? ''}
-          @input=${(e: any) => this._emit({ label: e.target.value || undefined })}
-        ></ha-textfield>
+          @value-changed=${(e: CustomEvent) => this._emit({ label: e.detail.value || undefined })}
+        ></mt-text-field>
 
         ${this.showDisplay
           ? html`<div class="field">
@@ -141,12 +142,13 @@ export class MtEntityListEditor extends LitElement {
                       @value-changed=${(e: CustomEvent) =>
                         this._updateItem(index, { icon: e.detail.value })}
                     ></mt-icon-field>
-                    <ha-textfield
+                    <mt-text-field
                       class="title-field"
                       label="Custom title"
                       .value=${item.label ?? ''}
-                      @input=${(e: any) => this._updateItem(index, { label: e.target.value })}
-                    ></ha-textfield>
+                      @value-changed=${(e: CustomEvent) =>
+                        this._updateItem(index, { label: e.detail.value })}
+                    ></mt-text-field>
                   </div>
                 </div>
                 <button class="del" title="Remove" @click=${() => this._removeItem(index)}>
@@ -172,8 +174,19 @@ export class MtEntityListEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
-    ha-textfield {
-      width: 100%;
+    /* Compact the HA entity combobox toward the pill look: surface fill, no
+       underline, rounded. Its height is fixed by HA internals, but the fill and
+       shape make it sit cohesively with the icon pill + title input below. */
+    ha-entity-picker {
+      display: block;
+      --mdc-text-field-fill-color: var(
+        --md-sys-color-surface-container-high,
+        var(--secondary-background-color)
+      );
+      --mdc-text-field-idle-line-color: transparent;
+      --mdc-text-field-hover-line-color: transparent;
+      --mdc-text-field-focused-line-color: var(--md-sys-color-primary, var(--primary-color));
+      --mdc-shape-small: 12px;
     }
     .field {
       display: flex;

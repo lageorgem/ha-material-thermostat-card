@@ -20,8 +20,12 @@ import {
   CARD_PADDING_X,
   pctToSpan,
 } from './grid';
-import { tokens, climateModeColor, prettyLabel } from './theme';
-import type { FeatureConfig, MaterialThermostatCardConfig } from './types';
+import { tokens, climateModeColor, prettyLabel, presetIcon } from './theme';
+import type {
+  ClimatePresetFeatureConfig,
+  FeatureConfig,
+  MaterialThermostatCardConfig,
+} from './types';
 import { feelsLikeC } from './calc/comfort-metrics';
 import { registerMtIcons } from './register-icons';
 import './dial/circular-dial';
@@ -338,6 +342,26 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     fireEvent(this, 'hass-more-info', { entityId: this._config.entity });
   }
 
+  /**
+   * The icon for the active climate preset, shown under the dial number (à la
+   * Google Home's eco leaf) — but only when the **preset modes** feature is
+   * configured and a meaningful preset is active. A per-option icon override
+   * wins; an explicit "no icon" override ('') suppresses it; otherwise the
+   * heuristic {@link presetIcon} is used. Returns undefined when there's nothing
+   * worth showing.
+   */
+  private _presetIcon(): string | undefined {
+    const feat = this._config.features?.find((f) => f.type === 'climate-preset-modes') as
+      | ClimatePresetFeatureConfig
+      | undefined;
+    if (!feat) return undefined;
+    const preset = this._stateObj?.attributes.preset_mode;
+    if (!preset || preset === 'none' || preset === 'off') return undefined;
+    const override = feat.options?.find((o) => o.value === preset);
+    if (override?.icon !== undefined) return override.icon || undefined;
+    return presetIcon(preset);
+  }
+
   /** Color basis for the dial: prefer the active HVAC action, else the mode. */
   private _colorMode(): string {
     const a = this._stateObj?.attributes;
@@ -390,6 +414,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .current=${this._displayCurrent(a.current_temperature)}
               .mode=${colorMode}
               .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
+              .presetIcon=${this._presetIcon()}
               .unit=${unit}
               .dual=${this._isDual}
               .lowValue=${this._targetLow}

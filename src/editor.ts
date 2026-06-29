@@ -478,7 +478,9 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     .feature {
       border: 1px solid var(--divider-color);
       border-radius: 12px;
-      overflow: hidden;
+      /* visible (not hidden) so a feature's icon-picker popover can extend past
+         the card edge instead of being clipped inside it */
+      overflow: visible;
       background: var(--secondary-background-color);
     }
     .feature-head {

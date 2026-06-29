@@ -6,6 +6,7 @@ import { prettyLabel, orderValues } from '../theme';
 import './display-toggle';
 import './width-field';
 import './icon-field';
+import './text-field';
 
 /**
  * Editor for the `input_select` feature: entity picker, optional row label,
@@ -97,11 +98,11 @@ export class MtInputSelectEditor extends LitElement {
           @value-changed=${(e: CustomEvent) => this._emit({ entity: e.detail.value })}
         ></ha-entity-picker>
 
-        <ha-textfield
+        <mt-text-field
           label="Row label (optional)"
           .value=${this.feature.label ?? ''}
-          @input=${(e: any) => this._emit({ label: e.target.value || undefined })}
-        ></ha-textfield>
+          @value-changed=${(e: CustomEvent) => this._emit({ label: e.detail.value || undefined })}
+        ></mt-text-field>
 
         <div class="field">
           <span class="field-label">Display</span>
@@ -127,12 +128,12 @@ export class MtInputSelectEditor extends LitElement {
                 return html`<div class="opt">
                   <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                   <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
-                  <ha-textfield
-                    label="Label"
+                  <mt-text-field
+                    label=${prettyLabel(value)}
                     .value=${ov?.label ?? ''}
-                    .placeholder=${prettyLabel(value)}
-                    @input=${(e: any) => this._setOverride(value, { label: e.target.value })}
-                  ></ha-textfield>
+                    @value-changed=${(e: CustomEvent) =>
+                      this._setOverride(value, { label: e.detail.value })}
+                  ></mt-text-field>
                   <mt-icon-field
                     .hass=${this.hass}
                     .value=${ov?.icon}
@@ -161,9 +162,17 @@ export class MtInputSelectEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
-    ha-entity-picker,
-    ha-textfield {
+    ha-entity-picker {
+      display: block;
       width: 100%;
+      --mdc-text-field-fill-color: var(
+        --md-sys-color-surface-container-high,
+        var(--secondary-background-color)
+      );
+      --mdc-text-field-idle-line-color: transparent;
+      --mdc-text-field-hover-line-color: transparent;
+      --mdc-text-field-focused-line-color: var(--md-sys-color-primary, var(--primary-color));
+      --mdc-shape-small: 12px;
     }
     .field {
       display: flex;
