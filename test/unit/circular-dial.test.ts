@@ -1438,8 +1438,22 @@ describe('mt-circular-dial', () => {
     });
   });
 
-  describe('dual current-label de-overlap', () => {
-    it('insets the current label when it would collide with a setpoint label', async () => {
+  describe('dual label de-overlap (angular spread along the arc)', () => {
+    const LABEL_SEP = 24; // mirrors LABEL_SEP_DEG in the component
+
+    /** The rotation (deg) of each orbiting LABEL, sorted ascending. */
+    function labelAngles(el: MtCircularDial): number[] {
+      const orbits = [...el.shadowRoot!.querySelectorAll('.markers .orbit')];
+      return orbits
+        .filter((o) => o.querySelector('.o-label'))
+        .map((o) => {
+          const m = /rotate\(([-0-9.]+)deg\)/.exec(o.getAttribute('style') ?? '');
+          return m ? parseFloat(m[1]) : NaN;
+        })
+        .sort((a, b) => a - b);
+    }
+
+    it('spreads colliding labels along the arc, keeping them on the ring (no inset)', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -1448,39 +1462,48 @@ describe('mt-circular-dial', () => {
       el.step = 0.5;
       el.lowValue = 18;
       el.highValue = 24;
-      el.current = 23.9; // angle ≈ the high setpoint → collide
+      el.current = 23.9; // angle ≈ the high setpoint → would collide
       await el.updateComplete;
-      const inset = el.shadowRoot!.querySelector('.o-label.inset');
-      expect(inset).to.not.equal(null);
-      expect(inset!.querySelector('.num.current')).to.not.equal(null);
-    });
 
-    it('does not inset the current label when it is clear of both setpoints', async () => {
-      const el = await mount();
-      el.dual = true;
-      el.mode = 'heat_cool';
-      el.min = 10;
-      el.max = 30;
-      el.step = 0.5;
-      el.lowValue = 18;
-      el.highValue = 28;
-      el.current = 23; // well clear of both
-      await el.updateComplete;
+      // The old "pull toward centre" inset is gone — labels stay at the ring.
       expect(el.shadowRoot!.querySelector('.o-label.inset')).to.equal(null);
+      const angles = labelAngles(el);
+      expect(angles.length).to.equal(3);
+      // Every adjacent pair is now at least the min separation apart.
+      for (let i = 1; i < angles.length; i++) {
+        expect(angles[i] - angles[i - 1]).to.be.at.least(LABEL_SEP - 0.5);
+      }
     });
 
-    it('never insets when the current temp is the primary number', async () => {
+    it('leaves well-separated labels at their natural angles', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
       el.min = 10;
       el.max = 30;
-      el.lowValue = 18;
-      el.highValue = 24;
+      el.step = 0.5;
+      el.lowValue = 18; // angle 333
+      el.highValue = 28; // angle 468
+      el.current = 23; // angle 400.5 — all far apart
+      await el.updateComplete;
+      const angles = labelAngles(el);
+      expect(angles).to.deep.equal([333, 400.5, 468]);
+    });
+
+    it('spreads only the two setpoints when current is the primary number', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.min = 10;
+      el.max = 30;
+      el.lowValue = 23.5;
+      el.highValue = 24; // setpoints nearly coincident
       el.current = 23.9;
-      el.showCurrentAsPrimary = true;
+      el.showCurrentAsPrimary = true; // current dot carries no label
       await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.o-label.inset')).to.equal(null);
+      const angles = labelAngles(el);
+      expect(angles.length).to.equal(2); // low + high only
+      expect(angles[1] - angles[0]).to.be.at.least(LABEL_SEP - 0.5);
     });
   });
 

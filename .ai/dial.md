@@ -40,7 +40,15 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
   they merge into one marker (icon sits `position:absolute; right:100%` of the
-  temp).
+  temp) — **single mode only**.
+- **Dual label de-overlap (`label-spread.ts`)** — low/high/current can cluster
+  (worst in heat_cool). `spreadAngles(angles, LABEL_SEP_DEG=24, ARC_START,
+  ARC_START+SWEEP)` nudges each LABEL along the arc (keeping it on the ring; the
+  DOTS stay at their true angle) so neighbours are ≥ 24° apart, moving each as
+  little as possible (L2-optimal isotonic regression / PAVA). No more pulling a
+  label toward the centre. Because the labels are rendered in a stable order
+  (low, high, current), the `.orbit` transform transition slides them — so they
+  **cross/swap smoothly** when a setpoint passes another point.
 
 ## The value segment
 
