@@ -15,6 +15,14 @@ import './selector-row';
 
 export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset';
 
+/** Default tile title per selector kind (used in `tile` display when unlabeled). */
+const TILE_TITLE: Record<ClimateSelectorKind, string> = {
+  hvac: 'Mode',
+  fan: 'Fan',
+  swing: 'Swing',
+  preset: 'Preset',
+};
+
 /**
  * Renders the climate HVAC / fan / swing selector. The available options come
  * from the entity's attributes; per-option label/icon/hide overrides come from
@@ -112,17 +120,24 @@ export class MtClimateSelector extends LitElement {
     // semantic color (cool→blue, heat→orange, …) when the Material You primary
     // token is absent — so on the default theme the modes aren't all the theme's
     // generic accent. With material-you-theme present, the M3 primary wins.
+    // The tile variant always tints with the mode color (`--mt-tile-accent`),
+    // per the "apply a tint of the mode color" requirement.
     const styleOverride =
       this.kind === 'hvac'
         ? `--mt-selected-bg: var(--md-sys-color-primary, ${climateModeColor(
             this._stateObj?.state
-          )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff);`
+          )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff); --mt-tile-accent: ${climateModeColor(
+            this._stateObj?.state
+          )};`
         : nothing;
+    // In tile display, fall back to a sensible per-kind title ("Mode", "Fan", …)
+    // so the tile reads like Google Home even without a configured label.
+    const label = this.label ?? (this.display === 'tile' ? TILE_TITLE[this.kind] : undefined);
     return html`
       <mt-selector-row
         .items=${items}
         display=${this.display}
-        .label=${this.label}
+        .label=${label}
         style=${styleOverride}
         @item-selected=${this._onSelect}
       ></mt-selector-row>

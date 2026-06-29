@@ -232,6 +232,108 @@ describe('mt-dropdown', () => {
     });
   });
 
+  describe('tile variant', () => {
+    /** Grab the tile trigger button of a tile-variant dropdown. */
+    function tile(el: MtDropdown): HTMLButtonElement {
+      return el.shadowRoot!.querySelector('.tile') as HTMLButtonElement;
+    }
+
+    it('renders a .tile trigger (not the pill .trigger) with title, value, and icon', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${items} label="Mode"></mt-dropdown>`
+      );
+      expect(el.shadowRoot!.querySelector('.trigger')).to.equal(null);
+      const t = tile(el);
+      expect(t).to.not.equal(null);
+      expect(t.querySelector('.title')!.textContent).to.equal('Mode');
+      // active item is 'a' (Alpha, mdi:a)
+      expect(t.querySelector('.value')!.textContent).to.equal('Alpha');
+      expect(t.querySelector('.ic ha-icon')!.getAttribute('icon')).to.equal('mdi:a');
+    });
+
+    it('marks the tile "on" when the active value is not off/none', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${items} label="Mode"></mt-dropdown>`
+      );
+      expect(tile(el).classList.contains('on')).to.be.true;
+    });
+
+    it('is not "on" when the active value is "off" (case-insensitive)', async () => {
+      const offItems: SelectorItem[] = [
+        { value: 'off', label: 'Off', icon: 'mdi:power', active: true },
+        { value: 'heat', label: 'Heat', icon: 'mdi:fire' },
+      ];
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${offItems} label="Mode"></mt-dropdown>`
+      );
+      expect(tile(el).classList.contains('on')).to.be.false;
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('Off');
+    });
+
+    it('is not "on" when the active value is "None" (uppercase)', async () => {
+      const noneItems: SelectorItem[] = [
+        { value: 'None', label: 'None', active: true },
+        { value: 'eco', label: 'Eco', icon: 'mdi:leaf' },
+      ];
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${noneItems} label="Preset"></mt-dropdown>`
+      );
+      expect(tile(el).classList.contains('on')).to.be.false;
+    });
+
+    it('is not "on" when nothing is active (uses items[0] for display)', async () => {
+      const noActive: SelectorItem[] = [
+        { value: 'a', label: 'Alpha', icon: 'mdi:a' },
+        { value: 'b', label: 'Beta', icon: 'mdi:b' },
+      ];
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${noActive} label="Mode"></mt-dropdown>`
+      );
+      expect(tile(el).classList.contains('on')).to.be.false;
+      // still shows the first item as the displayed value
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('Alpha');
+    });
+
+    it('omits the title when no label is set, and shows a dot when the active item has no icon', async () => {
+      const noIcon: SelectorItem[] = [{ value: 'plain', label: 'Plain', active: true }];
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${noIcon}></mt-dropdown>`
+      );
+      expect(tile(el).querySelector('.title')).to.equal(null);
+      expect(tile(el).querySelector('.ic .dot')).to.not.equal(null);
+      expect(tile(el).querySelector('.ic ha-icon')).to.equal(null);
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('Plain');
+    });
+
+    it('shows the placeholder as the value when there are no items', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${[]} placeholder="Pick"></mt-dropdown>`
+      );
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('Pick');
+      expect(tile(el).classList.contains('on')).to.be.false;
+    });
+
+    it('opens the shared menu on tap and selecting an option emits item-selected + closes', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${items} label="Mode"></mt-dropdown>`
+      );
+      expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
+      tile(el).click();
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.menu')).to.not.equal(null);
+      expect(tile(el).getAttribute('aria-expanded')).to.equal('true');
+      expect(tile(el).classList.contains('open')).to.be.true;
+
+      const opts = el.shadowRoot!.querySelectorAll('.opt');
+      const listener = oncePromise(el, 'item-selected');
+      (opts[2] as HTMLButtonElement).click();
+      const ev = await listener;
+      expect(ev.detail).to.deep.equal({ value: 'c' });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
+    });
+  });
+
   describe('alignment branches', () => {
     it('aligns right + up when the trigger sits in the bottom-right region', async () => {
       const el = await fixture<MtDropdown>(

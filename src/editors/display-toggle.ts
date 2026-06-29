@@ -3,9 +3,9 @@ import { customElement, property } from 'lit/decorators.js';
 import type { FeatureDisplay } from '../types';
 
 /**
- * A small segmented control for choosing between `icons` and `dropdown`
- * display in the feature editors. Self-contained (no `ha-select` dependency)
- * and emits `value-changed` with `{ value }`.
+ * A small segmented control for choosing between `icons`, `dropdown`, and
+ * `tile` display in the feature editors. Self-contained (no `ha-select`
+ * dependency) and emits `value-changed` with `{ value }`.
  */
 @customElement('mt-display-toggle')
 export class MtDisplayToggle extends LitElement {
@@ -33,6 +33,9 @@ export class MtDisplayToggle extends LitElement {
           @click=${() => this._set('dropdown')}
         >
           <ha-icon icon="mdi:form-dropdown"></ha-icon><span>Dropdown</span>
+        </button>
+        <button class=${this.value === 'tile' ? 'on' : ''} @click=${() => this._set('tile')}>
+          <ha-icon icon="mdi:card-text-outline"></ha-icon><span>Tile</span>
         </button>
       </div>
     `;

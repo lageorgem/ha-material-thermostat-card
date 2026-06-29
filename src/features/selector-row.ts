@@ -29,6 +29,9 @@ export class MtSelectorRow extends LitElement {
 
   protected render(): TemplateResult | typeof nothing {
     if (!this.items.length) return nothing;
+    // The tile carries its own internal title (above its value), so it is
+    // rendered on its own — without the leading row title used by icons/dropdown.
+    if (this.display === 'tile') return this._renderTile();
     const body = this.display === 'dropdown' ? this._renderDropdown() : this._renderIcons();
     // An optional title rendered above the control, so a selector can read like
     // a labeled row ("Fan speed" over the chips/dropdown). Opt-in: shown only
@@ -71,6 +74,20 @@ export class MtSelectorRow extends LitElement {
     return html`<mt-dropdown
       .items=${this.items}
       .placeholder=${this.label ?? ''}
+      @item-selected=${(e: CustomEvent) => this._select(e.detail.value)}
+    ></mt-dropdown>`;
+  }
+
+  /**
+   * Render the items as a Google-Home-style tile showing the current value,
+   * opening the same option menu when tapped. The `label` becomes the tile's
+   * title.
+   */
+  private _renderTile(): TemplateResult {
+    return html`<mt-dropdown
+      variant="tile"
+      .items=${this.items}
+      .label=${this.label ?? ''}
       @item-selected=${(e: CustomEvent) => this._select(e.detail.value)}
     ></mt-dropdown>`;
   }

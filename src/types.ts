@@ -1,7 +1,7 @@
 import type { ActionConfig, LovelaceCardConfig } from 'custom-card-helpers';
 
 /** How a selector feature is laid out. */
-export type FeatureDisplay = 'icons' | 'dropdown';
+export type FeatureDisplay = 'icons' | 'dropdown' | 'tile';
 
 export type FeatureType =
   | 'climate-hvac-modes'

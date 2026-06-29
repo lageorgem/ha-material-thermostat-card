@@ -467,6 +467,54 @@ describe('mt-climate-selector', () => {
     });
   });
 
+  describe('tile display', () => {
+    it('falls back to the per-kind title ("Mode") and sets the mode-color tile accent', async () => {
+      const hass = makeHass({ 'climate.test': climateState({}, 'heat') });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      // no configured label -> the default tile title for the hvac kind
+      expect(selectorRow(el)!.label).to.equal('Mode');
+      expect(selectorRow(el)!.getAttribute('display')).to.equal('tile');
+      // the tile tint accent carries the active mode color
+      const style = selectorRow(el)!.getAttribute('style') ?? '';
+      expect(style).to.contain('--mt-tile-accent');
+      expect(style).to.contain('--state-climate-heat-color');
+    });
+
+    it('uses the per-kind title for the fan selector', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="fan"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)!.label).to.equal('Fan');
+    });
+
+    it('a configured label wins over the per-kind default title', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+          display="tile"
+          .label=${'Heating'}
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)!.label).to.equal('Heating');
+    });
+  });
+
   describe('order', () => {
     it('respects an explicit order: listed values first, rest natural', async () => {
       const hass = makeHass({ 'climate.test': climateState() });

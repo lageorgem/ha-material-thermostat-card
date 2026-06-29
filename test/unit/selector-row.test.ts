@@ -198,4 +198,53 @@ describe('mt-selector-row', () => {
       expect(ev.composed).to.be.true;
     });
   });
+
+  describe('tile mode', () => {
+    const items: SelectorItem[] = [
+      { value: 'a', label: 'Alpha', icon: 'mdi:a', active: true },
+      { value: 'b', label: 'Beta' },
+    ];
+
+    it('renders a tile-variant mt-dropdown, no chips and no leading title', async () => {
+      const el = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items} display="tile" label="Mode"></mt-selector-row>`
+      );
+      const dd = el.shadowRoot!.querySelector('mt-dropdown') as any;
+      expect(dd).to.not.equal(null);
+      expect(dd.variant).to.equal('tile');
+      // the tile carries its own title, so the row's leading .title is omitted
+      expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.chips')).to.equal(null);
+    });
+
+    it('passes the label to the tile as its title', async () => {
+      const el = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items} display="tile" label="Mode"></mt-selector-row>`
+      );
+      const dd = el.shadowRoot!.querySelector('mt-dropdown') as any;
+      expect(dd.items).to.deep.equal(items);
+      expect(dd.label).to.equal('Mode');
+    });
+
+    it('passes an empty label to the tile when unset', async () => {
+      const el = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items} display="tile"></mt-selector-row>`
+      );
+      const dd = el.shadowRoot!.querySelector('mt-dropdown') as any;
+      expect(dd.label).to.equal('');
+    });
+
+    it('re-emits item-selected from the tile dropdown', async () => {
+      const el = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items} display="tile"></mt-selector-row>`
+      );
+      const dd = el.shadowRoot!.querySelector('mt-dropdown')!;
+      const listener = oncePromise(el, 'item-selected');
+      dd.dispatchEvent(
+        new CustomEvent('item-selected', { detail: { value: 'b' }, bubbles: true, composed: true })
+      );
+      const ev = await listener;
+      expect(ev.detail).to.deep.equal({ value: 'b' });
+    });
+  });
 });

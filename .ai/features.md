@@ -19,11 +19,13 @@ dispatches a `FeatureConfig` to the right element and applies grid placement.
 | `comfort` | `mt-comfort` | status line | the card's feels‑like sensors | read‑only; forecasts from history (**add once**) |
 
 ### Shared config (`BaseSelectorFeature`)
-`display?: 'icons' | 'dropdown'` and `width?: number` — but **only the
+`display?: 'icons' | 'dropdown' | 'tile'` and `width?: number` — but **only the
 selector-style types** extend it (`climate-*`, `input-select`, `switch-group`).
 `switch-list`/`button-list`/`entity-tile` have **`width` but no `display`** (lists
-are always icon rows; the tile is always a tile). Don't assume `display` exists
-on every feature.
+are always icon rows; the entity-tile is always a tile). Don't assume `display`
+exists on every feature. The `tile` display is a Google-Home-style card showing
+the current value (see the selector section below) — distinct from the standalone
+`entity-tile` feature.
 
 ### Per-option overrides (`OptionOverride`) + order
 `{ value, label?, icon?, hide? }` — supported by the three `climate-*` selectors
@@ -104,19 +106,33 @@ source of truth — extend/test those, keep the component thin.
 
 Everything selector-like funnels through `mt-selector-row`, which takes
 `SelectorItem[]` (`{ value, label, icon?, active?, disabled? }`) and renders
-either **M3 icon chips** or an **`mt-dropdown`**, emitting `item-selected`
+**M3 icon chips**, an **`mt-dropdown`** (`display: dropdown`), or a tile
+(`display: tile` → `mt-dropdown variant="tile"`), emitting `item-selected`
 (`{value}`, bubbles+composed). Each feature element just builds the
 `SelectorItem[]` from HA state and handles `item-selected`.
 
+The **tile** variant of `mt-dropdown` is a Google-Home-style card: an icon chip,
+the `label` as a title line, and the active item's label as the value, opening the
+same shared option menu when tapped. It reads as **"on"** (accent tint +
+extra-rounded `--mt-shape-card` corners) when the active value is **not** a
+hardcoded off state (`off`/`none`, case-insensitive via `_tileOn`); otherwise it's
+a neutral, less-rounded (`--mt-shape-chip-square`) rectangle. The tint color is
+`--mt-tile-accent` (default `--mt-primary`); the **HVAC** selector sets it to the
+active mode color so heat tiles tint orange, cool blue, etc. `climate-selector`
+also supplies a per-kind default title (`Mode`/`Fan`/`Swing`/`Preset`) for tiles
+without a configured `label`.
+
 The row's own **`label`** (distinct from the per-item labels) renders as an
-optional **title** above the control in both modes (`.title`), and is still the
-chip group's `aria-label` / the dropdown placeholder. Feature configs carry it on
-`BaseSelectorFeature.label`; `feature-row` forwards it. The **HVAC** selector also
-sets an inline `--mt-selected-bg: var(--md-sys-color-primary, <modeColor>)` on the
-row so the active chip uses the active mode's color when the Material You primary
-token is absent (default theme); other selectors keep the accent. Surface
-containers (`--mt-surface-container[-high/-highest]`) fall back to a
-`color-mix` elevation tint over the card background so tiles/lists don't blend in.
+optional **title** above the control in icons/dropdown modes (`.title`) — and as
+the tile's title line in tile mode — and is still the chip group's `aria-label` /
+the dropdown placeholder. Feature configs carry it on `BaseSelectorFeature.label`;
+`feature-row` forwards it. The **HVAC** selector also sets an inline
+`--mt-selected-bg: var(--md-sys-color-primary, <modeColor>)` (plus
+`--mt-tile-accent: <modeColor>`) on the row so the active chip/tile uses the
+active mode's color when the Material You primary token is absent (default theme);
+other selectors keep the accent. Surface containers
+(`--mt-surface-container[-high/-highest]`) fall back to a `color-mix` elevation
+tint over the card background so tiles/lists don't blend in.
 
 **`mt-search-panel`** (`editors/`) is the shared dropdown body: a search box +
 filtered, scrollable list of `SearchItem`s (`{value, primary, secondary?, icon?,

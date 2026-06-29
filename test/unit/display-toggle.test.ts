@@ -9,23 +9,46 @@ function buttons(el: MtDisplayToggle): HTMLButtonElement[] {
 }
 
 describe('mt-display-toggle', () => {
-  it('renders two buttons and marks the one matching value with class "on"', async () => {
+  it('renders three buttons and marks the one matching value with class "on"', async () => {
     const el = await fixture<MtDisplayToggle>(
       html`<mt-display-toggle .value=${'icons'}></mt-display-toggle>`
     );
-    const [icons, dropdown] = buttons(el);
-    expect(buttons(el).length).to.equal(2);
+    const [icons, dropdown, tile] = buttons(el);
+    expect(buttons(el).length).to.equal(3);
     expect(icons.classList.contains('on')).to.be.true;
     expect(dropdown.classList.contains('on')).to.be.false;
+    expect(tile.classList.contains('on')).to.be.false;
   });
 
   it('marks the dropdown button "on" when value is dropdown', async () => {
     const el = await fixture<MtDisplayToggle>(
       html`<mt-display-toggle .value=${'dropdown'}></mt-display-toggle>`
     );
-    const [icons, dropdown] = buttons(el);
+    const [icons, dropdown, tile] = buttons(el);
     expect(icons.classList.contains('on')).to.be.false;
     expect(dropdown.classList.contains('on')).to.be.true;
+    expect(tile.classList.contains('on')).to.be.false;
+  });
+
+  it('marks the tile button "on" when value is tile', async () => {
+    const el = await fixture<MtDisplayToggle>(
+      html`<mt-display-toggle .value=${'tile'}></mt-display-toggle>`
+    );
+    const [icons, dropdown, tile] = buttons(el);
+    expect(icons.classList.contains('on')).to.be.false;
+    expect(dropdown.classList.contains('on')).to.be.false;
+    expect(tile.classList.contains('on')).to.be.true;
+  });
+
+  it('clicking Tile emits value-changed with "tile"', async () => {
+    const el = await fixture<MtDisplayToggle>(
+      html`<mt-display-toggle .value=${'icons'}></mt-display-toggle>`
+    );
+    const cap = captureEvents('value-changed');
+    buttons(el)[2].click(); // tile
+    cap.stop();
+    expect(cap.events.length).to.equal(1);
+    expect(cap.events[0].detail).to.deep.equal({ value: 'tile' });
   });
 
   it('defaults value to "icons"', async () => {

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tile display — dev harness (light)</title>
+    <style>
+      :root {
+        /* Light, Google-Home-ish theme so the tile tint reads like the mock. */
+        --md-sys-color-primary: #4a5bd6;
+        --md-sys-color-on-primary: #ffffff;
+        --md-sys-color-surface: #fbf8ff;
+        --md-sys-color-surface-container: #eef0f6;
+        --md-sys-color-surface-container-high: #e7e9f0;
+        --md-sys-color-on-surface: #1a1b22;
+        --md-sys-color-on-surface-variant: #45464f;
+        --md-sys-color-outline-variant: #c5c6d0;
+        --md-sys-shape-corner-extra-large: 28px;
+        --md-sys-shape-corner-large: 16px;
+        --md-sys-typescale-display-large-size: 64px;
+        --ha-card-background: #ffffff;
+        --state-climate-heat-color: #ff8100;
+        --state-climate-cool-color: #2b9af9;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: start center;
+        background: #f3f4f8;
+        color: #1a1b22;
+        font-family: 'Roboto', system-ui, sans-serif;
+      }
+      ha-card {
+        display: block;
+        background: var(--ha-card-background);
+        color: var(--md-sys-color-on-surface);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+      }
+      #card {
+        width: 380px;
+        margin: 24px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="card"></div>
+    <script type="module">
+      class HaIcon extends HTMLElement {
+        static get observedAttributes() {
+          return ['icon'];
+        }
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.render();
+        }
+        attributeChangedCallback() {
+          this.render();
+        }
+        render() {
+          const size = getComputedStyle(this).getPropertyValue('--mdc-icon-size') || '24px';
+          this.style.display = 'inline-grid';
+          this.style.placeItems = 'center';
+          this.style.width = size;
+          this.style.height = size;
+          this.shadowRoot.innerHTML = `<span title="${this.getAttribute('icon') || ''}"
+            style="width:68%;height:68%;border-radius:50%;background:currentColor;opacity:.85"></span>`;
+        }
+      }
+      if (!customElements.get('ha-icon')) customElements.define('ha-icon', HaIcon);
+
+      const states = {
+        'climate.living_room': {
+          entity_id: 'climate.living_room',
+          state: 'heat',
+          attributes: {
+            friendly_name: 'Downstairs thermostat',
+            hvac_modes: ['off', 'cool', 'heat', 'dry', 'fan_only', 'auto'],
+            fan_modes: ['auto', 'low', 'medium', 'high'],
+            preset_modes: ['none', 'eco', 'comfort', 'away'],
+            fan_mode: 'high',
+            preset_mode: 'comfort',
+            hvac_action: 'heating',
+            current_temperature: 20,
+            temperature: 22,
+            min_temp: 16,
+            max_temp: 30,
+            target_temp_step: 0.5,
+          },
+        },
+        'climate.off_unit': {
+          entity_id: 'climate.off_unit',
+          state: 'off',
+          attributes: {
+            friendly_name: 'Spare room',
+            hvac_modes: ['off', 'cool', 'heat'],
+            current_temperature: 19,
+            temperature: 21,
+            min_temp: 16,
+            max_temp: 30,
+          },
+        },
+      };
+
+      const hass = {
+        states,
+        config: { unit_system: { temperature: '°C' } },
+        themes: {},
+        callService(domain, service, data) {
+          const ac = states['climate.living_room'];
+          if (service === 'set_hvac_mode') ac.state = data.hvac_mode;
+          if (service === 'set_fan_mode') ac.attributes.fan_mode = data.fan_mode;
+          if (service === 'set_preset_mode') ac.attributes.preset_mode = data.preset_mode;
+          push();
+        },
+      };
+
+      await import('../dist/material-thermostat-card.js');
+
+      const card = document.createElement('material-thermostat-card');
+      card.setConfig({
+        type: 'custom:material-thermostat-card',
+        entity: 'climate.living_room',
+        name: 'Downstairs thermostat',
+        features: [
+          { type: 'climate-hvac-modes', display: 'tile', width: 50 },
+          { type: 'climate-preset-modes', display: 'tile', label: 'Hold', width: 50 },
+          { type: 'climate-fan-modes', display: 'tile', width: 50 },
+        ],
+      });
+      document.getElementById('card').appendChild(card);
+
+      function push() {
+        const cloned = {};
+        for (const k in states)
+          cloned[k] = { ...states[k], attributes: { ...states[k].attributes } };
+        card.hass = { ...hass, states: cloned };
+      }
+      push();
+    </script>
+  </body>
+</html>

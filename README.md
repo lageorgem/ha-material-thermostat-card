@@ -56,7 +56,7 @@ gracefully under any Home Assistant theme.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
 - 🏠 **Google‑Home‑style dial**: no mode label cluttering the number (the HVAC chips show the mode), and the active **preset icon** (e.g. the eco leaf) under the temperature when the preset‑modes feature is added.
-- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row** or **dropdown**, each with an optional **title**.
+- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row**, a **dropdown**, or a **Google‑Home‑style tile** (icon + title + current value), each with an optional **title**.
 - ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, plus a custom title).
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.
 - 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
@@ -203,8 +203,8 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 
 | Option | Applies to | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` | `icons` | Render the selector as an icon row or a dropdown |
-| `label` | `climate-*`, `input-select`, `switch-group/list`, `button-list` | string | — | Optional **title** rendered above the control (e.g. `Fan speed`), in both `icons` and `dropdown` modes |
+| `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` \| `tile` | `icons` | Render the selector as an icon row, a dropdown, or a Google‑Home‑style **tile** |
+| `label` | `climate-*`, `input-select`, `switch-group/list`, `button-list` | string | — | Optional **title** — rendered above the control in `icons`/`dropdown` modes, and as the **tile's title line** in `tile` mode (climate selectors fall back to `Mode`/`Fan`/`Swing`/`Preset`) |
 | `width` | **all** feature types | number `10`–`100` (step 10) | `100` (selectors/lists) · `50` (tiles) | Width as a **percentage of the card** — see [Layout](#layout--responsiveness) |
 
 ### Climate selectors (HVAC / fan / swing / preset)
@@ -232,7 +232,18 @@ features:
       - value: vertical
         label: Swing
         icon: mt:swing-vertical-full
+
+  - type: climate-hvac-modes
+    display: tile         # Google-Home-style tile showing the current mode
+    label: Mode           # optional — defaults to "Mode" for HVAC
 ```
+
+> **Tile display.** `display: tile` renders the selector as a Google‑Home‑style card — an icon, the
+> `label` as a title, and the current value below it — that opens the option menu when tapped. A tile
+> shows an **"on" treatment** (a soft accent tint + extra‑rounded corners) whenever the current value
+> isn't a turned‑off state (`off`/`none`, any case); otherwise it stays a neutral, less‑rounded
+> rectangle. **HVAC tiles tint with the active mode's color** (heat→orange, cool→blue…); other
+> selectors tint with the theme primary. Pair with `width: 50` to sit two tiles side by side.
 
 ### Option overrides
 
@@ -264,9 +275,10 @@ shown. Unlisted values keep their Home Assistant defaults.
       icon: mdi:home-export-outline
 ```
 
-> A feature‑level `label` renders as a **title above the control** (in both `icons` and `dropdown`
-> modes) and doubles as the control's accessible name; with `display: dropdown` it is also the
-> dropdown's placeholder. Per‑option `label`s (in the `options:` list) rename individual values.
+> A feature‑level `label` renders as a **title above the control** (in `icons`/`dropdown` modes) or as
+> the **tile's title line** (in `tile` mode), and doubles as the control's accessible name; with
+> `display: dropdown` it is also the dropdown's placeholder. Per‑option `label`s (in the `options:`
+> list) rename individual values.
 
 ### `switch-group`
 
@@ -519,7 +531,7 @@ so it looks native under `material-you-theme` and remains usable under any theme
 Every option above is editable from the card's **visual editor**: a base form (entity, name, theme,
 "show current as primary") plus a **drag‑sortable list of features**. Each feature row expands to its
 own editor — per‑option label/icon/hide for selectors, entity pickers for lists, a `width` slider,
-and an icons/dropdown toggle. **Options and list items are drag‑to‑reorder** too (the order is saved
+and an icons / dropdown / tile display toggle. **Options and list items are drag‑to‑reorder** too (the order is saved
 to the config), so you control the order icons appear in. The **"Add feature"** menu only offers the
 climate selectors the entity actually exposes, and each climate selector can be added once.
 
