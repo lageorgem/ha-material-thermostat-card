@@ -751,6 +751,31 @@ describe('mt-climate-feature-editor', () => {
     expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(4);
   });
 
+  it('Title textfield @input sets the feature label', async () => {
+    const el = await mount('fan', { type: 'climate-fan-modes' });
+    const cap = captureEvents('feature-changed');
+    const titleTf = el.shadowRoot!.querySelector('.editor > ha-textfield') as Element;
+    emitInput(titleTf, 'Fan speed');
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.label).to.equal('Fan speed');
+  });
+
+  it('Title textfield emptied prunes the label to undefined', async () => {
+    const el = await mount('fan', { type: 'climate-fan-modes', label: 'Fan speed' });
+    const cap = captureEvents('feature-changed');
+    const titleTf = el.shadowRoot!.querySelector('.editor > ha-textfield') as Element;
+    emitInput(titleTf, '');
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.label).to.equal(undefined);
+  });
+
+  it('previews each option default icon in its icon pill', async () => {
+    const el = await mount('fan', { type: 'climate-fan-modes' });
+    const field = el.shadowRoot!.querySelector('.opt .opt-icon') as any;
+    // 'auto' is the first fan option → fanIcon('auto') = 'mdi:fan-auto'
+    expect(field.defaultIcon).to.equal('mdi:fan-auto');
+  });
+
   describe('reordering', () => {
     it('_orderedValues defaults to the natural value order', async () => {
       const el = await mount(
@@ -1386,6 +1411,20 @@ describe('mt-entity-list-editor', () => {
     emitValueChanged(iconPicker, undefined); // undefined -> revert to default (pruned)
     cap4.stop();
     expect((cap4.events[0].detail as any).feature.entities[0].icon).to.equal(undefined);
+  });
+
+  it("previews the entity's own icon as the icon pill default", async () => {
+    const hass = makeHass({ 'switch.x': entityState('switch.x', 'on', { icon: 'mdi:lamp' }) });
+    const el = await fixture<MtEntityListEditor>(
+      html`<mt-entity-list-editor
+        .hass=${hass}
+        .feature=${{ type: 'switch-group', entities: [{ entity: 'switch.x' }] }}
+        itemsKey="entities"
+        .includeDomains=${['switch']}
+      ></mt-entity-list-editor>`
+    );
+    const field = el.shadowRoot!.querySelector('.item mt-icon-field') as any;
+    expect(field.defaultIcon).to.equal('mdi:lamp');
   });
 
   it('_moveItem reorders the list (0 → 2 gives [b, c, a])', async () => {

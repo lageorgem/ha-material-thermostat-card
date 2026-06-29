@@ -108,6 +108,23 @@ either **M3 icon chips** or an **`mt-dropdown`**, emitting `item-selected`
 (`{value}`, bubbles+composed). Each feature element just builds the
 `SelectorItem[]` from HA state and handles `item-selected`.
 
+The row's own **`label`** (distinct from the per-item labels) renders as an
+optional **title** above the control in both modes (`.title`), and is still the
+chip group's `aria-label` / the dropdown placeholder. Feature configs carry it on
+`BaseSelectorFeature.label`; `feature-row` forwards it. The **HVAC** selector also
+sets an inline `--mt-selected-bg: var(--md-sys-color-primary, <modeColor>)` on the
+row so the active chip uses the active mode's color when the Material You primary
+token is absent (default theme); other selectors keep the accent. Surface
+containers (`--mt-surface-container[-high/-highest]`) fall back to a
+`color-mix` elevation tint over the card background so tiles/lists don't blend in.
+
+The editor's per-row/per-option icon control is **`mt-icon-field`** (`editors/`):
+a compact **pill** with two halves — left opens an `ha-icon-picker` in a
+`position: fixed` popover (fixed so it escapes the feature card's `overflow:hidden`),
+right is `mdi:cancel` (the explicit "no icon"). Same three-state contract as before:
+`undefined` = default · `''` = no icon · string = custom. Pass `defaultIcon` to
+preview the would-be glyph faded when unset.
+
 `mt-dropdown` (`dropdown.ts`) is **self-contained** — built deliberately to avoid
 HA's lazily-loaded `ha-select` (which is inert inside a custom card). It sizes to
 content (`width:max-content`), anchors to whichever edge keeps it on screen

@@ -8,7 +8,14 @@ import type {
   ClimateSwingFeatureConfig,
   OptionOverride,
 } from '../types';
-import { prettyLabel, orderValues } from '../theme';
+import {
+  prettyLabel,
+  orderValues,
+  HVAC_MODE_ICONS,
+  fanIcon,
+  swingIcon,
+  presetIcon,
+} from '../theme';
 import './display-toggle';
 import './width-field';
 import './icon-field';
@@ -44,6 +51,18 @@ export class MtClimateFeatureEditor extends LitElement {
   /** The option values in their configured display order. */
   private _orderedValues(): string[] {
     return orderValues(this._values(), this.feature.order);
+  }
+
+  /**
+   * The default icon for an option value (the icon shown when no override is
+   * set), used to preview the would-be icon in the option's icon pill.
+   * @param value the option value
+   */
+  private _defaultIcon(value: string): string {
+    if (this.kind === 'hvac') return HVAC_MODE_ICONS[value] ?? 'mdi:thermostat';
+    if (this.kind === 'fan') return fanIcon(value);
+    if (this.kind === 'preset') return presetIcon(value);
+    return swingIcon(value);
   }
 
   /**
@@ -110,6 +129,12 @@ export class MtClimateFeatureEditor extends LitElement {
     const display = this.feature.display ?? 'icons';
     return html`
       <div class="editor">
+        <ha-textfield
+          label="Title (optional)"
+          .value=${this.feature.label ?? ''}
+          @input=${(e: any) => this._emit({ label: e.target.value || undefined })}
+        ></ha-textfield>
+
         <div class="field">
           <span class="field-label">Display</span>
           <mt-display-toggle
@@ -159,6 +184,7 @@ export class MtClimateFeatureEditor extends LitElement {
           class="opt-icon"
           .hass=${this.hass}
           .value=${ov?.icon}
+          .defaultIcon=${this._defaultIcon(value)}
           @value-changed=${(e: CustomEvent) =>
             this._setOverride(value, { icon: e.detail.value })}
         ></mt-icon-field>
@@ -181,6 +207,9 @@ export class MtClimateFeatureEditor extends LitElement {
       gap: 12px;
       padding: 4px 0;
     }
+    ha-textfield {
+      width: 100%;
+    }
     .field {
       display: flex;
       align-items: center;
@@ -198,7 +227,7 @@ export class MtClimateFeatureEditor extends LitElement {
     }
     .opt {
       display: grid;
-      grid-template-columns: auto minmax(60px, 1fr) 2fr 104px auto;
+      grid-template-columns: auto minmax(60px, 1fr) 2fr auto auto;
       align-items: center;
       gap: 8px;
     }

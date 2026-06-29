@@ -37,6 +37,8 @@ export interface EntityItem {
 
 interface BaseSelectorFeature {
   display?: FeatureDisplay;
+  /** Optional title rendered above the selector (e.g. "Fan speed"). */
+  label?: string;
   /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
   width?: number;
 }

@@ -69,6 +69,7 @@ export class MtFeatureRow extends LitElement {
           entityId=${this.entityId}
           kind=${kind}
           display=${feature.display ?? 'icons'}
+          .label=${feature.label}
           .options=${feature.options}
           .order=${feature.order}
         ></mt-climate-selector>`;

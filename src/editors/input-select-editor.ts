@@ -182,7 +182,7 @@ export class MtInputSelectEditor extends LitElement {
     }
     .opt {
       display: grid;
-      grid-template-columns: auto minmax(60px, 1fr) 2fr 104px auto;
+      grid-template-columns: auto minmax(60px, 1fr) 2fr auto auto;
       align-items: center;
       gap: 8px;
     }

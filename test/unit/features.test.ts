@@ -424,6 +424,49 @@ describe('mt-climate-selector', () => {
     expect(selectorRow(el)!.getAttribute('display')).to.equal('dropdown');
   });
 
+  it('forwards a configured title (label) to the selector-row', async () => {
+    const hass = makeHass({ 'climate.test': climateState() });
+    const el = await fixture<MtClimateSelector>(
+      html`<mt-climate-selector
+        .hass=${hass}
+        entityId="climate.test"
+        kind="fan"
+        .label=${'Fan speed'}
+      ></mt-climate-selector>`
+    );
+    expect(selectorRow(el)!.label).to.equal('Fan speed');
+  });
+
+  describe('active-chip color (point 5)', () => {
+    it('hvac selector colors the active chip with the active mode color (md-sys primary wins)', async () => {
+      const hass = makeHass({ 'climate.test': climateState({}, 'heat') });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+        ></mt-climate-selector>`
+      );
+      const style = selectorRow(el)!.getAttribute('style') ?? '';
+      expect(style).to.contain('--mt-selected-bg');
+      // md-sys primary is preferred; the heat mode color is the fallback.
+      expect(style).to.contain('var(--md-sys-color-primary');
+      expect(style).to.contain('--state-climate-heat-color');
+    });
+
+    it('non-hvac selectors do not override the selected color', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="fan"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)!.getAttribute('style')).to.equal(null);
+    });
+  });
+
   describe('order', () => {
     it('respects an explicit order: listed values first, rest natural', async () => {
       const hass = makeHass({ 'climate.test': climateState() });

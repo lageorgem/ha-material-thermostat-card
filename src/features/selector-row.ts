@@ -29,7 +29,11 @@ export class MtSelectorRow extends LitElement {
 
   protected render(): TemplateResult | typeof nothing {
     if (!this.items.length) return nothing;
-    return this.display === 'dropdown' ? this._renderDropdown() : this._renderIcons();
+    const body = this.display === 'dropdown' ? this._renderDropdown() : this._renderIcons();
+    // An optional title rendered above the control, so a selector can read like
+    // a labeled row ("Fan speed" over the chips/dropdown). Opt-in: shown only
+    // when a label is configured.
+    return html`${this.label ? html`<div class="title">${this.label}</div>` : nothing}${body}`;
   }
 
   /**
@@ -78,6 +82,12 @@ export class MtSelectorRow extends LitElement {
         display: block;
         width: 100%;
         min-width: 0;
+      }
+      .title {
+        color: var(--mt-on-surface-variant);
+        font-size: var(--md-sys-typescale-label-large-size, 13px);
+        font-weight: 500;
+        padding: 0 4px 6px;
       }
       .chips {
         display: flex;

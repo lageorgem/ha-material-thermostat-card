@@ -75,14 +75,20 @@ describe('mt-selector-row', () => {
       expect((chips[0] as HTMLButtonElement).disabled).to.be.false;
     });
 
-    it('never shows the label as text in icons mode (even when set)', async () => {
-      // In icons mode the chips stand alone — the label must not render as a
-      // leading text element next to them.
+    it('renders the label as a visible title above the chips when set', async () => {
       const el = await fixture<MtSelectorRow>(
         html`<mt-selector-row .items=${items} label="Mode"></mt-selector-row>`
       );
-      expect(el.shadowRoot!.querySelector('.row-label')).to.equal(null);
-      expect(el.shadowRoot!.textContent).to.not.contain('Mode');
+      const title = el.shadowRoot!.querySelector('.title');
+      expect(title).to.not.equal(null);
+      expect(title!.textContent).to.equal('Mode');
+    });
+
+    it('omits the title element when no label is set', async () => {
+      const el = await fixture<MtSelectorRow>(
+        html`<mt-selector-row .items=${items}></mt-selector-row>`
+      );
+      expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
     });
 
     it('uses the label as the chip group aria-label, defaulting to "options"', async () => {

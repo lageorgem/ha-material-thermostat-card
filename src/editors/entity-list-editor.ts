@@ -120,33 +120,40 @@ export class MtEntityListEditor extends LitElement {
 
         <ha-sortable handle-selector=".handle" @item-moved=${this._moveItem}>
           <div class="items">
-            ${this._items.map(
-              (item, index) => html`<div class="item">
-              <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
-              <ha-entity-picker
-                .hass=${this.hass}
-                .value=${item.entity ?? ''}
-                .includeDomains=${this.includeDomains}
-                allow-custom-entity
-                @value-changed=${(e: CustomEvent) =>
-                  this._updateItem(index, { entity: e.detail.value })}
-              ></ha-entity-picker>
-              <ha-textfield
-                label="Label"
-                .value=${item.label ?? ''}
-                @input=${(e: any) => this._updateItem(index, { label: e.target.value })}
-              ></ha-textfield>
-              <mt-icon-field
-                .hass=${this.hass}
-                .value=${item.icon}
-                @value-changed=${(e: CustomEvent) =>
-                  this._updateItem(index, { icon: e.detail.value })}
-              ></mt-icon-field>
-              <button class="del" title="Remove" @click=${() => this._removeItem(index)}>
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
-            </div>`
-            )}
+            ${this._items.map((item, index) => {
+              const defaultIcon = this.hass?.states?.[item.entity]?.attributes?.icon;
+              return html`<div class="item">
+                <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
+                <div class="body">
+                  <ha-entity-picker
+                    .hass=${this.hass}
+                    .value=${item.entity ?? ''}
+                    .includeDomains=${this.includeDomains}
+                    allow-custom-entity
+                    @value-changed=${(e: CustomEvent) =>
+                      this._updateItem(index, { entity: e.detail.value })}
+                  ></ha-entity-picker>
+                  <div class="row2">
+                    <mt-icon-field
+                      .hass=${this.hass}
+                      .value=${item.icon}
+                      .defaultIcon=${defaultIcon}
+                      @value-changed=${(e: CustomEvent) =>
+                        this._updateItem(index, { icon: e.detail.value })}
+                    ></mt-icon-field>
+                    <ha-textfield
+                      class="title-field"
+                      label="Custom title"
+                      .value=${item.label ?? ''}
+                      @input=${(e: any) => this._updateItem(index, { label: e.target.value })}
+                    ></ha-textfield>
+                  </div>
+                </div>
+                <button class="del" title="Remove" @click=${() => this._removeItem(index)}>
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+              </div>`;
+            })}
           </div>
         </ha-sortable>
 
@@ -181,13 +188,33 @@ export class MtEntityListEditor extends LitElement {
     .items {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
+    /* Two lines per item: entity picker on top, then the icon pill + custom
+       title below. The drag handle and delete button flank both lines. */
     .item {
       display: grid;
-      grid-template-columns: auto 2fr 1.4fr 104px auto;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
       gap: 8px;
+      padding: 8px;
+      border-radius: 12px;
+      background: var(--md-sys-color-surface-container-high, var(--secondary-background-color));
+    }
+    .body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .row2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title-field {
+      flex: 1;
+      min-width: 0;
     }
     .handle {
       cursor: grab;
@@ -197,9 +224,6 @@ export class MtEntityListEditor extends LitElement {
     }
     .handle ha-icon {
       --mdc-icon-size: 20px;
-    }
-    mt-icon-field {
-      min-width: 0;
     }
     .del {
       width: 40px;

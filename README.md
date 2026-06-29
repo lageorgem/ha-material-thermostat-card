@@ -55,13 +55,13 @@ gracefully under any Home Assistant theme.
 - 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
-- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row** or **dropdown**.
-- ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from the visual editor.
+- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row** or **dropdown**, each with an optional **title**.
+- ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, plus a custom title).
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.
 - 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
 - 📐 **Percentage widths** that fill and wrap correctly at any card size, with a side‑by‑side wide mode.
 - 🌬️ A bundled **`mt:` AC swing icon set**, searchable in the icon picker.
-- 🎨 **Material 3** tokens with graceful Home Assistant theme fallbacks.
+- 🎨 **Material 3** tokens with graceful Home Assistant theme fallbacks — tiles/lists read as a distinct, slightly **elevated surface**, and on the default theme the HVAC chips take each **mode's own color** (cool→blue, heat→orange…).
 - 🛠️ A **visual editor** for every feature type.
 
 ## Installation
@@ -203,6 +203,7 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | Option | Applies to | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` | `icons` | Render the selector as an icon row or a dropdown |
+| `label` | `climate-*`, `input-select`, `switch-group/list`, `button-list` | string | — | Optional **title** rendered above the control (e.g. `Fan speed`), in both `icons` and `dropdown` modes |
 | `width` | **all** feature types | number `10`–`100` (step 10) | `100` (selectors/lists) · `50` (tiles) | Width as a **percentage of the card** — see [Layout](#layout--responsiveness) |
 
 ### Climate selectors (HVAC / fan / swing / preset)
@@ -214,6 +215,7 @@ features:
 
   - type: climate-fan-modes
     display: dropdown
+    label: Fan speed   # optional title shown above the control
     options:
       - value: high
         label: Turbo
@@ -261,8 +263,9 @@ shown. Unlisted values keep their Home Assistant defaults.
       icon: mdi:home-export-outline
 ```
 
-> `label` is shown only with `display: dropdown` (as the dropdown's placeholder) and as the
-> control's accessible name — in `icons` mode the chips stand alone with no leading text.
+> A feature‑level `label` renders as a **title above the control** (in both `icons` and `dropdown`
+> modes) and doubles as the control's accessible name; with `display: dropdown` it is also the
+> dropdown's placeholder. Per‑option `label`s (in the `options:` list) rename individual values.
 
 ### `switch-group`
 

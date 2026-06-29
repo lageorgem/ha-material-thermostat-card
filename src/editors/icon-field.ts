@@ -1,19 +1,26 @@
-import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 
 /**
- * An icon picker with an explicit **No icon** toggle — the "None" affordance the
- * bare `ha-icon-picker` lacks. Three states are emitted via `value-changed`:
+ * A compact icon control shaped like a **pill** with two mutually-exclusive
+ * halves:
+ *
+ * - **left** — an icon picker. It shows the effective icon (the custom override,
+ *   else the row's faded default) and opens a popover with `ha-icon-picker` so
+ *   the user can choose a custom one.
+ * - **right** — `mdi:cancel`, the "no icon" / disable toggle.
+ *
+ * Three values are emitted via `value-changed`, matching the rest of the editor:
  *
  * - `undefined` — unset: the consumer shows its **default** icon.
- * - `''` — **no icon**: the default is suppressed (the "remove the icon
- *   completely" case; the toggle is on).
- * - a string — a **custom** icon.
+ * - `''` — **no icon**: the default is suppressed (the right half is active).
+ * - a string — a **custom** icon (the left half is active).
  *
- * Clearing the picker reverts to the default (`undefined`); the toggle is the
- * only way to choose "no icon".
+ * It lives in the card editor (not the card), so it styles itself from the
+ * global Material You `--md-sys-*` tokens, falling back to Home Assistant theme
+ * variables so it stays usable under the default theme.
  */
 @customElement('mt-icon-field')
 export class MtIconField extends LitElement {
@@ -21,11 +28,39 @@ export class MtIconField extends LitElement {
   /** undefined = default · '' = no icon · string = custom icon. */
   @property() value?: string;
   @property() label = 'Icon';
+  /** The consumer's default icon, previewed (faded) when no custom icon is set. */
+  @property() defaultIcon?: string;
+
+  /** Whether the icon-picker popover is open. */
+  @state() private _open = false;
+  /** Fixed-position coordinates of the open popover (viewport px). */
+  @state() private _px = 0;
+  @state() private _py = 0;
 
   /** Whether the explicit "no icon" state is selected. */
   private get _none(): boolean {
     return this.value === '';
   }
+
+  /** Whether a custom icon is set. */
+  private get _custom(): boolean {
+    return !!this.value;
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener('click', this._onDocClick);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    document.removeEventListener('click', this._onDocClick);
+  }
+
+  /** Close the popover when clicking anywhere outside this element. */
+  private _onDocClick = (e: MouseEvent): void => {
+    if (this._open && !e.composedPath().includes(this)) this._open = false;
+  };
 
   /**
    * Emit the new value to the parent editor.
@@ -37,62 +72,140 @@ export class MtIconField extends LitElement {
     );
   }
 
+  /**
+   * Toggle the icon-picker popover. The popover is fixed-positioned (anchored to
+   * the pill's viewport rect) so it escapes the editor's `overflow: hidden`
+   * feature cards instead of being clipped inside them.
+   * @param e the click event
+   */
+  private _toggle(e: Event): void {
+    e.stopPropagation();
+    if (!this._open) {
+      const r = this.getBoundingClientRect();
+      const width = 248;
+      this._px = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+      this._py = r.bottom + 6;
+    }
+    this._open = !this._open;
+  }
+
+  /** Toggle the "no icon" state (off → '' , on → back to the default). */
+  private _toggleNone(e: Event): void {
+    e.stopPropagation();
+    this._open = false;
+    this._emit(this._none ? undefined : '');
+  }
+
   protected render(): TemplateResult {
     const none = this._none;
+    const custom = this._custom;
+    const shownIcon = custom ? this.value! : (this.defaultIcon ?? 'mdi:image-plus');
     return html`
-      <ha-icon-picker
-        .hass=${this.hass}
-        .label=${this.label}
-        .value=${this.value || ''}
-        .disabled=${none}
-        @value-changed=${(e: CustomEvent) => {
-          // The picker's event is composed — stop it so the parent editor only
-          // sees our normalized value (clearing the picker → default, not '').
-          e.stopPropagation();
-          this._emit(e.detail.value || undefined);
-        }}
-      ></ha-icon-picker>
-      <button
-        type="button"
-        class=${classMap({ none: true, active: none })}
-        aria-pressed=${none ? 'true' : 'false'}
-        title=${none ? 'No icon — click to use the default' : 'No icon'}
-        @click=${() => this._emit(none ? undefined : '')}
-      >
-        <ha-icon icon="mdi:image-off"></ha-icon>
-      </button>
+      <div class="pill">
+        <button
+          type="button"
+          class=${classMap({ seg: true, icon: true, active: custom, preview: !custom })}
+          aria-haspopup="dialog"
+          aria-expanded=${this._open ? 'true' : 'false'}
+          title=${this.label}
+          @click=${this._toggle}
+        >
+          <ha-icon icon=${shownIcon}></ha-icon>
+        </button>
+        <button
+          type="button"
+          class=${classMap({ seg: true, cancel: true, active: none })}
+          aria-pressed=${none ? 'true' : 'false'}
+          title=${none ? 'No icon — click to use the default' : 'No icon'}
+          @click=${this._toggleNone}
+        >
+          <ha-icon icon="mdi:cancel"></ha-icon>
+        </button>
+      </div>
+      ${this._open
+        ? html`<div
+            class="popover"
+            role="dialog"
+            style="left:${this._px}px;top:${this._py}px"
+          >
+            <ha-icon-picker
+              .hass=${this.hass}
+              .label=${this.label}
+              .value=${this.value || ''}
+              @value-changed=${(e: CustomEvent) => {
+                // The picker's event is composed — stop it so the parent editor
+                // only sees our normalized value (clearing the picker → default).
+                e.stopPropagation();
+                this._open = false;
+                this._emit(e.detail.value || undefined);
+              }}
+            ></ha-icon-picker>
+          </div>`
+        : nothing}
     `;
   }
 
   static styles = css`
     :host {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      display: inline-block;
+      position: relative;
     }
-    ha-icon-picker {
-      flex: 1;
-      min-width: 0;
+    .pill {
+      display: inline-flex;
+      height: 40px;
+      border-radius: var(--md-sys-shape-corner-full, 9999px);
+      background: var(--md-sys-color-surface-container-high, var(--secondary-background-color));
+      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
+      overflow: hidden;
     }
-    .none {
-      flex: 0 0 auto;
-      width: 36px;
-      height: 36px;
+    .seg {
+      width: 40px;
+      height: 100%;
+      padding: 0;
+      display: grid;
+      place-items: center;
       border: none;
-      border-radius: 50%;
       background: transparent;
-      color: var(--secondary-text-color);
+      color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
       cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition:
+        background-color 150ms cubic-bezier(0.2, 0, 0, 1),
+        color 150ms cubic-bezier(0.2, 0, 0, 1);
     }
-    .none:hover {
-      background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08);
+    .seg + .seg {
+      border-left: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
     }
-    .none.active {
-      color: var(--primary-color);
-      background: rgba(var(--rgb-primary-color, 103, 80, 164), 0.12);
+    .seg:hover {
+      background: color-mix(in srgb, currentColor 10%, transparent);
     }
-    .none ha-icon {
+    .seg.active {
+      background: var(--md-sys-color-primary, var(--primary-color));
+      color: var(--md-sys-color-on-primary, var(--text-primary-color, #fff));
+    }
+    /* The faded "this is just the default / add an icon" preview. */
+    .seg.icon.preview:not(.active) ha-icon {
+      opacity: 0.5;
+    }
+    .seg ha-icon {
       --mdc-icon-size: 20px;
+    }
+    .popover {
+      position: fixed;
+      z-index: 30;
+      width: 248px;
+      box-sizing: border-box;
+      padding: 8px;
+      background: var(--md-sys-color-surface-container-high, var(--card-background-color, #fff));
+      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
+      border-radius: 12px;
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .popover ha-icon-picker {
+      display: block;
+      width: 100%;
     }
   `;
 }

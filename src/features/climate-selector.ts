@@ -2,7 +2,15 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { FeatureDisplay, OptionOverride, SelectorItem } from '../types';
-import { HVAC_MODE_ICONS, fanIcon, swingIcon, presetIcon, prettyLabel, orderValues } from '../theme';
+import {
+  HVAC_MODE_ICONS,
+  fanIcon,
+  swingIcon,
+  presetIcon,
+  prettyLabel,
+  orderValues,
+  climateModeColor,
+} from '../theme';
 import './selector-row';
 
 export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset';
@@ -18,6 +26,8 @@ export class MtClimateSelector extends LitElement {
   @property() entityId!: string;
   @property() kind: ClimateSelectorKind = 'hvac';
   @property() display: FeatureDisplay = 'icons';
+  /** Optional title rendered above the selector. */
+  @property() label?: string;
   @property({ attribute: false }) options?: OptionOverride[];
   /** Explicit display order of option values (unlisted values follow naturally). */
   @property({ attribute: false }) order?: string[];
@@ -98,10 +108,22 @@ export class MtClimateSelector extends LitElement {
   protected render(): TemplateResult | typeof nothing {
     const items = this._build();
     if (!items.length) return nothing;
+    // For the HVAC mode selector, color the active chip with the active mode's
+    // semantic color (cool→blue, heat→orange, …) when the Material You primary
+    // token is absent — so on the default theme the modes aren't all the theme's
+    // generic accent. With material-you-theme present, the M3 primary wins.
+    const styleOverride =
+      this.kind === 'hvac'
+        ? `--mt-selected-bg: var(--md-sys-color-primary, ${climateModeColor(
+            this._stateObj?.state
+          )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff);`
+        : nothing;
     return html`
       <mt-selector-row
         .items=${items}
         display=${this.display}
+        .label=${this.label}
+        style=${styleOverride}
         @item-selected=${this._onSelect}
       ></mt-selector-row>
     `;

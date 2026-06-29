@@ -17,14 +17,24 @@ export const tokens = css`
     --mt-on-primary-container: var(--md-sys-color-on-primary-container, var(--primary-text-color, #21005d));
 
     --mt-surface: var(--md-sys-color-surface, var(--card-background-color, #fef7ff));
+    /* Surface containers. Under material-you-theme the real M3 tokens are used.
+       Everywhere else we tint the card background toward the on-surface color so
+       tiles/lists read as a distinct, slightly elevated surface instead of
+       blending into the card (the tint darkens in light themes and lightens in
+       dark themes — the right direction for elevation in both). The steps mirror
+       M3's container / high / highest elevation ladder. */
+    --mt-surface-bg: var(--ha-card-background, var(--card-background-color, #f3edf7));
     --mt-surface-container: var(
       --md-sys-color-surface-container,
-      var(--ha-card-background, var(--card-background-color, #f3edf7))
+      color-mix(in srgb, var(--mt-on-surface) 8%, var(--mt-surface-bg))
     );
-    --mt-surface-container-high: var(--md-sys-color-surface-container-high, var(--mt-surface-container));
+    --mt-surface-container-high: var(
+      --md-sys-color-surface-container-high,
+      color-mix(in srgb, var(--mt-on-surface) 11%, var(--mt-surface-bg))
+    );
     --mt-surface-container-highest: var(
       --md-sys-color-surface-container-highest,
-      var(--mt-surface-container-high)
+      color-mix(in srgb, var(--mt-on-surface) 14%, var(--mt-surface-bg))
     );
 
     --mt-on-surface: var(--md-sys-color-on-surface, var(--primary-text-color, #1c1b1f));
