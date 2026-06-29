@@ -5,11 +5,11 @@ import type { EntityItem } from '../types';
 import { tokens } from '../theme';
 
 /**
- * A read-only list of sensor rows — an optional icon, a (customizable) title and
- * the entity's current value — laid out like the Google Home app's sensor list.
- * A lighter alternative to a stack of entity tiles when you just want to read
- * several values. Each row falls back to the entity's friendly name / icon when
- * no override is given.
+ * A read-only sensor list rendered like the Google Home app: ONE rounded
+ * container holding a row per sensor — a (customizable) title and the entity's
+ * current value, with the value bolder than the title and both in a compact
+ * size. An icon is optional and opt-in: when set it sits inline, the same height
+ * as the text, with no circle/padding/outline.
  */
 @customElement('mt-sensor-list')
 export class MtSensorList extends LitElement {
@@ -34,13 +34,14 @@ export class MtSensorList extends LitElement {
     if (!items.length) return nothing;
     return html`
       ${this.label ? html`<div class="label">${this.label}</div>` : nothing}
-      <div class="list">
+      <div class="card">
         ${items.map((item) => {
           const state = this.hass?.states?.[item.entity];
           const name = item.label ?? state?.attributes.friendly_name ?? item.entity;
-          const icon = item.icon ?? state?.attributes.icon ?? 'mdi:gauge';
           return html`<div class="row">
-            <div class="ic"><ha-icon icon=${icon}></ha-icon></div>
+            ${item.icon
+              ? html`<ha-icon class="icon" icon=${item.icon}></ha-icon>`
+              : nothing}
             <div class="title" title=${name}>${name}</div>
             <div class="val">${this._value(item)}</div>
           </div>`;
@@ -61,46 +62,42 @@ export class MtSensorList extends LitElement {
         font-weight: 500;
         padding: 0 4px 6px;
       }
-      .list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+      /* One container for all sensors (à la Google Home), large M3 radius. */
+      .card {
+        background: var(--mt-surface-container);
+        border-radius: var(--mt-shape-card);
+        padding: 6px 0;
+        overflow: hidden;
       }
       .row {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 16px;
-        border-radius: var(--mt-shape-chip-square);
-        background: var(--mt-surface-container);
-        color: var(--mt-on-surface);
-        min-height: 52px;
+        gap: 10px;
+        padding: 10px 20px;
       }
-      .ic {
+      .icon {
         flex: 0 0 auto;
-        width: 36px;
-        height: 36px;
-        border-radius: var(--mt-shape-full);
-        display: grid;
-        place-items: center;
-        background: color-mix(in srgb, var(--mt-on-surface-variant) 14%, transparent);
+        /* same height as the text, no circle/padding/outline */
+        --mdc-icon-size: 18px;
         color: var(--mt-on-surface-variant);
-      }
-      .ic ha-icon {
-        --mdc-icon-size: 20px;
+        display: inline-flex;
+        align-items: center;
       }
       .title {
         flex: 1;
         min-width: 0;
-        font-size: var(--md-sys-typescale-body-large-size, 16px);
+        font-size: var(--md-sys-typescale-body-medium-size, 14px);
+        font-weight: 400;
+        color: var(--mt-on-surface-variant);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
       .val {
         flex: 0 0 auto;
-        color: var(--mt-on-surface-variant);
         font-size: var(--md-sys-typescale-body-medium-size, 14px);
+        font-weight: 700;
+        color: var(--mt-on-surface);
         white-space: nowrap;
       }
     `,

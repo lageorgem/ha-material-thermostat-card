@@ -30,12 +30,22 @@ function rows(el: MtSensorList): HTMLElement[] {
 describe('mt-sensor-list', () => {
   it('renders nothing when there are no (non-empty) items', async () => {
     const empty = await mount([]);
-    expect(empty.shadowRoot!.querySelector('.list')).to.equal(null);
+    expect(empty.shadowRoot!.querySelector('.card')).to.equal(null);
     const blank = await mount([{ entity: '' }]);
-    expect(blank.shadowRoot!.querySelector('.list')).to.equal(null);
+    expect(blank.shadowRoot!.querySelector('.card')).to.equal(null);
     // a missing items list (undefined) is treated as empty (the `?? []` guard)
     const missing = await mount(undefined as unknown as EntityItem[]);
-    expect(missing.shadowRoot!.querySelector('.list')).to.equal(null);
+    expect(missing.shadowRoot!.querySelector('.card')).to.equal(null);
+  });
+
+  it('renders all sensors inside a SINGLE container (not a tile each)', async () => {
+    const states = {
+      'sensor.a': entityState('sensor.a', '1'),
+      'sensor.b': entityState('sensor.b', '2'),
+    };
+    const el = await mount([{ entity: 'sensor.a' }, { entity: 'sensor.b' }], states);
+    expect(el.shadowRoot!.querySelectorAll('.card').length).to.equal(1);
+    expect(rows(el).length).to.equal(2);
   });
 
   it('shows the title (custom label → friendly_name → entity id) and the value with unit', async () => {
@@ -70,26 +80,23 @@ describe('mt-sensor-list', () => {
     expect(r[3].querySelector('.val')!.textContent!.trim()).to.equal('open');
   });
 
-  it('uses the configured icon, else the entity icon, else a gauge fallback', async () => {
+  it('shows an icon only when one is configured (opt-in, inline — no default fallback)', async () => {
     const states = {
       'sensor.a': entityState('sensor.a', '1', { icon: 'mdi:thermometer' }),
       'sensor.b': entityState('sensor.b', '2'),
     };
     const el = await mount(
       [
-        { entity: 'sensor.a', icon: 'mdi:leaf' }, // configured icon wins
-        { entity: 'sensor.b' }, // no config/state icon → fallback
+        { entity: 'sensor.a', icon: 'mdi:leaf' }, // configured icon renders inline
+        { entity: 'sensor.a' }, // entity has its own icon, but icons are opt-in → none
+        { entity: 'sensor.b' }, // no icon configured → none
       ],
       states
     );
     const r = rows(el);
-    expect(r[0].querySelector('ha-icon')!.getAttribute('icon')).to.equal('mdi:leaf');
-    // state icon used when no override
-    const stateIcon = await mount([{ entity: 'sensor.a' }], states);
-    expect(rows(stateIcon)[0].querySelector('ha-icon')!.getAttribute('icon')).to.equal(
-      'mdi:thermometer'
-    );
-    expect(r[1].querySelector('ha-icon')!.getAttribute('icon')).to.equal('mdi:gauge');
+    expect(r[0].querySelector('ha-icon.icon')!.getAttribute('icon')).to.equal('mdi:leaf');
+    expect(r[1].querySelector('ha-icon')).to.equal(null);
+    expect(r[2].querySelector('ha-icon')).to.equal(null);
   });
 
   it('shows an em-dash for missing / unknown / unavailable entities', async () => {

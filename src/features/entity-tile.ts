@@ -118,7 +118,8 @@ export class MtEntityTile extends LitElement {
         width: 100%;
         padding: 12px 16px;
         border: none;
-        border-radius: var(--mt-shape-chip-square);
+        /* large Material You corner (matches the sensor list) */
+        border-radius: var(--mt-shape-card);
         background: var(--mt-surface-container);
         color: var(--mt-on-surface);
         cursor: pointer;
