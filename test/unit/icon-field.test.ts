@@ -1,7 +1,8 @@
-import { fixture, html, expect } from '@open-wc/testing';
+import { fixture, html, expect, aTimeout } from '@open-wc/testing';
 import { makeHass } from '../helpers';
 import '../../src/editors/icon-field';
 import type { MtIconField } from '../../src/editors/icon-field';
+import { resetIconItemsForTest } from '../../src/editors/icon-list';
 
 /**
  * Mount mt-icon-field with the given value (undefined = default · '' = no icon).
@@ -20,22 +21,24 @@ async function mount(value?: string, defaultIcon?: string): Promise<MtIconField>
   return el;
 }
 
-/** The left "icon" segment (opens the picker). */
-function iconSeg(el: MtIconField): HTMLButtonElement {
-  return el.shadowRoot!.querySelector('.seg.icon') as HTMLButtonElement;
+const iconSeg = (el: MtIconField) => el.shadowRoot!.querySelector('.seg.icon') as HTMLButtonElement;
+const cancelSeg = (el: MtIconField) =>
+  el.shadowRoot!.querySelector('.seg.cancel') as HTMLButtonElement;
+const sp = (el: MtIconField) => el.shadowRoot!.querySelector('mt-search-panel') as any;
+const opts = (el: MtIconField): HTMLButtonElement[] =>
+  [...(sp(el)?.shadowRoot?.querySelectorAll('.opt') ?? [])] as HTMLButtonElement[];
+const searchBox = (el: MtIconField): HTMLInputElement =>
+  sp(el)!.shadowRoot!.querySelector('.search') as HTMLInputElement;
+
+/** Open the icon search panel and let the icon list load + render. */
+async function openIcons(el: MtIconField): Promise<void> {
+  iconSeg(el).click();
+  await el.updateComplete;
+  await aTimeout(0);
+  await el.updateComplete;
+  await sp(el)!.updateComplete;
 }
-/** The right "cancel" (no-icon) segment. */
-function cancelSeg(el: MtIconField): HTMLButtonElement {
-  return el.shadowRoot!.querySelector('.seg.cancel') as HTMLButtonElement;
-}
-/** The open popover, if any. */
-function popover(el: MtIconField): HTMLElement | null {
-  return el.shadowRoot!.querySelector('.popover');
-}
-/** The nested ha-icon-picker (only rendered while the popover is open). */
-function picker(el: MtIconField): any {
-  return el.shadowRoot!.querySelector('ha-icon-picker');
-}
+
 /** Resolve with the next value-changed detail.value. */
 function onChange(el: MtIconField): Promise<string | undefined> {
   return new Promise((res) =>
@@ -46,11 +49,13 @@ function onChange(el: MtIconField): Promise<string | undefined> {
 }
 
 describe('mt-icon-field', () => {
+  beforeEach(() => resetIconItemsForTest());
+
   it('renders a two-segment pill (icon + cancel), closed by default', async () => {
     const el = await mount();
     expect(iconSeg(el)).to.not.equal(null);
     expect(cancelSeg(el)).to.not.equal(null);
-    expect(popover(el)).to.equal(null);
+    expect(sp(el)).to.equal(null);
   });
 
   describe('resting state', () => {
@@ -97,102 +102,111 @@ describe('mt-icon-field', () => {
       expect(await p).to.equal(undefined);
     });
 
-    it('clicking cancel closes an open popover', async () => {
+    it('clicking cancel closes an open panel', async () => {
       const el = await mount(undefined);
-      iconSeg(el).click();
-      await el.updateComplete;
-      expect(popover(el)).to.not.equal(null);
+      await openIcons(el);
+      expect(sp(el)).to.not.equal(null);
       cancelSeg(el).click();
       await el.updateComplete;
-      expect(popover(el)).to.equal(null);
+      expect(sp(el)).to.equal(null);
     });
   });
 
-  describe('icon picker popover', () => {
-    it('clicking the icon segment opens a popover anchored under the pill', async () => {
+  describe('icon search panel', () => {
+    it('clicking the icon segment opens a search panel seeded with the value', async () => {
       const el = await mount('mdi:fire');
-      iconSeg(el).click();
-      await el.updateComplete;
-      const pop = popover(el)!;
-      expect(pop).to.not.equal(null);
+      await openIcons(el);
+      expect(sp(el)).to.not.equal(null);
       expect(iconSeg(el).getAttribute('aria-expanded')).to.equal('true');
-      expect(picker(el)).to.not.equal(null);
-      expect(picker(el).value).to.equal('mdi:fire');
-      // Absolutely positioned within the field (no viewport/fixed coordinates).
-      expect(getComputedStyle(pop).position).to.equal('absolute');
+      expect(sp(el).value).to.equal('mdi:fire');
+      expect(sp(el).allowCustom).to.equal(true);
+      expect(sp(el).customPrefix).to.equal('mdi:');
     });
 
-    it('opens with an empty picker when currently "no icon"', async () => {
+    it('loads a browsable list of icons', async () => {
+      const el = await mount();
+      await openIcons(el);
+      expect(sp(el).items.length).to.be.greaterThan(20);
+      expect(opts(el).length).to.be.greaterThan(0);
+    });
+
+    it('opens with an empty value when currently "no icon"', async () => {
       const el = await mount('');
-      iconSeg(el).click();
-      await el.updateComplete;
-      expect(picker(el).value).to.equal('');
+      await openIcons(el);
+      expect(sp(el).value).to.equal('');
     });
 
-    it('clicking the icon segment again closes the popover', async () => {
+    it('reuses the loaded icon list when reopened', async () => {
+      const el = await mount();
+      await openIcons(el);
+      expect(sp(el).items.length).to.be.greaterThan(0);
+      iconSeg(el).click(); // close
+      await el.updateComplete;
+      expect(sp(el)).to.equal(null);
+      iconSeg(el).click(); // reopen — icons already loaded, no reload
+      await el.updateComplete;
+      await sp(el).updateComplete;
+      expect(sp(el).items.length).to.be.greaterThan(0);
+    });
+
+    it('clicking the icon segment again closes the panel', async () => {
       const el = await mount(undefined);
+      await openIcons(el);
+      expect(sp(el)).to.not.equal(null);
       iconSeg(el).click();
       await el.updateComplete;
-      expect(popover(el)).to.not.equal(null);
-      iconSeg(el).click();
-      await el.updateComplete;
-      expect(popover(el)).to.equal(null);
+      expect(sp(el)).to.equal(null);
     });
 
-    it('choosing an icon emits the custom value and closes the popover', async () => {
-      const el = await mount(undefined);
-      iconSeg(el).click();
-      await el.updateComplete;
+    it('choosing an icon from the list emits it and closes', async () => {
+      const el = await mount();
+      await openIcons(el);
+      const home = opts(el).find((o) => o.querySelector('.opt-name')!.textContent === 'mdi:home')!;
       const p = onChange(el);
-      picker(el).dispatchEvent(
-        new CustomEvent('value-changed', {
-          detail: { value: 'mdi:snowflake' },
-          bubbles: true,
-          composed: true,
-        })
-      );
-      expect(await p).to.equal('mdi:snowflake');
+      home.click();
+      expect(await p).to.equal('mdi:home');
       await el.updateComplete;
-      expect(popover(el)).to.equal(null);
+      expect(sp(el)).to.equal(null);
     });
 
-    it('clearing the picker reverts to the default (undefined), not "no icon"', async () => {
-      const el = await mount('mdi:fire');
-      iconSeg(el).click();
-      await el.updateComplete;
+    it('committing a typed custom icon emits it (free text for the long tail)', async () => {
+      const el = await mount();
+      await openIcons(el);
+      const s = searchBox(el);
+      s.value = 'unicorn-variant'; // not in the curated list
+      s.dispatchEvent(new Event('input'));
+      await sp(el).updateComplete;
+      const custom = sp(el).shadowRoot.querySelector('.opt.custom') as HTMLButtonElement;
+      expect(custom).to.not.equal(null);
       const p = onChange(el);
-      picker(el).dispatchEvent(
-        new CustomEvent('value-changed', { detail: { value: '' }, bubbles: true, composed: true })
-      );
-      expect(await p).to.equal(undefined);
+      custom.click();
+      expect(await p).to.equal('mdi:unicorn-variant');
     });
   });
 
   describe('outside-click handling', () => {
-    it('a document click outside closes an open popover', async () => {
+    it('a document click outside closes an open panel', async () => {
       const el = await mount(undefined);
-      iconSeg(el).click();
-      await el.updateComplete;
-      expect(popover(el)).to.not.equal(null);
+      await openIcons(el);
+      expect(sp(el)).to.not.equal(null);
       document.body.click();
       await el.updateComplete;
-      expect(popover(el)).to.equal(null);
+      expect(sp(el)).to.equal(null);
     });
 
-    it('a click inside (on the picker) keeps the popover open', async () => {
+    it('a click inside (on the panel) keeps it open', async () => {
       const el = await mount(undefined);
-      iconSeg(el).click();
+      await openIcons(el);
+      searchBox(el).click();
       await el.updateComplete;
-      picker(el).click();
-      await el.updateComplete;
-      expect(popover(el)).to.not.equal(null);
+      expect(sp(el)).to.not.equal(null);
     });
 
     it('a document click while closed is a no-op', async () => {
       const el = await mount(undefined);
       document.body.click();
       await el.updateComplete;
-      expect(popover(el)).to.equal(null);
+      expect(sp(el)).to.equal(null);
     });
   });
 });

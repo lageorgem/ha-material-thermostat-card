@@ -789,25 +789,15 @@ export class MtCircularDial extends LitElement {
               <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.04" />
               <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
-            <!-- A white twin of the halo profile, used to MASK the dither grain to
-                 the halo's shape and intensity (no grain on the flat areas). -->
-            <radialGradient id="mt-glow-mask" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#fff" stop-opacity="0.38" />
-              <stop offset="20%" stop-color="#fff" stop-opacity="0.3" />
-              <stop offset="40%" stop-color="#fff" stop-opacity="0.2" />
-              <stop offset="60%" stop-color="#fff" stop-opacity="0.11" />
-              <stop offset="80%" stop-color="#fff" stop-opacity="0.04" />
-              <stop offset="100%" stop-color="#fff" stop-opacity="0" />
-            </radialGradient>
-            <mask id="mt-grain-mask">
-              <circle cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow-mask)" />
-            </mask>
-            <!-- Fine monochrome noise. Overlaid on the halo it DITHERS the
-                 gradient, breaking the 8-bit banding ("rings") that Chromium shows
-                 on Windows/Android (macOS dithers gradients in its compositor, so
-                 it already looks smooth there). -->
+            <!-- DITHER the halo. An 8-bit gradient bands into "rings" on platforms
+                 whose compositor doesn't dither (Chromium on Windows/Android;
+                 macOS dithers automatically). We bake fine noise INTO the glow:
+                 add a tiny ± grey perturbation to the colour channels (alpha
+                 untouched), which — because the glow is premultiplied — shifts the
+                 displayed luminance directly, breaking the bands. All in one
+                 filter (no mix-blend-mode, which proved unreliable on Android). -->
             <filter
-              id="mt-grain"
+              id="mt-glow-dither"
               x="0"
               y="0"
               width="100%"
@@ -822,17 +812,25 @@ export class MtCircularDial extends LitElement {
                 stitchTiles="stitch"
                 result="noise"
               />
-              <feColorMatrix in="noise" type="saturate" values="0" />
+              <feColorMatrix
+                in="noise"
+                type="matrix"
+                values="0.12 0 0 0 -0.06
+                        0.12 0 0 0 -0.06
+                        0.12 0 0 0 -0.06
+                        0 0 0 0 0"
+                result="grain"
+              />
+              <feComposite in="SourceGraphic" in2="grain" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" />
             </filter>
           </defs>
-          <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <circle
-            class="grain"
+            class="glow"
             cx=${CENTER}
             cy=${CENTER}
             r="150"
-            filter="url(#mt-grain)"
-            mask="url(#mt-grain-mask)"
+            fill="url(#mt-glow)"
+            filter="url(#mt-glow-dither)"
           />
           <path class="ring" d=${ringPath} />
           ${this.dual
@@ -954,10 +952,14 @@ export class MtCircularDial extends LitElement {
    */
   private _renderDualCenter(): TemplateResult {
     if (this._showRange) {
+      // While actively changing (dragging or the 5s post-change window) the range
+      // is shown at the larger dynamic size; once it settles it shrinks back so it
+      // isn't oversized at rest.
+      const emphasized = this._dragging || this._showRangeTimer;
       return html`
         <div class=${classMap({ center: true, tight: this._centerTight })}>
           ${this._renderStatus()}
-          <div class="temp dual">
+          <div class=${classMap({ temp: true, dual: true, settled: !emphasized })}>
             <span class="value-text">${this._fmt(this._displayLow, this._precision)}</span>
             <span class="dash">–</span>
             <span class="value-text">${this._fmt(this._displayHigh, this._precision)}</span>
@@ -968,7 +970,6 @@ export class MtCircularDial extends LitElement {
       `;
     }
     const active = this._dualActive;
-    const label = active === 'cool' ? 'Cooling' : 'Heating';
     const target = active === 'cool' ? this._displayHigh : this._displayLow;
     // Honor show_current_as_primary: the big number is the current temperature
     // (the targeted setpoint is shown by the mode-icon marker on the ring).
@@ -976,7 +977,7 @@ export class MtCircularDial extends LitElement {
     const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
-        <div class="mode">${label}</div>
+        ${this._renderStatus()}
         <div class="temp">
           <span class="value-text">${this._fmt(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
@@ -1054,21 +1055,8 @@ export class MtCircularDial extends LitElement {
       }
       .glow,
       .ring,
-      .value,
-      .grain {
+      .value {
         pointer-events: none;
-      }
-      /* Dither overlay: fine noise blended over the halo so the gradient doesn't
-         band into rings on platforms whose compositor doesn't dither (Chromium
-         on Windows/Android). overlay blend nudges each pixel ± a hair, breaking
-         the 8-bit steps; the mask keeps it on the halo. --mt-grain-opacity tunes
-         how strong it is. */
-      .grain {
-        mix-blend-mode: overlay;
-        opacity: var(--mt-grain-opacity, 0.4);
-      }
-      .dial.off .grain {
-        opacity: 0;
       }
       .hit {
         fill: none;
@@ -1251,6 +1239,12 @@ export class MtCircularDial extends LitElement {
       .temp.dual .dash {
         font-size: clamp(14px, 10cqi, 32px);
         color: var(--mt-on-surface-variant);
+      }
+      /* At rest (not dragging / >5s after a change) the range shrinks so it isn't
+         oversized when it's just sitting there idle. */
+      .temp.dual.settled .value-text,
+      .temp.dual.settled .dash {
+        font-size: clamp(12px, 6cqi, 22px);
       }
       /* A numeric marker near 3/9 o'clock crowds the centre readout — shrink and
          allow the value/unit to wrap so the orbiting labels don't overlap it. */

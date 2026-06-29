@@ -33,15 +33,20 @@ async function mount(
 }
 
 const trigger = (el: MtEntityPicker) => el.shadowRoot!.querySelector('.trigger') as HTMLElement;
+/** The open-state positioning wrapper (present iff the dropdown is open). */
 const panel = (el: MtEntityPicker) => el.shadowRoot!.querySelector('.panel');
-const optButtons = (el: MtEntityPicker) =>
-  [...el.shadowRoot!.querySelectorAll('.opt')] as HTMLButtonElement[];
-const search = (el: MtEntityPicker) => el.shadowRoot!.querySelector('.search') as HTMLInputElement;
+/** The nested shared search panel (search box + results live in its shadow). */
+const sp = (el: MtEntityPicker) => el.shadowRoot!.querySelector('mt-search-panel') as any;
+const optButtons = (el: MtEntityPicker): HTMLButtonElement[] =>
+  [...(sp(el)?.shadowRoot?.querySelectorAll('.opt') ?? [])] as HTMLButtonElement[];
+const search = (el: MtEntityPicker): HTMLInputElement =>
+  sp(el)!.shadowRoot!.querySelector('.search') as HTMLInputElement;
 
-/** Open the dropdown. */
+/** Open the dropdown and let the search panel render + focus. */
 async function open(el: MtEntityPicker): Promise<void> {
   trigger(el).click();
   await el.updateComplete;
+  await sp(el)!.updateComplete;
 }
 
 /** Type into the search box. */
@@ -49,7 +54,7 @@ async function type(el: MtEntityPicker, value: string): Promise<void> {
   const s = search(el);
   s.value = value;
   s.dispatchEvent(new Event('input'));
-  await el.updateComplete;
+  await sp(el)!.updateComplete;
 }
 
 /** Resolve with the next value-changed detail.value. */
@@ -90,9 +95,23 @@ describe('mt-entity-picker', () => {
     const el = await mount();
     await open(el);
     expect(panel(el)).to.not.equal(null);
-    expect(el.shadowRoot!.activeElement).to.equal(search(el));
+    expect(sp(el).shadowRoot.activeElement).to.equal(search(el));
     const names = optButtons(el).map((b) => b.querySelector('.opt-name')!.textContent);
     expect(names).to.deep.equal(['Humidity', 'Lamp', 'Temperature', 'Weird']);
+  });
+
+  it('falls back to the entity id when an entity has no friendly_name', async () => {
+    const el = await fixture<MtEntityPicker>(
+      html`<mt-entity-picker
+        .hass=${makeHass({ 'sensor.bare': entityState('sensor.bare', '1', {}) })}
+        .value=${''}
+      ></mt-entity-picker>`
+    );
+    await el.updateComplete;
+    await open(el);
+    expect(optButtons(el).map((b) => b.querySelector('.opt-name')!.textContent)).to.deep.equal([
+      'sensor.bare',
+    ]);
   });
 
   it('restricts candidates to includeDomains', async () => {
@@ -143,7 +162,7 @@ describe('mt-entity-picker', () => {
   it('marks the current value as the active option', async () => {
     const el = await mount({ value: 'sensor.temp' });
     await open(el);
-    const active = el.shadowRoot!.querySelector('.opt.active')!;
+    const active = sp(el).shadowRoot.querySelector('.opt.active')!;
     expect(active.querySelector('.opt-name')!.textContent).to.equal('Temperature');
   });
 
@@ -151,7 +170,7 @@ describe('mt-entity-picker', () => {
     const el = await mount();
     (el as unknown as { hass: unknown }).hass = undefined;
     await el.updateComplete;
-    expect((el as unknown as { _entities(): unknown[] })._entities()).to.deep.equal([]);
+    expect((el as unknown as { _items(): unknown[] })._items()).to.deep.equal([]);
   });
 
   it('clicking the trigger again closes the dropdown', async () => {
@@ -168,14 +187,14 @@ describe('mt-entity-picker', () => {
       await open(el);
       await type(el, 'zzzzz');
       expect(optButtons(el).length).to.equal(0);
-      expect(el.shadowRoot!.querySelector('.empty')).to.not.equal(null);
+      expect(sp(el).shadowRoot.querySelector('.empty')).to.not.equal(null);
     });
 
     it('offers a "Use …" row for a custom value and commits it on click', async () => {
       const el = await mount({ allowCustom: true });
       await open(el);
       await type(el, 'sensor.custom');
-      const custom = el.shadowRoot!.querySelector('.opt.custom') as HTMLButtonElement;
+      const custom = sp(el).shadowRoot.querySelector('.opt.custom') as HTMLButtonElement;
       expect(custom).to.not.equal(null);
       const p = onChange(el);
       custom.click();
@@ -186,7 +205,7 @@ describe('mt-entity-picker', () => {
       const el = await mount({ allowCustom: true });
       await open(el);
       await type(el, 'sensor.temp');
-      expect(el.shadowRoot!.querySelector('.opt.custom')).to.equal(null);
+      expect(sp(el).shadowRoot.querySelector('.opt.custom')).to.equal(null);
     });
   });
 

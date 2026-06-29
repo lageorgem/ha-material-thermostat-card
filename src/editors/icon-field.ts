@@ -2,14 +2,17 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import type { HomeAssistant } from 'custom-card-helpers';
+import './search-panel';
+import type { SearchItem } from './search-panel';
+import { loadIconItems } from './icon-list';
 
 /**
  * A compact icon control shaped like a **pill** with two mutually-exclusive
  * halves:
  *
- * - **left** — an icon picker. It shows the effective icon (the custom override,
- *   else the row's faded default) and opens a popover with `ha-icon-picker` so
- *   the user can choose a custom one.
+ * - **left** — the icon. It shows the effective icon (the custom override, else
+ *   the row's faded default) and opens a rounded {@link MtSearchPanel} (search +
+ *   browsable list) right under the pill — matching {@link MtEntityPicker}.
  * - **right** — `mdi:cancel`, the "no icon" / disable toggle.
  *
  * Three values are emitted via `value-changed`, matching the rest of the editor:
@@ -18,9 +21,9 @@ import type { HomeAssistant } from 'custom-card-helpers';
  * - `''` — **no icon**: the default is suppressed (the right half is active).
  * - a string — a **custom** icon (the left half is active).
  *
- * It lives in the card editor (not the card), so it styles itself from the
- * global Material You `--md-sys-*` tokens, falling back to Home Assistant theme
- * variables so it stays usable under the default theme.
+ * The list browses a curated common set + any registered custom icon packs;
+ * since HA bundles the full MDI list at build time (no runtime list), any other
+ * icon is reachable by typing its full `mdi:<name>` in the search box.
  */
 @customElement('mt-icon-field')
 export class MtIconField extends LitElement {
@@ -31,8 +34,10 @@ export class MtIconField extends LitElement {
   /** The consumer's default icon, previewed (faded) when no custom icon is set. */
   @property() defaultIcon?: string;
 
-  /** Whether the icon-picker popover is open. */
+  /** Whether the icon search panel is open. */
   @state() private _open = false;
+  /** The browsable icon list (lazy-loaded on first open). */
+  @state() private _icons: SearchItem[] = [];
 
   /** Whether the explicit "no icon" state is selected. */
   private get _none(): boolean {
@@ -54,7 +59,7 @@ export class MtIconField extends LitElement {
     document.removeEventListener('click', this._onDocClick);
   }
 
-  /** Close the popover when clicking anywhere outside this element. */
+  /** Close the panel when clicking anywhere outside this element. */
   private _onDocClick = (e: MouseEvent): void => {
     if (this._open && !e.composedPath().includes(this)) this._open = false;
   };
@@ -70,23 +75,17 @@ export class MtIconField extends LitElement {
   }
 
   /**
-   * Toggle the icon picker. It's anchored right under the pill (absolute, within
-   * this host's stacking context); the editor's feature cards use
-   * `overflow: visible` so it isn't clipped. On open the picker's search box is
-   * focused so the icon segment drops straight into searching (no extra click
-   * into a nested field). HA bundles the icon list at build time, so we reuse its
-   * picker rather than re-implementing the search.
+   * Toggle the icon search panel, lazy-loading the browsable list on first open.
+   * The panel is anchored right under the pill (absolute); the editor's feature
+   * cards use `overflow: visible` so it isn't clipped.
    * @param e the click event
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
     this._open = !this._open;
-    if (this._open) {
-      this.updateComplete.then(() => {
-        const picker = this.shadowRoot?.querySelector('ha-icon-picker') as
-          | (HTMLElement & { focus?: () => void })
-          | null;
-        picker?.focus?.();
+    if (this._open && this._icons.length === 0) {
+      loadIconItems().then((items) => {
+        this._icons = items;
       });
     }
   }
@@ -98,6 +97,17 @@ export class MtIconField extends LitElement {
     this._emit(this._none ? undefined : '');
   }
 
+  /**
+   * Commit a picked icon and close.
+   * @param e the panel's pick event
+   */
+  private _onPick(e: CustomEvent): void {
+    // The panel only ever picks a non-empty value (a list item or a typed custom
+    // icon); "no icon" is the cancel segment's job.
+    this._open = false;
+    this._emit(e.detail.value);
+  }
+
   protected render(): TemplateResult {
     const none = this._none;
     const custom = this._custom;
@@ -107,7 +117,7 @@ export class MtIconField extends LitElement {
         <button
           type="button"
           class=${classMap({ seg: true, icon: true, active: custom, preview: !custom })}
-          aria-haspopup="dialog"
+          aria-haspopup="listbox"
           aria-expanded=${this._open ? 'true' : 'false'}
           title=${this.label}
           @click=${this._toggle}
@@ -125,19 +135,16 @@ export class MtIconField extends LitElement {
         </button>
       </div>
       ${this._open
-        ? html`<div class="popover" role="dialog">
-            <ha-icon-picker
-              .hass=${this.hass}
-              .label=${this.label}
+        ? html`<div class="panel">
+            <mt-search-panel
+              .items=${this._icons}
               .value=${this.value || ''}
-              @value-changed=${(e: CustomEvent) => {
-                // The picker's event is composed — stop it so the parent editor
-                // only sees our normalized value (clearing the picker → default).
-                e.stopPropagation();
-                this._open = false;
-                this._emit(e.detail.value || undefined);
-              }}
-            ></ha-icon-picker>
+              .allowCustom=${true}
+              customPrefix="mdi:"
+              placeholder="Search icons…"
+              @pick=${this._onPick}
+              @dismiss=${() => (this._open = false)}
+            ></mt-search-panel>
           </div>`
         : nothing}
     `;
@@ -188,19 +195,21 @@ export class MtIconField extends LitElement {
     .seg ha-icon {
       --mdc-icon-size: 20px;
     }
-    /* Bare positioning wrapper — no box chrome, so clicking the icon shows just
-       HA's icon picker (one combobox) directly under the pill, not a nested
-       popup-with-a-dropdown. */
-    .popover {
+    /* Rounded search panel anchored under the pill (matches mt-entity-picker). */
+    .panel {
       position: absolute;
       z-index: 30;
       top: calc(100% + 6px);
       left: 0;
       width: 256px;
-    }
-    .popover ha-icon-picker {
-      display: block;
-      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      background: var(--md-sys-color-surface-container-high, var(--card-background-color, #fff));
+      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
+      border-radius: 16px;
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        0 1px 3px rgba(0, 0, 0, 0.2);
     }
   `;
 }

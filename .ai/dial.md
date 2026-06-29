@@ -124,12 +124,14 @@ the eco leaf) under the number; the card computes it from the configured
 range (low – high) while dragging, for **5s after a setpoint
 changes** (`_bumpRangeDisplay` 5s timer, armed in `updated()` — guarded by
 `_prevLow/_prevHigh` so the initial set doesn't arm it), or while idle. Otherwise
-it **collapses** to the active sub-mode label ("Cooling"/"Heating") + the
-targeted setpoint value, **and the active setpoint's ring marker shows the
-sub-mode icon** (`dualSetIconEl`, like single mode — the icon is at the SETPOINT,
-not in the centre text). `show_current_as_primary` makes the collapsed big number
-the **current temperature** (the setpoint is then shown only by the icon marker),
-mirroring single mode.
+it **collapses** to the targeted setpoint value (no "Cooling"/"Heating" label —
+removed; the chips show the mode), **and the active setpoint's ring marker shows
+the sub-mode icon** (`dualSetIconEl`, like single mode — the icon is at the
+SETPOINT, not in the centre text). `show_current_as_primary` makes the collapsed
+big number the **current temperature** (the setpoint is then shown only by the
+icon marker), mirroring single mode. The range font is the larger dynamic size
+only while **emphasized** (`_dragging || _showRangeTimer`); once it settles
+(idle, >5s) the `.settled` class shrinks it so it isn't oversized at rest.
 
 **Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
 sit at radius ~100 and can collide with the (horizontally widest) centre readout
@@ -171,13 +173,15 @@ disc.
 
 **Anti-banding dither.** An 8-bit gradient bands into concentric "rings" on
 platforms whose compositor doesn't dither (Chromium on Windows/Android; macOS
-dithers automatically, which is why it looks smooth there). To fix it everywhere,
-`circle.grain` overlays fine `feTurbulence` noise (desaturated via
-`feColorMatrix saturate 0`) with `mix-blend-mode: overlay`, masked to the halo's
-shape/intensity by `#mt-grain-mask` (a white twin of the glow gradient). The
-overlay nudges each pixel ± a hair, breaking the 8-bit steps. Strength is
-`--mt-grain-opacity` (default 0.4); hidden when the dial is off. This is the
-standard "grainy gradient" technique (Stripe/Apple).
+dithers automatically, which is why it looks smooth there). We bake the dither
+INTO the glow via the `#mt-glow-dither` filter applied to `circle.glow`:
+`feTurbulence` (fractalNoise) → `feColorMatrix` produces a tiny ± grey
+perturbation in the COLOUR channels (alpha untouched) → `feComposite`
+`operator="arithmetic"` adds it to the gradient. Because the glow is
+premultiplied, perturbing the colour channels (not alpha) shifts the *displayed*
+luminance directly, breaking the steps. All in one filter — **no mix-blend-mode**
+(an earlier blend-mode grain overlay had no visible effect on Android). Tune
+amplitude via the feColorMatrix coefficients (currently `0.12 … -0.06` ≈ ±0.06).
 
 ## Animations
 

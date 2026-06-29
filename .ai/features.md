@@ -118,24 +118,31 @@ token is absent (default theme); other selectors keep the accent. Surface
 containers (`--mt-surface-container[-high/-highest]`) fall back to a
 `color-mix` elevation tint over the card background so tiles/lists don't blend in.
 
-The editor's per-row/per-option icon control is **`mt-icon-field`** (`editors/`):
-a compact **pill** with two halves — left opens HA's `ha-icon-picker` **bare**
-(no box chrome) anchored right under the pill (`position: absolute`; the feature
-card uses `overflow: visible` so it isn't clipped — do NOT use `position: fixed`,
-HA's editor dialog has a transformed ancestor that breaks viewport coords) and
-**auto-focuses** it so the click drops straight into searching. We reuse HA's
-picker because the MDI icon list is **bundled at build time** (`import("../../build/mdi/iconList.json")`)
-— there is no runtime URL to fetch, so a custom icon search can't be populated.
-Right half is `mdi:cancel` (explicit "no icon"). Three-state contract:
-`undefined` = default · `''` = no icon · string = custom. Pass `defaultIcon` to
-preview the would-be glyph faded when unset.
+**`mt-search-panel`** (`editors/`) is the shared dropdown body: a search box +
+filtered, scrollable list of `SearchItem`s (`{value, primary, secondary?, icon?,
+keywords?}`). It self-focuses, caps to 50 results, supports `allowCustom` +
+`customPrefix` (a "Use …" row / Enter for free-text values), and emits
+`pick`/`dismiss`. It does NOT manage open/close or position — the parent renders
+it (absolutely positioned) while open. Both pickers below use it, so they look
+and behave identically. ALWAYS prefer this over HA's stock combobox/pickers.
 
-Entity selection uses a **custom `mt-entity-picker`** (`editors/`), NOT
-`ha-entity-picker` (whose stock combobox is bulky and off-aesthetic). It's a
-rounded pill trigger that opens one dropdown panel = a search box + a filtered,
-domain-restricted list built from `hass.states` (reliable, fully ours). Emits
-`value-changed` (`{value}`) so it's a drop-in for `ha-entity-picker`; supports
-`allowCustom` (a "Use …" row / Enter) for non-existent ids.
+**`mt-entity-picker`** (`editors/`): a rounded pill trigger + `mt-search-panel`
+fed from `hass.states` (domain-filtered, reliable). Drop-in for
+`ha-entity-picker` (emits `value-changed {value}`); `allowCustom` permits typed
+ids.
+
+**`mt-icon-field`** (`editors/`): the two-half pill — left opens an
+`mt-search-panel` of icons right under the pill (`position: absolute`; the
+feature card uses `overflow: visible` so it isn't clipped — do NOT use
+`position: fixed`, HA's editor dialog has a transformed ancestor that breaks
+viewport coords); right is `mdi:cancel` ("no icon"). Three-state contract:
+`undefined` = default · `''` = no icon · string = custom; pass `defaultIcon` for
+the faded preview. The browsable list (`icon-list.ts` → `loadIconItems`) is a
+**curated common MDI set + every registered custom icon pack** (enumerated via
+`window.customIcons[prefix].getIconList()`, which is how our `mt:` icons show
+up). HA bundles the full MDI list at build time (`import("../../build/mdi/iconList.json")`)
+— no runtime URL — so anything not curated is reached by typing its full
+`mdi:<name>` (free text via `allowCustom`/`customPrefix="mdi:"`).
 
 Title/label inputs use **`mt-text-field`** (a native `<input>` styled as a pill),
 NOT a bare `<ha-textfield>` — a standalone `ha-textfield` placed directly in a

@@ -1,9 +1,9 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state, query } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-
-const MAX_RESULTS = 50;
+import './search-panel';
+import type { SearchItem } from './search-panel';
 
 /** Default leading glyph by domain, so each row reads at a glance. */
 const DOMAIN_ICON: Record<string, string> = {
@@ -21,19 +21,13 @@ const DOMAIN_ICON: Record<string, string> = {
   climate: 'mdi:thermostat',
 };
 
-interface EntityRow {
-  id: string;
-  name: string;
-  icon: string;
-}
-
 /**
  * A compact, rounded entity picker that matches the editor's pill aesthetic
  * (same height/shape as {@link MtIconField}). Clicking the trigger opens a
- * single dropdown panel with a search box on top and the matching entities
- * below — no big stock combobox, no nested popups. Emits `value-changed`
- * (`{ value }`, bubbles+composed) like `ha-entity-picker`, so editors swap it in
- * with no other changes.
+ * single {@link MtSearchPanel} (search box + domain-filtered list from
+ * `hass.states`) — no bulky stock combobox, no nested popups. Emits
+ * `value-changed` (`{ value }`, bubbles+composed) like `ha-entity-picker`, so
+ * editors swap it in with no other changes.
  */
 @customElement('mt-entity-picker')
 export class MtEntityPicker extends LitElement {
@@ -46,9 +40,6 @@ export class MtEntityPicker extends LitElement {
   @property({ type: Boolean }) allowCustom = false;
 
   @state() private _open = false;
-  @state() private _query = '';
-
-  @query('.search') private _searchInput?: HTMLInputElement;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -65,91 +56,64 @@ export class MtEntityPicker extends LitElement {
     if (this._open && !e.composedPath().includes(this)) this._open = false;
   };
 
-  /** Candidate entities (filtered by domain), sorted by name. */
-  private _entities(): EntityRow[] {
+  /** The icon for an entity: its own, else a domain default, else a generic tag. */
+  private _iconFor(id: string, ownIcon?: string): string {
+    return ownIcon ?? DOMAIN_ICON[id.split('.')[0]] ?? 'mdi:tag';
+  }
+
+  /** Candidate entities (filtered by domain), sorted by name, as search items. */
+  private _items(): SearchItem[] {
     const states = this.hass?.states ?? {};
     return Object.keys(states)
       .filter((id) => !this.includeDomains || this.includeDomains.includes(id.split('.')[0]))
       .map((id) => {
         const a = states[id].attributes;
         return {
-          id,
-          name: (a.friendly_name as string) ?? id,
-          icon: (a.icon as string) ?? DOMAIN_ICON[id.split('.')[0]] ?? 'mdi:tag',
+          value: id,
+          primary: (a.friendly_name as string) ?? id,
+          secondary: id,
+          icon: this._iconFor(id, a.icon as string | undefined),
         };
       })
-      .sort((x, y) => x.name.localeCompare(y.name));
+      .sort((x, y) => x.primary.localeCompare(y.primary));
   }
 
-  /** The candidates matching the current search query (capped). */
-  private _filtered(): EntityRow[] {
-    const q = this._query.trim().toLowerCase();
-    const list = q
-      ? this._entities().filter(
-          (e) => e.id.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
-        )
-      : this._entities();
-    return list.slice(0, MAX_RESULTS);
-  }
-
-  /** The row to render in the (closed) trigger for the current value. */
-  private _selected(): EntityRow | undefined {
+  /** The row shown in the (closed) trigger for the current value. */
+  private _selected(): { name: string; icon: string } | undefined {
     if (!this.value) return undefined;
     const a = this.hass?.states?.[this.value]?.attributes;
     return {
-      id: this.value,
       name: (a?.friendly_name as string) ?? this.value,
-      icon: (a?.icon as string) ?? DOMAIN_ICON[this.value.split('.')[0]] ?? 'mdi:tag',
+      icon: this._iconFor(this.value, a?.icon as string | undefined),
     };
   }
 
   /**
-   * Toggle the dropdown; focus the search box when opening.
+   * Toggle the dropdown.
    * @param e the click event
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
     this._open = !this._open;
-    if (this._open) {
-      this._query = '';
-      this.updateComplete.then(() => {
-        /* c8 ignore next -- the search box is always in the DOM once the panel opens */
-        this._searchInput?.focus();
-      });
-    }
   }
 
   /**
    * Commit a selected value and close.
-   * @param value the chosen entity id
+   * @param e the panel's pick event
    */
-  private _pick(value: string): void {
+  private _onPick(e: CustomEvent): void {
     this._open = false;
     this.dispatchEvent(
-      new CustomEvent('value-changed', { detail: { value }, bubbles: true, composed: true })
+      new CustomEvent('value-changed', {
+        detail: { value: e.detail.value },
+        bubbles: true,
+        composed: true,
+      })
     );
-  }
-
-  /**
-   * Search box keystrokes: Escape closes; Enter commits a typed value when
-   * custom entities are allowed.
-   * @param e the keyboard event
-   */
-  private _onKey(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      this._open = false;
-    } else if (e.key === 'Enter' && this.allowCustom && this._query.trim()) {
-      this._pick(this._query.trim());
-    }
   }
 
   protected render(): TemplateResult {
     const sel = this._selected();
-    const q = this._query.trim();
-    const results = this._filtered();
-    const showCustom =
-      this.allowCustom && q.length > 0 && !results.some((r) => r.id === q);
     return html`
       <button
         type="button"
@@ -165,40 +129,15 @@ export class MtEntityPicker extends LitElement {
         <ha-icon class="chev" icon="mdi:chevron-down"></ha-icon>
       </button>
       ${this._open
-        ? html`<div class="panel" role="listbox">
-            <input
-              class="search"
-              type="text"
+        ? html`<div class="panel">
+            <mt-search-panel
+              .items=${this._items()}
+              .value=${this.value}
+              .allowCustom=${this.allowCustom}
               placeholder="Search entities…"
-              .value=${this._query}
-              @input=${(e: Event) => (this._query = (e.target as HTMLInputElement).value)}
-              @keydown=${this._onKey}
-            />
-            <div class="results">
-              ${results.map(
-                (r) => html`<button
-                  type="button"
-                  class=${classMap({ opt: true, active: r.id === this.value })}
-                  role="option"
-                  @click=${() => this._pick(r.id)}
-                >
-                  <ha-icon icon=${r.icon}></ha-icon>
-                  <span class="opt-text">
-                    <span class="opt-name">${r.name}</span>
-                    <span class="opt-id">${r.id}</span>
-                  </span>
-                </button>`
-              )}
-              ${showCustom
-                ? html`<button type="button" class="opt custom" @click=${() => this._pick(q)}>
-                    <ha-icon icon="mdi:plus"></ha-icon>
-                    <span class="opt-text"><span class="opt-name">Use “${q}”</span></span>
-                  </button>`
-                : nothing}
-              ${results.length === 0 && !showCustom
-                ? html`<div class="empty">No matching entities</div>`
-                : nothing}
-            </div>
+              @pick=${this._onPick}
+              @dismiss=${() => (this._open = false)}
+            ></mt-search-panel>
           </div>`
         : nothing}
     `;
@@ -257,85 +196,13 @@ export class MtEntityPicker extends LitElement {
       left: 0;
       right: 0;
       padding: 8px;
+      box-sizing: border-box;
       background: var(--md-sys-color-surface-container-high, var(--card-background-color, #fff));
       border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
       border-radius: 16px;
       box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.3),
         0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-    .search {
-      width: 100%;
-      box-sizing: border-box;
-      height: 38px;
-      padding: 0 12px;
-      margin-bottom: 6px;
-      border-radius: var(--md-sys-shape-corner-full, 9999px);
-      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
-      background: var(--md-sys-color-surface-container, var(--card-background-color));
-      color: var(--md-sys-color-on-surface, var(--primary-text-color));
-      font: inherit;
-      font-size: 14px;
-      outline: none;
-    }
-    .search:focus {
-      border-color: var(--md-sys-color-primary, var(--primary-color));
-    }
-    .results {
-      max-height: 240px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .opt {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 8px 10px;
-      border: none;
-      background: transparent;
-      color: var(--md-sys-color-on-surface, var(--primary-text-color));
-      border-radius: 10px;
-      cursor: pointer;
-      font: inherit;
-      text-align: left;
-    }
-    .opt:hover {
-      background: color-mix(in srgb, currentColor 8%, transparent);
-    }
-    .opt.active {
-      background: var(--md-sys-color-secondary-container, rgba(127, 127, 127, 0.18));
-    }
-    .opt ha-icon {
-      --mdc-icon-size: 20px;
-      flex: 0 0 auto;
-      color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
-    }
-    .opt-text {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-    .opt-name {
-      font-size: 14px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .opt-id {
-      font-size: 12px;
-      color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .empty {
-      padding: 10px;
-      color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
-      font-size: 13px;
-      text-align: center;
     }
   `;
 }

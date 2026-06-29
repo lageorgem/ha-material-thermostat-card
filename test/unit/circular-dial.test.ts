@@ -305,25 +305,16 @@ describe('mt-circular-dial', () => {
   });
 
   describe('halo dither (anti-banding)', () => {
-    it('overlays a masked, filtered noise circle blended over the halo', async () => {
+    it('bakes a noise-dither filter into the glow circle', async () => {
       const el = await mount();
       el.mode = 'cool';
       await el.updateComplete;
-      const grain = el.shadowRoot!.querySelector('circle.grain') as SVGElement;
-      expect(grain).to.not.equal(null);
-      expect(grain.getAttribute('filter')).to.equal('url(#mt-grain)');
-      expect(grain.getAttribute('mask')).to.equal('url(#mt-grain-mask)');
-      expect(getComputedStyle(grain).mixBlendMode).to.equal('overlay');
-      // The dither noise filter is defined.
-      expect(el.shadowRoot!.querySelector('filter#mt-grain feTurbulence')).to.not.equal(null);
-    });
-
-    it('hides the grain when the dial is off (no halo to dither)', async () => {
-      const el = await mount();
-      el.mode = 'off';
-      await el.updateComplete;
-      const grain = el.shadowRoot!.querySelector('circle.grain') as SVGElement;
-      expect(getComputedStyle(grain).opacity).to.equal('0');
+      const glow = el.shadowRoot!.querySelector('circle.glow') as SVGElement;
+      expect(glow.getAttribute('filter')).to.equal('url(#mt-glow-dither)');
+      // The dither filter generates noise and composites it onto the glow.
+      const filter = el.shadowRoot!.querySelector('filter#mt-glow-dither')!;
+      expect(filter.querySelector('feTurbulence')).to.not.equal(null);
+      expect(filter.querySelector('feComposite[operator="arithmetic"]')).to.not.equal(null);
     });
   });
 
@@ -2112,7 +2103,7 @@ describe('mt-circular-dial', () => {
   });
 
   describe('dual center readout (_renderDualCenter / _showRange)', () => {
-    it('fresh mount cooling collapses to "Cooling" + the high setpoint only', async () => {
+    it('fresh mount cooling collapses to the high setpoint only (no mode label)', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -2123,7 +2114,8 @@ describe('mt-circular-dial', () => {
       el.current = 28; // cooling
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      // No Cooling/Heating label (the chips show the mode, à la Google Home).
+      expect(sr.querySelector('.center .mode')).to.equal(null);
       // collapsed: a single value-text, no dual range, no dash
       const texts = sr.querySelectorAll('.center .value-text');
       expect(texts.length).to.equal(1);
@@ -2132,7 +2124,7 @@ describe('mt-circular-dial', () => {
       expect(sr.querySelector('.dash')).to.equal(null);
     });
 
-    it('fresh mount heating collapses to "Heating" + the low setpoint only', async () => {
+    it('fresh mount heating collapses to the low setpoint only (no mode label)', async () => {
       const el = await mount();
       el.dual = true;
       el.mode = 'heat_cool';
@@ -2143,7 +2135,7 @@ describe('mt-circular-dial', () => {
       el.current = 14; // heating
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Heating');
+      expect(sr.querySelector('.center .mode')).to.equal(null);
       const texts = sr.querySelectorAll('.center .value-text');
       expect(texts.length).to.equal(1);
       expect(texts[0].textContent!.trim()).to.equal('18.0'); // the low setpoint
@@ -2171,6 +2163,27 @@ describe('mt-circular-dial', () => {
       expect(texts[0].textContent!.trim()).to.equal('18.0');
       expect(texts[1].textContent!.trim()).to.equal('24.0');
       expect(dual!.querySelector('.dash')!.textContent!.trim()).to.equal('–');
+    });
+
+    it('the idle (settled) range is compact; dragging emphasizes it', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.step = 0.5;
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21; // idle -> range, settled (no drag, no recent change)
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.temp.dual.settled')).to.not.equal(null);
+
+      // While dragging the range is emphasized (not settled).
+      (el as any)._dragging = true;
+      (el as any)._dragLow = 18;
+      (el as any)._dragHigh = 24;
+      el.requestUpdate();
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.not.equal(null);
+      expect(el.shadowRoot!.querySelector('.temp.dual.settled')).to.equal(null);
     });
 
     it('dragging with an active sub-mode shows the range (not collapsed)', async () => {
@@ -2253,7 +2266,7 @@ describe('mt-circular-dial', () => {
       el.showCurrentAsPrimary = true;
       await el.updateComplete;
       const sr = el.shadowRoot!;
-      expect(sr.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      expect(sr.querySelector('.center .mode')).to.equal(null);
       expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28.0');
     });
 
@@ -2384,7 +2397,9 @@ describe('mt-circular-dial', () => {
       el.current = 28; // cooling -> collapsed
       await el.updateComplete;
       expect((el as any)._showRangeTimer).to.be.false;
-      expect(el.shadowRoot!.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      // collapsed (single number, no range), and no Cooling/Heating label
+      expect(el.shadowRoot!.querySelector('.temp.dual')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.center .mode')).to.equal(null);
 
       // change a setpoint -> bump the timer + show the range. The bump happens in
       // updated() (this cycle), scheduling a follow-up render, so settle twice.
@@ -2400,7 +2415,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       expect((el as any)._showRangeTimer).to.be.false;
       expect(el.shadowRoot!.querySelector('.temp.dual')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.center .mode')!.textContent!.trim()).to.equal('Cooling');
+      expect(el.shadowRoot!.querySelector('.center .mode')).to.equal(null);
     });
   });
 
