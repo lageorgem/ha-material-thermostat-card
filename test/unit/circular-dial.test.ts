@@ -2337,13 +2337,53 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('.center.tight')).to.equal(null);
     });
 
-    it('single: true when the current marker is near the horizontal axis', async () => {
+    it('single: true when a marker is near the axis AND the number is wide ("24.0")', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.min = 7;
       el.max = 35;
+      el.step = 0.5; // setpoint renders as "24.0" — 4 chars, wide
       el.value = 24;
       el.current = 30; // ≈90°
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.true;
+    });
+
+    it('single: false when a marker is near the axis but the number is short ("24")', async () => {
+      // The root cause of the per-card size differences: a short setpoint must
+      // NOT shrink just because the current marker happens to sit near 3 o'clock.
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 7;
+      el.max = 35;
+      el.step = 1; // setpoint renders as "24" — 2 chars
+      el.value = 24;
+      el.current = 30; // ≈90°
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.false;
+    });
+
+    it('single: true with show_current_as_primary when the current readout is wide', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 7;
+      el.max = 35;
+      el.value = 30; // setpoint marker ≈90°
+      el.current = 26.4; // big number "26.4" — wide
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      expect((el as any)._centerTight).to.be.true;
+    });
+
+    it('single: with show_current_as_primary but no current falls back to the setpoint width', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.min = 7;
+      el.max = 35;
+      el.step = 0.5; // setpoint "30.0" — wide
+      el.value = 30; // ≈90°, becomes the big number (no current)
+      el.current = undefined;
+      el.showCurrentAsPrimary = true;
       await el.updateComplete;
       expect((el as any)._centerTight).to.be.true;
     });

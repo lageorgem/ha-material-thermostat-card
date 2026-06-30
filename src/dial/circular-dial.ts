@@ -197,7 +197,27 @@ export class MtCircularDial extends LitElement {
         near(this._displayHigh) ||
         (!this.showCurrentAsPrimary && near(this.current))
       );
-    return near(this.showCurrentAsPrimary ? this._displayValue : this.current);
+    // Single mode: shrink ONLY when the centre number is wide enough (≥ 4 chars,
+    // e.g. "26.4") to actually collide with a marker near the 3/9 o'clock axis.
+    // A short setpoint ("24") never collides, so it keeps the full size — this is
+    // what keeps the number a consistent size across cards regardless of where a
+    // given entity's markers happen to fall.
+    return (
+      near(this.showCurrentAsPrimary ? this._displayValue : this.current) &&
+      this._singleReadoutWide
+    );
+  }
+
+  /**
+   * Whether the single-mode centre number is wide enough (≥ 4 characters, e.g.
+   * "26.4") to risk overlapping a marker near the 3/9 o'clock axis. Mirrors the
+   * big-number choice in {@link _renderSingleCenter}.
+   */
+  private get _singleReadoutWide(): boolean {
+    const big =
+      this.showCurrentAsPrimary && this.current != null ? this.current : this._displayValue;
+    const precision = this.showCurrentAsPrimary ? 1 : this._precision;
+    return this._fmt(big, precision).length >= 4;
   }
 
   /** Show the range for 5s after a setpoint change, then collapse to the mode. */
