@@ -264,15 +264,17 @@ export class MtGridSlider extends LitElement {
       border-radius: var(--ha-border-radius-md, 8px);
       overflow: hidden;
     }
+    /* The unfilled track is transparent so it reads as the surrounding surface
+       (the editor's feature panel) rather than a stray tinted band. */
     .background {
       position: absolute;
       inset: 0;
-      background: var(--disabled-color, #bdbdbd);
-      opacity: 0.4;
+      background: transparent;
     }
     .active {
       position: absolute;
       background: var(--primary-color, #6750a4);
+      border-radius: var(--ha-border-radius-md, 8px);
       top: 0;
       right: calc(var(--max) * 100%);
       bottom: 0;

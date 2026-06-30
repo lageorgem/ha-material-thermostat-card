@@ -214,6 +214,44 @@ describe('mt-icon-field', () => {
       await openIcons(el);
       expect(el.shadowRoot!.querySelector('.panel')!.classList.contains('right')).to.be.true;
     });
+
+    it('measures against the editor host (the dialog), not the viewport', async () => {
+      // Mount inside a real shadow root so getRootNode().host resolves to a
+      // bounded "editor" — mirroring the narrow, centered edit dialog.
+      const wrap = document.createElement('div');
+      const shadow = wrap.attachShadow({ mode: 'open' });
+      document.body.appendChild(wrap);
+      try {
+        const el = document.createElement('mt-icon-field') as MtIconField;
+        el.hass = makeHass({});
+        shadow.appendChild(el);
+        await el.updateComplete;
+        // host spans 100..500 (midpoint 300); the pill sits centered at 440 → it
+        // is in the host's right half even though it's nowhere near the viewport
+        // edge, so the panel must right-anchor.
+        const rect = (left: number, width: number): DOMRect =>
+          ({
+            left,
+            width,
+            right: left + width,
+            top: 0,
+            bottom: 40,
+            height: 40,
+            x: left,
+            y: 0,
+            toJSON: () => ({}),
+          }) as DOMRect;
+        wrap.getBoundingClientRect = () => rect(100, 400);
+        el.getBoundingClientRect = () => rect(400, 80);
+        (el.shadowRoot!.querySelector('.seg.icon') as HTMLButtonElement).click();
+        await el.updateComplete;
+        await aTimeout(0);
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.panel')!.classList.contains('right')).to.be.true;
+      } finally {
+        wrap.remove();
+      }
+    });
   });
 
   describe('outside-click handling', () => {

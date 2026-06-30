@@ -36,13 +36,10 @@ export class MtIconField extends LitElement {
 
   /** Whether the icon search panel is open. */
   @state() private _open = false;
-  /** Anchor the panel to its right edge (grow leftward) near the viewport edge. */
+  /** Anchor the panel to its right edge (grow leftward) near the editor's edge. */
   @state() private _alignRight = false;
   /** The browsable icon list (lazy-loaded on first open). */
   @state() private _icons: SearchItem[] = [];
-
-  /** The panel's width (keep in sync with `.panel { width }`). */
-  private static readonly PANEL_WIDTH = 256;
 
   /** Whether the explicit "no icon" state is selected. */
   private get _none(): boolean {
@@ -85,14 +82,27 @@ export class MtIconField extends LitElement {
    * cards use `overflow: visible` so it isn't clipped.
    * @param e the click event
    */
+  /**
+   * The bounding box that constrains the panel — the editor element hosting this
+   * field (its shadow host), so we measure against the (often narrow, centered)
+   * edit dialog rather than the whole viewport. Null when there is no shadow
+   * host (then the caller falls back to the viewport).
+   */
+  private _hostBounds(): DOMRect | null {
+    const host = (this.getRootNode() as ShadowRoot).host as HTMLElement | undefined;
+    return host ? host.getBoundingClientRect() : null;
+  }
+
   private _toggle(e: Event): void {
     e.stopPropagation();
     if (!this._open) {
-      // Left-align by default; flip to right-anchored (grow leftward) when a
-      // left-anchored panel would spill past the viewport's right edge — which
-      // in the narrow editor causes the whole dialog to scroll horizontally.
+      // Anchor leftward (grow toward the panel's left) when the pill sits in the
+      // right half of its editor — otherwise a 256px left-anchored panel spills
+      // past the (narrow, centered) edit dialog and scrolls it horizontally.
       const r = this.getBoundingClientRect();
-      this._alignRight = r.left + MtIconField.PANEL_WIDTH > window.innerWidth - 8;
+      const hb = this._hostBounds();
+      const mid = hb ? (hb.left + hb.right) / 2 : window.innerWidth / 2;
+      this._alignRight = r.left + r.width / 2 > mid;
     }
     this._open = !this._open;
     if (this._open && this._icons.length === 0) {
