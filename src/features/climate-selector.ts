@@ -133,11 +133,16 @@ export class MtClimateSelector extends LitElement {
     // In tile display, fall back to a sensible per-kind title ("Mode", "Fan", …)
     // so the tile reads like Google Home even without a configured label.
     const label = this.label ?? (this.display === 'tile' ? TILE_TITLE[this.kind] : undefined);
+    // When the climate is off, every climate tile (fan/preset/swing too) reads as
+    // off — otherwise an active fan/preset would still look "on" while the unit
+    // is powered down. (items are non-empty only when the state exists.)
+    const forceOff = this._stateObj!.state === 'off';
     return html`
       <mt-selector-row
         .items=${items}
         display=${this.display}
         .label=${label}
+        .forceOff=${forceOff}
         style=${styleOverride}
         @item-selected=${this._onSelect}
       ></mt-selector-row>

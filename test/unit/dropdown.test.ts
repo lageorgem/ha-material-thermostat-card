@@ -281,6 +281,14 @@ describe('mt-dropdown', () => {
       expect(tile(el).classList.contains('on')).to.be.false;
     });
 
+    it('is not "on" when forceOff is set, even with an active non-off value', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${items} label="Fan" .forceOff=${true}></mt-dropdown>`
+      );
+      // active item is 'a' (a non-off value) — but the parent is off
+      expect(tile(el).classList.contains('on')).to.be.false;
+    });
+
     it('is not "on" when nothing is active (uses items[0] for display)', async () => {
       const noActive: SelectorItem[] = [
         { value: 'a', label: 'Alpha', icon: 'mdi:a' },

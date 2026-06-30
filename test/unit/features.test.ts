@@ -513,6 +513,33 @@ describe('mt-climate-selector', () => {
       );
       expect(selectorRow(el)!.label).to.equal('Heating');
     });
+
+    it('forces the off tile style on every climate tile when the mode is off', async () => {
+      // A fan tile whose value is "auto" still reads as off when the unit is off.
+      const hass = makeHass({ 'climate.test': climateState({}, 'off') });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="fan"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)!.forceOff).to.be.true;
+    });
+
+    it('does not force the off style when the mode is active', async () => {
+      const hass = makeHass({ 'climate.test': climateState({}, 'cool') });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="fan"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)!.forceOff).to.be.false;
+    });
   });
 
   describe('order', () => {

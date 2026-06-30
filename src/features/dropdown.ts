@@ -25,6 +25,9 @@ export class MtDropdown extends LitElement {
   @property() variant: 'pill' | 'tile' = 'pill';
   /** Title shown above the value in the `tile` variant. */
   @property() label = '';
+  /** Force the tile's "off" treatment regardless of its value (e.g. the parent
+   * climate is off, so its fan/preset tiles should read as off too). */
+  @property({ type: Boolean }) forceOff = false;
 
   @state() private _open = false;
   @state() private _up = false;
@@ -62,6 +65,7 @@ export class MtDropdown extends LitElement {
    * tile's accent tint and the extra-rounded corners.
    */
   private get _tileOn(): boolean {
+    if (this.forceOff) return false;
     const sel = this.items.find((i) => i.active);
     if (!sel) return false;
     const v = sel.value.toLowerCase();

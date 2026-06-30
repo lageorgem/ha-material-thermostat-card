@@ -16,6 +16,8 @@ export class MtSelectorRow extends LitElement {
   @property({ attribute: false }) items: SelectorItem[] = [];
   @property() display: FeatureDisplay = 'icons';
   @property() label?: string;
+  /** Force the tile's "off" treatment (e.g. the parent climate mode is off). */
+  @property({ type: Boolean }) forceOff = false;
 
   /**
    * Dispatch the selection to the parent feature component.
@@ -88,6 +90,7 @@ export class MtSelectorRow extends LitElement {
       variant="tile"
       .items=${this.items}
       .label=${this.label ?? ''}
+      .forceOff=${this.forceOff}
       @item-selected=${(e: CustomEvent) => this._select(e.detail.value)}
     ></mt-dropdown>`;
   }
