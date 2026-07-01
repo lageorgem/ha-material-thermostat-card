@@ -124,6 +124,43 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('.preset-icon')).to.equal(null);
     });
 
+    it('colors the preset icon with presetIconColor when set', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.presetIcon = 'mdi:leaf';
+      el.presetIconColor = '#4caf50';
+      await el.updateComplete;
+      const icon = el.shadowRoot!.querySelector('.preset-icon')!;
+      expect(icon.getAttribute('style') ?? '').to.contain('color: #4caf50');
+    });
+
+    it('leaves the preset icon uncolored (default) when presetIconColor is unset', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.presetIcon = 'mdi:leaf';
+      await el.updateComplete;
+      const icon = el.shadowRoot!.querySelector('.preset-icon')!;
+      expect(icon.getAttribute('style')).to.equal(null);
+    });
+
+    it('a per-mode override drives the dial color (halo/number)', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.modeColors = { heat: '#abcdef' };
+      await el.updateComplete;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.getAttribute('style')).to.contain('--dial-color: #abcdef');
+    });
+
+    it('falls back to the built-in mode color when no override is set', async () => {
+      const el = await mount();
+      el.mode = 'cool';
+      el.modeColors = { heat: '#abcdef' }; // no override for cool
+      await el.updateComplete;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.getAttribute('style')).to.contain(`--dial-color: ${climateModeColor('cool')}`);
+    });
+
     it('shows the current temp as primary when showCurrentAsPrimary is set', async () => {
       const el = await mount();
       el.mode = 'cool';

@@ -44,6 +44,7 @@ export class MtInputSelect extends LitElement {
         label: overrides.get(v)?.label ?? prettyLabel(v),
         icon: overrides.get(v)?.icon,
         active: v === state.state,
+        color: overrides.get(v)?.color,
       }));
   }
 

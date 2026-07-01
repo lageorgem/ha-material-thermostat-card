@@ -1,5 +1,6 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 /**
  * A tiny text input styled as a **pill** to match {@link MtIconField} — same
@@ -16,6 +17,8 @@ export class MtTextField extends LitElement {
   @property() value = '';
   /** Placeholder + accessible name. */
   @property() label = '';
+  /** Flatten the left corners so a control (e.g. the color pill) attaches seamlessly. */
+  @property({ type: Boolean }) flatLeft = false;
 
   /**
    * Emit the current input value to the parent editor.
@@ -31,6 +34,7 @@ export class MtTextField extends LitElement {
   protected render(): TemplateResult {
     return html`<input
       type="text"
+      class=${classMap({ 'flat-left': this.flatLeft })}
       .value=${this.value ?? ''}
       placeholder=${this.label}
       aria-label=${this.label}
@@ -62,6 +66,12 @@ export class MtTextField extends LitElement {
     }
     input:focus {
       border-color: var(--md-sys-color-primary, var(--primary-color));
+    }
+    /* Attach seamlessly to a control on the left (e.g. the color pill). */
+    input.flat-left {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      border-left: none;
     }
   `;
 }

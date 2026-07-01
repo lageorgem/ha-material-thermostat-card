@@ -978,6 +978,70 @@ describe('mt-climate-feature-editor', () => {
       expect(hideBtn.classList.contains('on')).to.be.true;
     });
   });
+
+  describe('color picker', () => {
+    const withPresets = { 'climate.test': climateState({ preset_modes: ['none', 'eco'] }) };
+
+    it('shows the color field for HVAC modes in any display', async () => {
+      const el = await mount('hvac');
+      expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.not.equal(null);
+    });
+
+    it('shows the color field for preset modes in any display', async () => {
+      const el = await mount('preset', { type: 'climate-preset-modes' }, withPresets);
+      expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.not.equal(null);
+    });
+
+    it('hides the color field for fan in icon/dropdown display', async () => {
+      const el = await mount('fan', { type: 'climate-fan-modes' });
+      expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.equal(null);
+    });
+
+    it('shows the color field for fan in tile display', async () => {
+      const el = await mount('fan', { type: 'climate-fan-modes', display: 'tile' });
+      expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.not.equal(null);
+    });
+
+    it('_defaultColor: hvac→mode color, preset→eco special / else primary, fan→primary', async () => {
+      const hvac = await mount('hvac');
+      expect((hvac as any)._defaultColor('cool')).to.equal(
+        'var(--state-climate-cool-color, #2b9af9)'
+      );
+      const preset = await mount('preset', { type: 'climate-preset-modes' }, withPresets);
+      expect((preset as any)._defaultColor('eco')).to.equal('#4caf50');
+      expect((preset as any)._defaultColor('none')).to.contain('--md-sys-color-primary');
+      const fan = await mount('fan', { type: 'climate-fan-modes' });
+      expect((fan as any)._defaultColor('auto')).to.contain('--md-sys-color-primary');
+    });
+
+    it('color field value-changed sets the color override', async () => {
+      const el = await mount('hvac');
+      const cap = captureEvents('feature-changed');
+      const cf = el.shadowRoot!.querySelector('.opt mt-color-field') as Element;
+      emitValueChanged(cf, '#ff0000');
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.options[0]).to.deep.include({ color: '#ff0000' });
+    });
+
+    it('_setOverride keeps a color and prunes it when reset to undefined', async () => {
+      const set = await mount('hvac');
+      const cap1 = captureEvents('feature-changed');
+      (set as any)._setOverride('cool', { color: '#abcdef' });
+      cap1.stop();
+      expect((cap1.events[0].detail as any).feature.options).to.deep.equal([
+        { value: 'cool', color: '#abcdef' },
+      ]);
+
+      const reset = await mount('hvac', {
+        type: 'climate-hvac-modes',
+        options: [{ value: 'cool', color: '#abcdef' }],
+      });
+      const cap2 = captureEvents('feature-changed');
+      (reset as any)._setOverride('cool', { color: undefined });
+      cap2.stop();
+      expect((cap2.events[0].detail as any).feature.options).to.deep.equal([]);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1221,6 +1285,62 @@ describe('mt-input-select-editor', () => {
         { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
       );
       expect(el.shadowRoot!.querySelector('.opt .opt-hide')!.classList.contains('on')).to.be.true;
+    });
+
+    it('keeps a color override and prunes it when reset', async () => {
+      const el = await withOptions();
+      const cap1 = captureEvents('feature-changed');
+      (el as any)._setOverride('home', { color: '#111111' });
+      cap1.stop();
+      expect((cap1.events[0].detail as any).feature.options).to.deep.equal([
+        { value: 'home', color: '#111111' },
+      ]);
+      const el2 = await mount(
+        {
+          type: 'input-select',
+          entity: 'input_select.mode',
+          options: [{ value: 'home', color: '#111111' }],
+        },
+        { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
+      );
+      const cap2 = captureEvents('feature-changed');
+      (el2 as any)._setOverride('home', { color: undefined });
+      cap2.stop();
+      expect((cap2.events[0].detail as any).feature.options).to.deep.equal([]);
+    });
+  });
+
+  describe('color picker (tile display only)', () => {
+    it('hides the color field in icon/dropdown display', async () => {
+      const el = await withOptions();
+      expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.equal(null);
+    });
+
+    it('shows the color field in tile display and its value drives _setOverride', async () => {
+      const el = await mount(
+        { type: 'input-select', entity: 'input_select.mode', display: 'tile' },
+        { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
+      );
+      const cf = el.shadowRoot!.querySelector('.opt mt-color-field') as Element;
+      expect(cf).to.not.equal(null);
+      const cap = captureEvents('feature-changed');
+      emitValueChanged(cf, '#222222');
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.options[0]).to.deep.include({ color: '#222222' });
+    });
+
+    it('seeds the color field with an existing override color', async () => {
+      const el = await mount(
+        {
+          type: 'input-select',
+          entity: 'input_select.mode',
+          display: 'tile',
+          options: [{ value: 'home', color: '#654321' }],
+        },
+        { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
+      );
+      const cf = el.shadowRoot!.querySelector('.opt mt-color-field') as any;
+      expect(cf.value).to.equal('#654321');
     });
   });
 });
@@ -1471,6 +1591,52 @@ describe('mt-entity-list-editor', () => {
     (el.shadowRoot!.querySelector('.item .del') as HTMLButtonElement).click();
     cap.stop();
     expect((cap.events[0].detail as any).feature.entities).to.deep.equal([]);
+  });
+
+  describe('color picker (switch group in tile display only)', () => {
+    it('hides the color field when not a tile switch group', async () => {
+      // switch-list (no display toggle) never shows the color field
+      const list = await mount({
+        feature: { type: 'switch-list', entities: [{ entity: 'switch.a' }] },
+      });
+      expect(list.shadowRoot!.querySelector('.item mt-color-field')).to.equal(null);
+      // switch-group in icon display: still no color field
+      const iconGroup = await mount({
+        feature: { type: 'switch-group', entities: [{ entity: 'switch.a' }], display: 'icons' },
+        showDisplay: true,
+      });
+      expect(iconGroup.shadowRoot!.querySelector('.item mt-color-field')).to.equal(null);
+    });
+
+    it('shows the color field for a tile switch group and its value drives _updateItem', async () => {
+      const el = await mount({
+        feature: { type: 'switch-group', entities: [{ entity: 'switch.a' }], display: 'tile' },
+        showDisplay: true,
+      });
+      const cf = el.shadowRoot!.querySelector('.item mt-color-field') as Element;
+      expect(cf).to.not.equal(null);
+      const cap = captureEvents('feature-changed');
+      emitValueChanged(cf, '#334455');
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.entities[0]).to.deep.include({ color: '#334455' });
+    });
+
+    it('_updateItem keeps a color and prunes it when reset', async () => {
+      const el = await mount({
+        feature: {
+          type: 'switch-group',
+          entities: [{ entity: 'switch.a', color: '#334455' }],
+          display: 'tile',
+        },
+        showDisplay: true,
+      });
+      const cap = captureEvents('feature-changed');
+      (el as any)._updateItem(0, { color: undefined });
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.entities[0]).to.deep.equal({
+        entity: 'switch.a',
+      });
+    });
   });
 });
 

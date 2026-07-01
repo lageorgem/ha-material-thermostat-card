@@ -1,4 +1,4 @@
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type {
@@ -15,11 +15,17 @@ import {
   fanIcon,
   swingIcon,
   presetIcon,
+  climateModeColor,
+  presetColor,
 } from '../theme';
 import './display-toggle';
 import './width-field';
 import './icon-field';
 import './text-field';
+import './color-field';
+
+/** Theme primary color expression used as the default swatch when unset. */
+const THEME_PRIMARY = 'var(--md-sys-color-primary, var(--primary-color, #6750a4))';
 
 type ClimateFeature =
   | ClimateModesFeatureConfig
@@ -64,6 +70,18 @@ export class MtClimateFeatureEditor extends LitElement {
     if (this.kind === 'fan') return fanIcon(value);
     if (this.kind === 'preset') return presetIcon(value);
     return swingIcon(value);
+  }
+
+  /**
+   * The default swatch color for an option (before any override): the HVAC mode
+   * color, the preset special-case color (eco→green, sleep→blue), else the theme
+   * primary — matching what the rendered feature falls back to.
+   * @param value the option value
+   */
+  private _defaultColor(value: string): string {
+    if (this.kind === 'hvac') return climateModeColor(value);
+    if (this.kind === 'preset') return presetColor(value) ?? THEME_PRIMARY;
+    return THEME_PRIMARY;
   }
 
   /**
@@ -114,8 +132,11 @@ export class MtClimateFeatureEditor extends LitElement {
     // `undefined` = unset (use the default icon); '' = explicit "no icon" (kept).
     if (merged.icon === undefined) delete merged.icon;
     if (!merged.hide) delete merged.hide;
+    // undefined/'' color = reset to the default (theme/mode) color.
+    if (!merged.color) delete merged.color;
 
-    const meaningful = merged.label !== undefined || merged.icon !== undefined || !!merged.hide;
+    const meaningful =
+      merged.label !== undefined || merged.icon !== undefined || !!merged.hide || !!merged.color;
     if (idx >= 0) {
       if (meaningful) options[idx] = merged;
       else options.splice(idx, 1);
@@ -128,6 +149,10 @@ export class MtClimateFeatureEditor extends LitElement {
   protected render(): TemplateResult {
     const values = this._values();
     const display = this.feature.display ?? 'icons';
+    // The color picker is offered for HVAC and preset modes in any display (their
+    // colors feed the dial), and for every selector in tile display (the tile
+    // accent). Fan/swing in icon/dropdown display have no place for a color.
+    const showColor = this.kind === 'hvac' || this.kind === 'preset' || display === 'tile';
     return html`
       <div class="editor">
         <mt-text-field
@@ -156,7 +181,7 @@ export class MtClimateFeatureEditor extends LitElement {
             </p>`
           : html`<ha-sortable handle-selector=".handle" @item-moved=${this._moveOption}>
               <div class="options">
-                ${this._orderedValues().map((value) => this._renderOption(value))}
+                ${this._orderedValues().map((value) => this._renderOption(value, showColor))}
               </div>
             </ha-sortable>`}
       </div>
@@ -166,20 +191,33 @@ export class MtClimateFeatureEditor extends LitElement {
   /**
    * Render the override controls for a single option.
    * @param value the option value
+   * @param showColor whether to show the color picker attached to the title
    */
-  private _renderOption(value: string): TemplateResult {
+  private _renderOption(value: string, showColor: boolean): TemplateResult {
     const ov = this._override(value);
     const hidden = !!ov?.hide;
     return html`
       <div class="opt">
         <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
         <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
-        <mt-text-field
-          class="opt-label"
-          label=${prettyLabel(value)}
-          .value=${ov?.label ?? ''}
-          @value-changed=${(e: CustomEvent) => this._setOverride(value, { label: e.detail.value })}
-        ></mt-text-field>
+        <div class="title-group">
+          ${showColor
+            ? html`<mt-color-field
+                .value=${ov?.color}
+                .defaultColor=${this._defaultColor(value)}
+                @value-changed=${(e: CustomEvent) =>
+                  this._setOverride(value, { color: e.detail.value })}
+              ></mt-color-field>`
+            : nothing}
+          <mt-text-field
+            class="opt-label"
+            label=${prettyLabel(value)}
+            .flatLeft=${showColor}
+            .value=${ov?.label ?? ''}
+            @value-changed=${(e: CustomEvent) =>
+              this._setOverride(value, { label: e.detail.value })}
+          ></mt-text-field>
+        </div>
         <mt-icon-field
           class="opt-icon"
           .hass=${this.hass}
@@ -243,6 +281,16 @@ export class MtClimateFeatureEditor extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    /* The color pill + title field form a single attached pill. */
+    .title-group {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+    .title-group mt-text-field {
+      flex: 1;
+      min-width: 0;
     }
     .opt-icon {
       min-width: 0;

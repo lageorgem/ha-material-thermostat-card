@@ -6,6 +6,7 @@ import './display-toggle';
 import './width-field';
 import './icon-field';
 import './text-field';
+import './color-field';
 import './entity-picker';
 
 /**
@@ -61,6 +62,8 @@ export class MtEntityListEditor extends LitElement {
     if (merged.label === '') delete merged.label;
     // `undefined` = unset (use the default icon); '' = explicit "no icon" (kept).
     if (merged.icon === undefined) delete merged.icon;
+    // undefined/'' color = reset to the theme default.
+    if (!merged.color) delete merged.color;
     items[index] = merged;
     this._setItems(items);
   }
@@ -96,6 +99,8 @@ export class MtEntityListEditor extends LitElement {
 
   protected render(): TemplateResult {
     const display = (this.feature as any).display ?? 'icons';
+    // Color is offered only for the switch group in tile display (it tints the tile).
+    const showColor = this.showDisplay && display === 'tile';
     return html`
       <div class="editor">
         <mt-text-field
@@ -144,13 +149,23 @@ export class MtEntityListEditor extends LitElement {
                       @value-changed=${(e: CustomEvent) =>
                         this._updateItem(index, { icon: e.detail.value })}
                     ></mt-icon-field>
-                    <mt-text-field
-                      class="title-field"
-                      label="Custom title"
-                      .value=${item.label ?? ''}
-                      @value-changed=${(e: CustomEvent) =>
-                        this._updateItem(index, { label: e.detail.value })}
-                    ></mt-text-field>
+                    <div class="title-group">
+                      ${showColor
+                        ? html`<mt-color-field
+                            .value=${item.color}
+                            @value-changed=${(e: CustomEvent) =>
+                              this._updateItem(index, { color: e.detail.value })}
+                          ></mt-color-field>`
+                        : nothing}
+                      <mt-text-field
+                        class="title-field"
+                        label="Custom title"
+                        .flatLeft=${showColor}
+                        .value=${item.label ?? ''}
+                        @value-changed=${(e: CustomEvent) =>
+                          this._updateItem(index, { label: e.detail.value })}
+                      ></mt-text-field>
+                    </div>
                   </div>
                 </div>
                 <button class="del" title="Remove" @click=${() => this._removeItem(index)}>
@@ -212,6 +227,13 @@ export class MtEntityListEditor extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+    /* Color pill + title field attach into a single pill. */
+    .title-group {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
     }
     .title-field {
       flex: 1;

@@ -79,6 +79,11 @@ export class MtCircularDial extends LitElement {
   @property() modeLabel = '';
   /** Optional preset icon shown under the temperature (e.g. the eco leaf). */
   @property() presetIcon?: string;
+  /** Optional color for the preset icon (defaults to the muted variant). */
+  @property() presetIconColor?: string;
+  /** Per-mode color overrides (from the HVAC modes feature). Falls back to the
+   * built-in mode color for any mode not listed. Feeds the halo/ring/number. */
+  @property({ attribute: false }) modeColors: Record<string, string> = {};
   @property() unit = '°C';
   @property({ type: Boolean }) showCurrentAsPrimary = false;
   @property({ type: Boolean }) disabled = false;
@@ -164,10 +169,19 @@ export class MtCircularDial extends LitElement {
     return true; // auto / dry / fan_only keep their own color
   }
 
+  /**
+   * The color for a mode: an explicit per-mode override (from the HVAC feature),
+   * else the built-in semantic mode color.
+   * @param mode the climate mode
+   */
+  private _modeColor(mode: string): string {
+    return this.modeColors[mode] ?? climateModeColor(mode);
+  }
+
   /** The dial's mode color (off / idle modes use the neutral variant). */
   private get _dialColor(): string {
     return COLORED_MODES.includes(this._effectiveMode)
-      ? climateModeColor(this._effectiveMode)
+      ? this._modeColor(this._effectiveMode)
       : MtCircularDial.IDLE_COLOR;
   }
 
@@ -737,7 +751,7 @@ export class MtCircularDial extends LitElement {
       dualSegs.push({
         from: coolSide ? hi : Math.min(lo, cur),
         to: coolSide ? Math.max(hi, cur) : lo,
-        color: coolSide ? climateModeColor('cool') : climateModeColor('heat'),
+        color: coolSide ? this._modeColor('cool') : this._modeColor('heat'),
         opacity: active === null ? 0 : 1,
         cls: 'demand',
       });
@@ -906,7 +920,11 @@ export class MtCircularDial extends LitElement {
    */
   private _renderPresetIcon(): TemplateResult | typeof nothing {
     return this.presetIcon
-      ? html`<ha-icon class="preset-icon" icon=${this.presetIcon}></ha-icon>`
+      ? html`<ha-icon
+          class="preset-icon"
+          icon=${this.presetIcon}
+          style=${this.presetIconColor ? `color: ${this.presetIconColor}` : nothing}
+        ></ha-icon>`
       : nothing;
   }
 

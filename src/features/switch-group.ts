@@ -28,6 +28,7 @@ export class MtSwitchGroup extends LitElement {
           icon: e.icon ?? state?.attributes.icon,
           active: state?.state === 'on',
           disabled: !state || state.state === 'unavailable',
+          color: e.color,
         };
       });
   }

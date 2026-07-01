@@ -107,6 +107,19 @@ export function fanIcon(value: string): string {
   return 'mdi:fan';
 }
 
+/**
+ * Default accent color for a climate preset value: green for "eco"-like presets,
+ * blue for "sleep"-like ones, and undefined otherwise (so the theme's default
+ * color applies). Overridable per option via the color picker.
+ * @param value the preset value
+ */
+export function presetColor(value: string): string | undefined {
+  const v = value.toLowerCase();
+  if (v.includes('eco')) return '#4caf50';
+  if (v.includes('sleep')) return '#2196f3';
+  return undefined;
+}
+
 /** Heuristic icon for a climate preset value (eco/away/home/…). */
 export function presetIcon(value: string): string {
   const v = value.toLowerCase();

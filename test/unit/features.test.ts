@@ -468,7 +468,7 @@ describe('mt-climate-selector', () => {
   });
 
   describe('tile display', () => {
-    it('falls back to the per-kind title ("Mode") and sets the mode-color tile accent', async () => {
+    it('falls back to the per-kind title ("Mode") and gives each mode its mode color', async () => {
       const hass = makeHass({ 'climate.test': climateState({}, 'heat') });
       const el = await fixture<MtClimateSelector>(
         html`<mt-climate-selector
@@ -481,10 +481,66 @@ describe('mt-climate-selector', () => {
       // no configured label -> the default tile title for the hvac kind
       expect(selectorRow(el)!.label).to.equal('Mode');
       expect(selectorRow(el)!.getAttribute('display')).to.equal('tile');
-      // the tile tint accent carries the active mode color
-      const style = selectorRow(el)!.getAttribute('style') ?? '';
-      expect(style).to.contain('--mt-tile-accent');
-      expect(style).to.contain('--state-climate-heat-color');
+      // each mode item carries its mode color (the tile tint is applied from the
+      // active item's color by mt-dropdown).
+      const items = rowItems(el);
+      expect(items.find((i) => i.value === 'heat')!.color).to.contain('--state-climate-heat-color');
+      expect(items.find((i) => i.value === 'cool')!.color).to.contain('--state-climate-cool-color');
+    });
+
+    it('an option color override wins over the default mode color', async () => {
+      const hass = makeHass({ 'climate.test': climateState({}, 'heat') });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="hvac"
+          display="tile"
+          .options=${[{ value: 'heat', color: '#abcdef' }]}
+        ></mt-climate-selector>`
+      );
+      expect(rowItems(el).find((i) => i.value === 'heat')!.color).to.equal('#abcdef');
+    });
+
+    it('preset options default to the eco/sleep special-case colors', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ preset_modes: ['none', 'eco', 'sleep'] }),
+      });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="preset"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      const items = rowItems(el);
+      expect(items.find((i) => i.value === 'eco')!.color).to.equal('#4caf50');
+      expect(items.find((i) => i.value === 'sleep')!.color).to.equal('#2196f3');
+      // a plain preset has no default color (theme default applies)
+      expect(items.find((i) => i.value === 'none')!.color).to.equal(undefined);
+    });
+
+    it('fan/swing options have no default color', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const fan = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="fan"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      expect(rowItems(fan).every((i) => i.color === undefined)).to.be.true;
+      const swing = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="swing"
+          display="tile"
+        ></mt-climate-selector>`
+      );
+      expect(rowItems(swing).every((i) => i.color === undefined)).to.be.true;
     });
 
     it('uses the per-kind title for the fan selector', async () => {
@@ -704,6 +760,19 @@ describe('mt-input-select', () => {
       ></mt-input-select>`
     );
     expect(selectorRow(el)!.label).to.equal('Scene');
+  });
+
+  it('passes a per-option color override through to the item', async () => {
+    const hass = makeHass({ 'input_select.mode': isState(['morning', 'day']) });
+    const el = await fixture<MtInputSelect>(
+      html`<mt-input-select
+        .hass=${hass}
+        entity="input_select.mode"
+        .options=${[{ value: 'day', color: '#123456' }]}
+      ></mt-input-select>`
+    );
+    expect(rowItems(el).find((i) => i.value === 'day')!.color).to.equal('#123456');
+    expect(rowItems(el).find((i) => i.value === 'morning')!.color).to.equal(undefined);
   });
 
   it('respects an explicit order: listed values first, rest natural', async () => {
@@ -928,6 +997,18 @@ describe('mt-switch-group', () => {
     );
     expect(selectorRow(el)!.getAttribute('display')).to.equal('dropdown');
     expect(selectorRow(el)!.label).to.equal('Zone');
+  });
+
+  it('passes a per-entity color through to the item', async () => {
+    const hass = makeHass({ 'switch.a': entityState('switch.a', 'on') });
+    const el = await fixture<MtSwitchGroup>(
+      html`<mt-switch-group
+        .hass=${hass}
+        .entities=${[{ entity: 'switch.a', color: '#00ff00' }, { entity: 'switch.b' }]}
+      ></mt-switch-group>`
+    );
+    expect(rowItems(el).find((i) => i.value === 'switch.a')!.color).to.equal('#00ff00');
+    expect(rowItems(el).find((i) => i.value === 'switch.b')!.color).to.equal(undefined);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   prettyLabel,
   orderValues,
   isOffValue,
+  presetColor,
 } from '../../src/theme';
 import {
   WIDTH_STEP,
@@ -167,6 +168,22 @@ describe('theme', () => {
     it('default → tune-variant', () => {
       expect(presetIcon('manual')).to.equal('mdi:tune-variant');
       expect(presetIcon('')).to.equal('mdi:tune-variant');
+    });
+  });
+
+  describe('presetColor', () => {
+    it('eco-like presets are green', () => {
+      expect(presetColor('eco')).to.equal('#4caf50');
+      expect(presetColor('Eco Comfort')).to.equal('#4caf50');
+    });
+    it('sleep-like presets are blue', () => {
+      expect(presetColor('sleep')).to.equal('#2196f3');
+      expect(presetColor('SLEEP')).to.equal('#2196f3');
+    });
+    it('any other preset has no default color', () => {
+      expect(presetColor('none')).to.equal(undefined);
+      expect(presetColor('away')).to.equal(undefined);
+      expect(presetColor('boost')).to.equal(undefined);
     });
   });
 

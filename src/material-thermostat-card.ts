@@ -20,8 +20,9 @@ import {
   CARD_PADDING_X,
   pctToSpan,
 } from './grid';
-import { tokens, climateModeColor, prettyLabel, presetIcon } from './theme';
+import { tokens, climateModeColor, prettyLabel, presetIcon, presetColor } from './theme';
 import type {
+  ClimateModesFeatureConfig,
   ClimatePresetFeatureConfig,
   FeatureConfig,
   MaterialThermostatCardConfig,
@@ -362,6 +363,38 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     return presetIcon(preset);
   }
 
+  /**
+   * Per-mode color overrides configured on the HVAC modes feature — fed to the
+   * dial so a custom mode color drives the halo, temperature and mode icon.
+   * Empty when there is no HVAC feature or no color overrides.
+   */
+  private _hvacColors(): Record<string, string> {
+    const feat = this._config.features?.find((f) => f.type === 'climate-hvac-modes') as
+      | ClimateModesFeatureConfig
+      | undefined;
+    const map: Record<string, string> = {};
+    for (const o of feat?.options ?? []) {
+      if (o.color) map[o.value] = o.color;
+    }
+    return map;
+  }
+
+  /**
+   * The color for the active preset icon under the dial number: the per-option
+   * override, else the preset special-case color (eco→green, sleep→blue). Mirrors
+   * {@link _presetIcon} — undefined when no preset icon is shown or no color applies.
+   */
+  private _presetColor(): string | undefined {
+    const feat = this._config.features?.find((f) => f.type === 'climate-preset-modes') as
+      | ClimatePresetFeatureConfig
+      | undefined;
+    if (!feat) return undefined;
+    const preset = this._stateObj?.attributes.preset_mode;
+    if (!preset || preset === 'none' || preset === 'off') return undefined;
+    const override = feat.options?.find((o) => o.value === preset);
+    return override?.color ?? presetColor(preset);
+  }
+
   /** Color basis for the dial: prefer the active HVAC action, else the mode. */
   private _colorMode(): string {
     const a = this._stateObj?.attributes;
@@ -415,6 +448,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .mode=${colorMode}
               .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
               .presetIcon=${this._presetIcon()}
+              .presetIconColor=${this._presetColor()}
+              .modeColors=${this._hvacColors()}
               .unit=${unit}
               .dual=${this._isDual}
               .lowValue=${this._targetLow}

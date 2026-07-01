@@ -1,4 +1,4 @@
-export const CARD_VERSION = '1.6.8';
+export const CARD_VERSION = '1.7.0';
 
 /** Lovelace card type (used as `custom:material-thermostat-card`). */
 export const CARD_TYPE = 'material-thermostat-card';

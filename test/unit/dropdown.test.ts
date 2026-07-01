@@ -321,6 +321,24 @@ describe('mt-dropdown', () => {
       expect(tile(el).classList.contains('on')).to.be.false;
     });
 
+    it('tints the tile with the active item color via --mt-tile-accent', async () => {
+      const colored: SelectorItem[] = [
+        { value: 'heat', label: 'Heat', icon: 'mdi:fire', active: true, color: '#ff8100' },
+        { value: 'off', label: 'Off' },
+      ];
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${colored} label="Mode"></mt-dropdown>`
+      );
+      expect(tile(el).getAttribute('style') ?? '').to.contain('--mt-tile-accent: #ff8100');
+    });
+
+    it('sets no --mt-tile-accent when the active item has no color', async () => {
+      const el = await fixture<MtDropdown>(
+        html`<mt-dropdown variant="tile" .items=${items} label="Mode"></mt-dropdown>`
+      );
+      expect(tile(el).getAttribute('style') ?? '').to.not.contain('--mt-tile-accent');
+    });
+
     it('opens the shared menu on tap and selecting an option emits item-selected + closes', async () => {
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown variant="tile" .items=${items} label="Mode"></mt-dropdown>`

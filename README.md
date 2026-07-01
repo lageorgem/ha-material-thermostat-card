@@ -57,7 +57,7 @@ gracefully under any Home Assistant theme.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
 - 🏠 **Google‑Home‑style dial**: no mode label cluttering the number (the HVAC chips show the mode), and the active **preset icon** (e.g. the eco leaf) under the temperature when the preset‑modes feature is added.
 - 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row**, a **dropdown**, or a **Google‑Home‑style tile** (icon + title + current value), each with an optional **title**.
-- ✏️ Per‑option **label / icon / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, plus a custom title).
+- ✏️ Per‑option **label / icon / color / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, a **color pill** that defaults to the theme/mode color, plus a custom title).
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.
 - 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
 - 📐 **Percentage widths** that fill and wrap correctly at any card size, with a side‑by‑side wide mode.
@@ -256,6 +256,17 @@ shown. Unlisted values keep their Home Assistant defaults.
 | `label` | string | Replacement display label |
 | `icon` | string | Replacement icon (`mdi:…` or `mt:…`) |
 | `hide` | boolean | Remove this option from the row |
+| `color` | string | Accent color (hex) for the option — see **Colors** below. Unset uses the theme/default color |
+
+> **Colors.** In the visual editor a **color pill** attaches to the left of each option's title. It
+> defaults to the color the theme would use — the **HVAC mode colors** (heat→orange, cool→blue…) are
+> pre‑picked for HVAC modes, and **`eco`‑like presets are green / `sleep`‑like presets blue** — and
+> can be reset back to that default at any time. Where a chosen color shows up:
+> - **HVAC modes** — feeds the **dial** (halo, temperature, mode icon) for the active mode, and the tile tint in `tile` display.
+> - **Preset modes** — feeds the **preset icon under the dial number**, and the tile tint in `tile` display.
+> - **Any other selector** (fan/swing/`input-select`/`switch-group`) — applies to the **tile tint in `tile` display** only.
+>
+> The picker is shown for HVAC and preset modes in any display, and for every selector in `tile` display.
 
 <p align="center">
   <img src="assets/selectors.png" alt="A card using a HVAC dropdown, fan-mode option overrides, and an input_select row" width="400">

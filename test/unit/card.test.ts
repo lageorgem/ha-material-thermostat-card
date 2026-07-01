@@ -350,6 +350,70 @@ describe('material-thermostat-card', () => {
     });
   });
 
+  describe('dial colors (HVAC + preset overrides)', () => {
+    const presetState = (preset_mode?: string) =>
+      climateState({ preset_modes: ['none', 'eco', 'sleep'], preset_mode });
+
+    it('preset icon color defaults to the eco special-case color', async () => {
+      const el = track(
+        await mount(baseConfig({ features: [{ type: 'climate-preset-modes' }] }), {
+          [ENTITY]: presetState('eco'),
+        })
+      );
+      expect(dial(el).presetIconColor).to.equal('#4caf50');
+    });
+
+    it('preset icon color honors a per-option override', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              { type: 'climate-preset-modes', options: [{ value: 'eco', color: '#ff00ff' }] },
+            ],
+          }),
+          { [ENTITY]: presetState('eco') }
+        )
+      );
+      expect(dial(el).presetIconColor).to.equal('#ff00ff');
+    });
+
+    it('preset icon color is undefined without the feature and for the "none" preset', async () => {
+      const noFeat = track(await mount(baseConfig(), { [ENTITY]: presetState('eco') }));
+      expect(dial(noFeat).presetIconColor).to.equal(undefined);
+      const none = track(
+        await mount(baseConfig({ features: [{ type: 'climate-preset-modes' }] }), {
+          [ENTITY]: presetState('none'),
+        })
+      );
+      expect(dial(none).presetIconColor).to.equal(undefined);
+    });
+
+    it('modeColors is empty without an HVAC feature or without color overrides', async () => {
+      const noFeat = track(await mount(baseConfig()));
+      expect(dial(noFeat).modeColors).to.deep.equal({});
+      const noColors = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] }))
+      );
+      expect(dial(noColors).modeColors).to.deep.equal({});
+    });
+
+    it('modeColors carries the HVAC per-mode color overrides', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              {
+                type: 'climate-hvac-modes',
+                options: [{ value: 'heat', color: '#ff8800' }, { value: 'cool' }],
+              },
+            ],
+          })
+        )
+      );
+      expect(dial(el).modeColors).to.deep.equal({ heat: '#ff8800' });
+    });
+  });
+
   describe('_isDual', () => {
     it('true when heat_cool with low+high present', async () => {
       const el = track(

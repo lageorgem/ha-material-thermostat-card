@@ -63,4 +63,14 @@ describe('mt-text-field', () => {
     i.dispatchEvent(new Event('input'));
     expect(await p).to.equal('');
   });
+
+  it('has no flat-left class by default and adds it when flatLeft is set', async () => {
+    const plain = await mount();
+    expect(input(plain).classList.contains('flat-left')).to.be.false;
+    const flat = await fixture<MtTextField>(
+      html`<mt-text-field .flatLeft=${true}></mt-text-field>`
+    );
+    await flat.updateComplete;
+    expect(input(flat).classList.contains('flat-left')).to.be.true;
+  });
 });

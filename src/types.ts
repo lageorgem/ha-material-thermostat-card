@@ -26,6 +26,8 @@ export interface OptionOverride {
   label?: string;
   icon?: string;
   hide?: boolean;
+  /** Accent color override (hex). Unset = the theme/default color for the option. */
+  color?: string;
 }
 
 /** A single entity entry for switch/button list-style features. */
@@ -33,6 +35,8 @@ export interface EntityItem {
   entity: string;
   label?: string;
   icon?: string;
+  /** Accent color override (hex), applied to the tile in tile display. */
+  color?: string;
 }
 
 interface BaseSelectorFeature {
@@ -182,4 +186,6 @@ export interface SelectorItem {
   icon?: string;
   active?: boolean;
   disabled?: boolean;
+  /** Accent color (CSS) for this option — feeds the tile tint in tile display. */
+  color?: string;
 }

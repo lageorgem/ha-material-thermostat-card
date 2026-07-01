@@ -27,8 +27,23 @@ exists on every feature. The `tile` display is a Google-Home-style card showing
 the current value (see the selector section below) — distinct from the standalone
 `entity-tile` feature.
 
+### Per-option colors (`OptionOverride.color` / `EntityItem.color`)
+Per-option **`color?`** (hex) overrides the accent color. Editor UI: `mt-color-field`
+(`editors/color-field.ts`) — a **half-pill swatch** attached to the left of the
+title (`mt-text-field` gets `flatLeft`), opening a popover with a native color
+input + **Reset to default**. The swatch's `defaultColor` (shown when unset) is
+`climateModeColor(value)` for HVAC, `presetColor(value)` (eco→`#4caf50`,
+sleep→`#2196f3`, `theme.ts`) for presets, else the theme primary. Visibility: HVAC
+& preset in **any** display, every selector in **tile** display (and switch-group
+only, among entity lists). Where a color is applied at render time:
+- **HVAC** — the card's `_hvacColors()` builds a `{mode: hex}` map → `mt-circular-dial.modeColors`; `_modeColor()` uses it for the halo/ring/number/mode-icon (+dual overshoot bands). Also the item `color` on the tile.
+- **Preset** — the card's `_presetColor()` → `mt-circular-dial.presetIconColor` colors the preset icon under the number. Also the tile.
+- **Others** — only the tile: `mt-dropdown._renderTile` sets `--mt-tile-accent` from the active item's `color`.
+The features attach `color` to each `SelectorItem` (`climate-selector`/`input-select`
+build it from override+default; `switch-group` from `entity.color`).
+
 ### Per-option overrides (`OptionOverride`) + order
-`{ value, label?, icon?, hide? }` — supported by the three `climate-*` selectors
+`{ value, label?, icon?, hide?, color? }` — supported by the three `climate-*` selectors
 and `input-select`. `value` keys to an underlying option; `hide:true` removes it.
 Those features also accept **`order?: string[]`** (an explicit display order of
 option values). The selectors apply it via `orderValues(all, order)` in
@@ -37,7 +52,7 @@ the entity adding/removing options). The editors persist it by drag-reordering
 the option rows (`ha-sortable` + a `.handle`, `_moveOption` → emit `{ order }`).
 
 ### List items (`EntityItem`)
-`{ entity, label?, icon? }` — `switch-group.entities`, `switch-list.entities`,
+`{ entity, label?, icon?, color? }` — `switch-group.entities`, `switch-list.entities`,
 `button-list.items` (note the **`items`** key for button-list, **`entities`** for
 the others — the shared editor takes an `itemsKey` prop to handle this). The
 shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,

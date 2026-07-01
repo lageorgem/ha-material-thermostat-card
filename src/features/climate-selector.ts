@@ -10,6 +10,7 @@ import {
   prettyLabel,
   orderValues,
   climateModeColor,
+  presetColor,
 } from '../theme';
 import './selector-row';
 
@@ -65,23 +66,31 @@ export class MtClimateSelector extends LitElement {
     let values: string[] = [];
     let active: string | undefined;
     let defaultIcon: (v: string) => string | undefined;
+    // Default accent per option: HVAC modes carry their mode color, presets the
+    // eco/sleep special-case color, fan/swing none (theme default). An explicit
+    // per-option `color` override always wins.
+    let defaultColor: (v: string) => string | undefined;
 
     if (this.kind === 'hvac') {
       values = state.attributes.hvac_modes ?? [];
       active = state.state;
       defaultIcon = (v) => HVAC_MODE_ICONS[v] ?? 'mdi:thermostat';
+      defaultColor = (v) => climateModeColor(v);
     } else if (this.kind === 'fan') {
       values = state.attributes.fan_modes ?? [];
       active = state.attributes.fan_mode;
       defaultIcon = (v) => fanIcon(v);
+      defaultColor = () => undefined;
     } else if (this.kind === 'preset') {
       values = state.attributes.preset_modes ?? [];
       active = state.attributes.preset_mode;
       defaultIcon = (v) => presetIcon(v);
+      defaultColor = (v) => presetColor(v);
     } else {
       values = state.attributes.swing_modes ?? [];
       active = state.attributes.swing_mode;
       defaultIcon = (v) => swingIcon(v);
+      defaultColor = () => undefined;
     }
 
     return orderValues(values, this.order)
@@ -91,6 +100,7 @@ export class MtClimateSelector extends LitElement {
         label: overrides.get(v)?.label ?? prettyLabel(v),
         icon: overrides.get(v)?.icon ?? defaultIcon(v),
         active: v === active,
+        color: overrides.get(v)?.color ?? defaultColor(v),
       }));
   }
 
@@ -120,15 +130,12 @@ export class MtClimateSelector extends LitElement {
     // semantic color (cool→blue, heat→orange, …) when the Material You primary
     // token is absent — so on the default theme the modes aren't all the theme's
     // generic accent. With material-you-theme present, the M3 primary wins.
-    // The tile variant always tints with the mode color (`--mt-tile-accent`),
-    // per the "apply a tint of the mode color" requirement.
+    // (The tile tint comes from each item's `color`, applied by mt-dropdown.)
     const styleOverride =
       this.kind === 'hvac'
         ? `--mt-selected-bg: var(--md-sys-color-primary, ${climateModeColor(
             this._stateObj?.state
-          )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff); --mt-tile-accent: ${climateModeColor(
-            this._stateObj?.state
-          )};`
+          )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff);`
         : nothing;
     // In tile display, fall back to a sensible per-kind title ("Mode", "Fan", …)
     // so the tile reads like Google Home even without a configured label.

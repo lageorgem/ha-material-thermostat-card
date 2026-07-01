@@ -137,9 +137,13 @@ export class MtDropdown extends LitElement {
    * @param active the currently active (or first) item
    */
   private _renderTile(active: SelectorItem | undefined): TemplateResult {
+    // The active option's color tints the tile (via --mt-tile-accent); unset
+    // falls back to the primary in the tile styles.
+    const accent = active?.color ? `--mt-tile-accent: ${active.color}` : nothing;
     return html`
       <button
         class=${classMap({ tile: true, on: this._tileOn, open: this._open })}
+        style=${accent}
         aria-haspopup="listbox"
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}

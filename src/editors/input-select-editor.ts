@@ -1,4 +1,4 @@
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { InputSelectFeatureConfig, OptionOverride } from '../types';
@@ -7,6 +7,7 @@ import './display-toggle';
 import './width-field';
 import './icon-field';
 import './text-field';
+import './color-field';
 import './entity-picker';
 
 /**
@@ -75,7 +76,10 @@ export class MtInputSelectEditor extends LitElement {
     // `undefined` = unset (use the default icon); '' = explicit "no icon" (kept).
     if (merged.icon === undefined) delete merged.icon;
     if (!merged.hide) delete merged.hide;
-    const meaningful = merged.label !== undefined || merged.icon !== undefined || !!merged.hide;
+    // undefined/'' color = reset to the theme default.
+    if (!merged.color) delete merged.color;
+    const meaningful =
+      merged.label !== undefined || merged.icon !== undefined || !!merged.hide || !!merged.color;
     if (idx >= 0) {
       if (meaningful) options[idx] = merged;
       else options.splice(idx, 1);
@@ -126,15 +130,27 @@ export class MtInputSelectEditor extends LitElement {
               ${this._orderedValues().map((value) => {
                 const ov = this._override(value);
                 const hidden = !!ov?.hide;
+                // Color is offered only in tile display (it tints the tile).
+                const showColor = display === 'tile';
                 return html`<div class="opt">
                   <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                   <div class="opt-name" title=${value}>${prettyLabel(value)}</div>
-                  <mt-text-field
-                    label=${prettyLabel(value)}
-                    .value=${ov?.label ?? ''}
-                    @value-changed=${(e: CustomEvent) =>
-                      this._setOverride(value, { label: e.detail.value })}
-                  ></mt-text-field>
+                  <div class="title-group">
+                    ${showColor
+                      ? html`<mt-color-field
+                          .value=${ov?.color}
+                          @value-changed=${(e: CustomEvent) =>
+                            this._setOverride(value, { color: e.detail.value })}
+                        ></mt-color-field>`
+                      : nothing}
+                    <mt-text-field
+                      label=${prettyLabel(value)}
+                      .flatLeft=${showColor}
+                      .value=${ov?.label ?? ''}
+                      @value-changed=${(e: CustomEvent) =>
+                        this._setOverride(value, { label: e.detail.value })}
+                    ></mt-text-field>
+                  </div>
                   <mt-icon-field
                     .hass=${this.hass}
                     .value=${ov?.icon}
@@ -203,6 +219,15 @@ export class MtInputSelectEditor extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .title-group {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+    .title-group mt-text-field {
+      flex: 1;
+      min-width: 0;
     }
     mt-icon-field {
       min-width: 0;
