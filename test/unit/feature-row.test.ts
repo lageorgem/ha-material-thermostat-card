@@ -127,10 +127,25 @@ describe('mt-feature-row', () => {
       expect(el.shadowRoot!.querySelector('mt-button-list')).to.not.equal(null);
     });
 
-    it('entity-tile -> mt-entity-tile', async () => {
-      const hass = makeHass({ 'sensor.x': { entity_id: 'sensor.x', state: '1', attributes: {} } });
+    it('entity-tile -> mt-entity-tile (forceOff false when the climate is not off)', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({}, 'cool'),
+        'sensor.x': entityState('sensor.x', '1'),
+      });
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x' });
-      expect(el.shadowRoot!.querySelector('mt-entity-tile')).to.not.equal(null);
+      const tile = el.shadowRoot!.querySelector('mt-entity-tile') as any;
+      expect(tile).to.not.equal(null);
+      expect(tile.forceOff).to.equal(false);
+    });
+
+    it('entity-tile -> forceOff true when the card climate entity is off', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({}, 'off'),
+        'sensor.x': entityState('sensor.x', '1'),
+      });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x' });
+      const tile = el.shadowRoot!.querySelector('mt-entity-tile') as any;
+      expect(tile.forceOff).to.equal(true);
     });
 
     it('comfort -> mt-comfort, threading the shared feels-like sensors', async () => {

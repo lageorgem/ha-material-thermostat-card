@@ -351,7 +351,7 @@ on/off). Runs `tap_action` if set, otherwise the entity's natural action.
 | `name` | string | friendly name | Tile title |
 | `icon` | string | entity / domain icon | Tile icon |
 | `tap_action` | [action](https://www.home-assistant.io/dashboards/actions/) | natural action | Standard Lovelace action (`toggle`, `more-info`, `navigate`, `call-service`, `url`, `none`, …) |
-| `compact` | boolean | `false` | Icon + value only (no title) — fits more per row |
+| `compact` | boolean | `false` | Icon only (no title or value) — fits more per row |
 | `width` | number `10`–`100` | `50` | Width as a percentage of the card |
 
 **Default tap action** (when `tap_action` is unset): press for `button`/`input_button`/`scene`/`script`,

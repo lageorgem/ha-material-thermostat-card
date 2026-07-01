@@ -51,7 +51,13 @@ shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
   `more-info`, `toggle`, `url`, `navigate`, `call-service`/`perform-action`,
   `default`.
 - Degradation by width: `width:1` → icon-only pill; `compact:true` **or**
-  `width ≤ 2` → icon + value (no title); else full tile (icon + title + value).
+  `width ≤ 2` → icon only (no title, no value); else full tile (icon + title + value).
+- Shares its look with the selector dropdown's tile variant via
+  `features/tile-styles.ts` (`tileStyles`). The tile takes the accent "on"
+  treatment (soft tint + extra-rounded corners) when its value is **not falsy**
+  (`isOffValue` in `theme.ts`: off/none/false/null/0/unavailable/unknown, else on),
+  and is forced to the off treatment via `forceOff` (threaded from `feature-row`)
+  when the card's **climate entity is off** — matching the climate selectors.
 
 ### Feels‑like + the comfort feature (`calc/`, `features/comfort.ts`)
 Card‑level `feels_like: { temperature?, humidity?, show_as_current? }` (in

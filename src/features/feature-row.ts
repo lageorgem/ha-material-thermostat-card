@@ -30,6 +30,14 @@ export class MtFeatureRow extends LitElement {
   @state() private _comfortVisible = false;
 
   /**
+   * Whether the card's climate entity is off — so entity tiles read as off too
+   * (matching the climate selectors' `forceOff` behavior).
+   */
+  private get _climateOff(): boolean {
+    return this.hass?.states?.[this.entityId]?.state === 'off';
+  }
+
+  /**
    * Size the host to its column span. The card's feature grid auto-flows these,
    * wrapping to a new row when a feature's span doesn't fit in the remaining
    * columns. The comfort row collapses (host hidden) until it has trustworthy
@@ -103,7 +111,11 @@ export class MtFeatureRow extends LitElement {
           .label=${feature.label}
         ></mt-button-list>`;
       case 'entity-tile':
-        return html`<mt-entity-tile .hass=${this.hass} .config=${feature}></mt-entity-tile>`;
+        return html`<mt-entity-tile
+          .hass=${this.hass}
+          .config=${feature}
+          .forceOff=${this._climateOff}
+        ></mt-entity-tile>`;
       case 'sensor-list':
         return html`<mt-sensor-list
           .hass=${this.hass}

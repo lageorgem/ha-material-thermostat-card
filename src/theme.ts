@@ -146,6 +146,28 @@ export function orderValues(all: string[], order?: string[]): string[] {
   return [...ordered, ...all.filter((v) => !seen.has(v))];
 }
 
+/**
+ * Whether a tile value/state reads as "off" (falsy), so the tile shows its
+ * neutral, squarer treatment rather than the accent-tinted, extra-rounded "on"
+ * treatment. Covers the explicit off states (`off`/`none`) plus the generically
+ * falsy values (empty, `false`, `null`, `0`, `unavailable`, `unknown`), all
+ * case-insensitive. Anything else is considered "on".
+ * @param value the raw state/option value
+ */
+export function isOffValue(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return (
+    v === '' ||
+    v === 'off' ||
+    v === 'none' ||
+    v === 'false' ||
+    v === 'null' ||
+    v === '0' ||
+    v === 'unavailable' ||
+    v === 'unknown'
+  );
+}
+
 /** Turn an entity option value into a human label ("fan_only" -> "Fan Only"). */
 export function prettyLabel(value: string): string {
   if (value === 'heat_cool') return 'Heat/Cool';

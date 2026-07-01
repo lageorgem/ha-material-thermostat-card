@@ -22,7 +22,7 @@ test('renders the dial and all feature rows', async ({ page }) => {
   // the big center temperature shows the target (21)
   await expect(page.locator('mt-circular-dial .value-text')).toHaveText('21.0');
   // the entity tile shows its sensor value + unit
-  await expect(page.locator('mt-entity-tile .sub')).toHaveText('52 %');
+  await expect(page.locator('mt-entity-tile .value')).toHaveText('52 %');
 });
 
 test('selecting an HVAC mode chip calls climate.set_hvac_mode', async ({ page }) => {

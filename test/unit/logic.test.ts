@@ -7,6 +7,7 @@ import {
   presetIcon,
   prettyLabel,
   orderValues,
+  isOffValue,
 } from '../../src/theme';
 import {
   WIDTH_STEP,
@@ -202,6 +203,28 @@ describe('theme', () => {
 
     it('ignores order values not present in the list', () => {
       expect(orderValues(['a', 'b'], ['x', 'b'])).to.deep.equal(['b', 'a']);
+    });
+  });
+
+  describe('isOffValue', () => {
+    // Each falsy value hits a distinct branch of the || chain.
+    ['', 'off', 'none', 'false', 'null', '0', 'unavailable', 'unknown'].forEach((v) => {
+      it(`treats "${v || '(empty)'}" as off`, () => {
+        expect(isOffValue(v)).to.be.true;
+      });
+    });
+
+    it('is case-insensitive and trims whitespace', () => {
+      expect(isOffValue('  OFF ')).to.be.true;
+      expect(isOffValue('None')).to.be.true;
+      expect(isOffValue('UNAVAILABLE')).to.be.true;
+    });
+
+    it('treats any other value as "on"', () => {
+      expect(isOffValue('on')).to.be.false;
+      expect(isOffValue('21')).to.be.false;
+      expect(isOffValue('cool')).to.be.false;
+      expect(isOffValue('heat')).to.be.false;
     });
   });
 });

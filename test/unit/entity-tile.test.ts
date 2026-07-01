@@ -31,7 +31,7 @@ describe('mt-entity-tile', () => {
     it('returns undefined (no .sub) when there is no state', async () => {
       const hass = makeHass({});
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.missing' });
-      expect(el.shadowRoot!.querySelector('.sub')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
     });
 
     it('sensor with unit_of_measurement -> "value unit"', async () => {
@@ -39,7 +39,7 @@ describe('mt-entity-tile', () => {
         'sensor.temp': entityState('sensor.temp', '21', { unit_of_measurement: '°C' }),
       });
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp' });
-      const sub = el.shadowRoot!.querySelector('.sub');
+      const sub = el.shadowRoot!.querySelector('.value');
       expect(sub).to.not.equal(null);
       expect(sub!.textContent).to.equal('21 °C');
     });
@@ -49,7 +49,7 @@ describe('mt-entity-tile', () => {
         'sensor.mode': entityState('sensor.mode', 'idle'),
       });
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.mode' });
-      const sub = el.shadowRoot!.querySelector('.sub');
+      const sub = el.shadowRoot!.querySelector('.value');
       expect(sub).to.not.equal(null);
       expect(sub!.textContent).to.equal('idle');
     });
@@ -60,7 +60,7 @@ describe('mt-entity-tile', () => {
         const id = `${domain}.x`;
         const hass = makeHass({ [id]: entityState(id, 'on') });
         const el = await mount(hass, { type: 'entity-tile', entity: id });
-        const sub = el.shadowRoot!.querySelector('.sub');
+        const sub = el.shadowRoot!.querySelector('.value');
         expect(sub).to.not.equal(null);
         expect(sub!.textContent).to.equal('On');
       });
@@ -69,7 +69,7 @@ describe('mt-entity-tile', () => {
         const id = `${domain}.x`;
         const hass = makeHass({ [id]: entityState(id, 'off') });
         const el = await mount(hass, { type: 'entity-tile', entity: id });
-        const sub = el.shadowRoot!.querySelector('.sub');
+        const sub = el.shadowRoot!.querySelector('.value');
         expect(sub).to.not.equal(null);
         expect(sub!.textContent).to.equal('Off');
       });
@@ -81,7 +81,7 @@ describe('mt-entity-tile', () => {
         const id = `${domain}.x`;
         const hass = makeHass({ [id]: entityState(id, 'whatever') });
         const el = await mount(hass, { type: 'entity-tile', entity: id });
-        expect(el.shadowRoot!.querySelector('.sub')).to.equal(null);
+        expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
       });
     });
 
@@ -90,7 +90,7 @@ describe('mt-entity-tile', () => {
         'climate.ac': entityState('climate.ac', 'cool'),
       });
       const el = await mount(hass, { type: 'entity-tile', entity: 'climate.ac' });
-      const sub = el.shadowRoot!.querySelector('.sub');
+      const sub = el.shadowRoot!.querySelector('.value');
       expect(sub).to.not.equal(null);
       expect(sub!.textContent).to.equal('cool');
     });
@@ -190,11 +190,11 @@ describe('mt-entity-tile', () => {
       expect(tile!.classList.contains('icon-only')).to.be.true;
       expect(tile!.querySelector('ha-icon')).to.not.equal(null);
       expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.val')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
       expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
     });
 
-    it('compact:true -> .tile.compact (.ic + .val, no .title)', async () => {
+    it('compact:true -> .tile.compact showing only the icon (no value, no title)', async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', { unit_of_measurement: '°C' }),
       });
@@ -206,10 +206,11 @@ describe('mt-entity-tile', () => {
       const tile = el.shadowRoot!.querySelector('.tile');
       expect(tile!.classList.contains('compact')).to.be.true;
       expect(el.shadowRoot!.querySelector('.ic')).to.not.equal(null);
-      const val = el.shadowRoot!.querySelector('.val');
-      expect(val).to.not.equal(null);
-      expect(val!.textContent).to.equal('21 °C');
+      expect(el.shadowRoot!.querySelector('.ic ha-icon')).to.not.equal(null);
+      // compact shows only the icon — no value line and no title
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
       expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.text')).to.equal(null);
     });
 
     it('width<=2 -> .tile.compact', async () => {
@@ -219,24 +220,11 @@ describe('mt-entity-tile', () => {
       const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', width: 2 });
       const tile = el.shadowRoot!.querySelector('.tile');
       expect(tile!.classList.contains('compact')).to.be.true;
+      // still icon-only even though the sensor has a value
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
     });
 
-    it('compact tile without a secondary value renders no .val', async () => {
-      // button domain -> _secondary() returns undefined
-      const hass = makeHass({
-        'button.x': entityState('button.x', 'unknown'),
-      });
-      const el = await mount(hass, {
-        type: 'entity-tile',
-        entity: 'button.x',
-        compact: true,
-      });
-      const tile = el.shadowRoot!.querySelector('.tile');
-      expect(tile!.classList.contains('compact')).to.be.true;
-      expect(el.shadowRoot!.querySelector('.val')).to.equal(null);
-    });
-
-    it('otherwise -> full .tile with .title and .sub (when secondary)', async () => {
+    it('otherwise -> full .tile with .title and .value (when secondary)', async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', {
           unit_of_measurement: '°C',
@@ -250,58 +238,85 @@ describe('mt-entity-tile', () => {
       expect(tile!.classList.contains('icon-only')).to.be.false;
       expect(el.shadowRoot!.querySelector('.ic')).to.not.equal(null);
       expect(el.shadowRoot!.querySelector('.title')!.textContent).to.equal('Temp');
-      expect(el.shadowRoot!.querySelector('.sub')!.textContent).to.equal('21 °C');
+      expect(el.shadowRoot!.querySelector('.value')!.textContent).to.equal('21 °C');
     });
 
-    it('full .tile with no secondary renders no .sub', async () => {
+    it('full .tile with no secondary renders no .value', async () => {
       // button -> no secondary
       const hass = makeHass({
         'button.x': entityState('button.x', 'unknown', { friendly_name: 'Press Me' }),
       });
       const el = await mount(hass, { type: 'entity-tile', entity: 'button.x' });
       expect(el.shadowRoot!.querySelector('.title')!.textContent).to.equal('Press Me');
-      expect(el.shadowRoot!.querySelector('.sub')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
     });
   });
 
-  describe('_isOn highlight', () => {
-    it('icon-only tile gets `on` class when state is on', async () => {
+  describe('tile "on" treatment (color + roundness)', () => {
+    /** The rendered `.tile` button. */
+    const tileOf = (el: MtEntityTile) => el.shadowRoot!.querySelector('.tile')!;
+
+    it('icon-only tile gets `on` class when the value is not falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
       const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
-      const tile = el.shadowRoot!.querySelector('.tile')!;
-      expect(tile.classList.contains('on')).to.be.true;
+      expect(tileOf(el).classList.contains('on')).to.be.true;
     });
 
-    it('icon-only tile lacks `on` class when state is off', async () => {
+    it('icon-only tile lacks `on` class when the value is falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
       const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
-      const tile = el.shadowRoot!.querySelector('.tile')!;
-      expect(tile.classList.contains('on')).to.be.false;
+      expect(tileOf(el).classList.contains('on')).to.be.false;
     });
 
-    it('compact tile .ic gets `on` class when state is on', async () => {
+    it('compact tile gets `on` class when the value is not falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, {
-        type: 'entity-tile',
-        entity: 'switch.x',
-        compact: true,
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', compact: true });
+      expect(tileOf(el).classList.contains('on')).to.be.true;
+    });
+
+    it('full tile gets `on` class when the value is not falsy', async () => {
+      const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
+      expect(tileOf(el).classList.contains('on')).to.be.true;
+    });
+
+    it('full tile lacks `on` class when the value is falsy', async () => {
+      const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
+      expect(tileOf(el).classList.contains('on')).to.be.false;
+    });
+
+    it('a sensor with a real value reads as "on" (colored)', async () => {
+      const hass = makeHass({ 'sensor.temp': entityState('sensor.temp', '21') });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', width: 3 });
+      expect(tileOf(el).classList.contains('on')).to.be.true;
+    });
+
+    const falsyStates = ['off', 'none', 'false', 'null', '0', 'unavailable', 'unknown', ''];
+    falsyStates.forEach((s) => {
+      it(`treats "${s || '(empty)'}" as off (no accent)`, async () => {
+        const hass = makeHass({ 'sensor.x': entityState('sensor.x', s) });
+        const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x', width: 3 });
+        expect(tileOf(el).classList.contains('on')).to.be.false;
       });
-      const ic = el.shadowRoot!.querySelector('.ic')!;
-      expect(ic.classList.contains('on')).to.be.true;
     });
 
-    it('full tile .ic gets `on` class when state is on', async () => {
+    it('is off when there is no state at all', async () => {
+      const hass = makeHass({});
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.gone', width: 3 });
+      expect(tileOf(el).classList.contains('on')).to.be.false;
+    });
+
+    it('forceOff overrides an otherwise "on" value (climate is off)', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
-      const ic = el.shadowRoot!.querySelector('.ic')!;
-      expect(ic.classList.contains('on')).to.be.true;
-    });
-
-    it('full tile .ic lacks `on` class when state is off', async () => {
-      const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
-      const ic = el.shadowRoot!.querySelector('.ic')!;
-      expect(ic.classList.contains('on')).to.be.false;
+      const el = await fixture<MtEntityTile>(
+        html`<mt-entity-tile
+          .hass=${hass}
+          .config=${{ type: 'entity-tile', entity: 'switch.x', width: 3 } as EntityTileFeatureConfig}
+          .forceOff=${true}
+        ></mt-entity-tile>`
+      );
+      expect(tileOf(el).classList.contains('on')).to.be.false;
     });
   });
 
