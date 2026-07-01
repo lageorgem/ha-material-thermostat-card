@@ -194,7 +194,7 @@ describe('mt-entity-tile', () => {
       expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
     });
 
-    it('compact:true -> .tile.compact showing only the icon (no value, no title)', async () => {
+    it('compact:true -> .tile.compact showing only a bare centered icon (no circle, no value/title)', async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', { unit_of_measurement: '°C' }),
       });
@@ -205,8 +205,9 @@ describe('mt-entity-tile', () => {
       });
       const tile = el.shadowRoot!.querySelector('.tile');
       expect(tile!.classList.contains('compact')).to.be.true;
-      expect(el.shadowRoot!.querySelector('.ic')).to.not.equal(null);
-      expect(el.shadowRoot!.querySelector('.ic ha-icon')).to.not.equal(null);
+      // the icon is rendered directly on the tile — no .ic circle chip
+      expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
+      expect(tile!.querySelector('ha-icon')).to.not.equal(null);
       // compact shows only the icon — no value line and no title
       expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
       expect(el.shadowRoot!.querySelector('.title')).to.equal(null);

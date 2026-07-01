@@ -108,7 +108,7 @@ export class MtEntityTile extends LitElement {
           aria-label=${name}
           title=${name}
         >
-          <div class="ic"><ha-icon icon=${icon}></ha-icon></div>
+          <ha-icon icon=${icon}></ha-icon>
         </button>
       `;
     }
@@ -147,13 +147,15 @@ export class MtEntityTile extends LitElement {
       .tile.icon-only ha-icon {
         --mdc-icon-size: 24px;
       }
-      /* Compact: just the icon chip, centered — no value under it. Still follows
-         the tile roundness/color rules (squarer + neutral off, rounder + tinted
-         on) via the shared .tile / .tile.on styles. */
+      /* Compact: just a bare centered icon (no circle chip), at the same height
+         as the other tiles (inherits the shared .tile min-height). Width is left
+         to the user's configured column span. Still follows the tile
+         roundness/color rules via the shared .tile / .tile.on styles. */
       .tile.compact {
         justify-content: center;
-        padding: 8px;
-        min-height: 48px;
+      }
+      .tile.compact ha-icon {
+        --mdc-icon-size: 24px;
       }
     `,
   ];
