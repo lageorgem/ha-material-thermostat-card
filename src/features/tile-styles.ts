@@ -19,7 +19,11 @@ export const tileStyles = css`
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    min-height: 56px;
+    /* 40px icon chip + 24px vertical padding = 64px. Capped title/value
+       line-heights keep the text shorter than the chip, so every tile variant
+       (full, icon-only, and the dropdown/climate tiles) lands on the same 64px
+       height and lines up in a mixed feature row. */
+    min-height: 64px;
     box-sizing: border-box;
     border: none;
     /* "off" tiles are squarer rounded rectangles; "on" tiles morph to the
@@ -83,6 +87,7 @@ export const tileStyles = css`
   }
   .tile .title {
     font-size: var(--md-sys-typescale-label-medium-size, 13px);
+    line-height: 1.2;
     font-weight: 500;
     color: var(--mt-on-surface-variant);
     overflow: hidden;
@@ -94,6 +99,7 @@ export const tileStyles = css`
   }
   .tile .value {
     font-size: var(--md-sys-typescale-body-large-size, 16px);
+    line-height: 1.2;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;

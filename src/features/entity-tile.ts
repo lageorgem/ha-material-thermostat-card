@@ -22,11 +22,14 @@ const DOMAIN_ICONS: Record<string, string> = {
 /**
  * A Google-Home-style tile for a sensor, switch, or button. Shares its look with
  * the selector dropdown's tile variant (see {@link ../features/tile-styles}):
- * an icon chip with a small title over the value. The tile takes the accent
- * "on" treatment — soft tint + extra-rounded corners — whenever its value is
- * not falsy (off/none/false/null/0/unavailable/unknown), unless the card's
+ * an icon chip with a small title over the value. Two layouts, chosen by
+ * `config.display`: `tile` (default) shows the icon chip, title and value;
+ * `icon` shows only a bare centered icon at the same height. The tile takes the
+ * accent "on" treatment — soft tint + extra-rounded corners — whenever its value
+ * is not falsy (off/none/false/null/0/unavailable/unknown), unless the card's
  * climate entity is off ({@link forceOff}), in which case it always reads as off.
- * Tapping runs a configurable tap action, else the entity's natural action.
+ * In `tile` display an optional `config.color` overrides the accent. Tapping
+ * runs a configurable tap action, else the entity's natural action.
  */
 @customElement('mt-entity-tile')
 export class MtEntityTile extends LitElement {
@@ -81,16 +84,14 @@ export class MtEntityTile extends LitElement {
     const secondary = this._secondary();
     const on = this._tileOn;
 
-    // Narrow widths degrade gracefully: 1 unit = an icon-only chip; ≤ 2 units (or
-    // an explicit `compact`) = a compact tile showing just the icon (no value).
-    const w = this.config.width;
-    const iconOnly = w === 1;
-    const compact = this.config.compact || (typeof w === 'number' && w <= 2);
+    // The user picks the layout explicitly; `compact` is the legacy flag for the
+    // icon layout, still honored for existing configs.
+    const display = this.config.display ?? (this.config.compact ? 'icon' : 'tile');
 
-    if (iconOnly) {
+    if (display === 'icon') {
       return html`
         <button
-          class=${classMap({ tile: true, 'icon-only': true, on })}
+          class=${classMap({ tile: true, icon: true, on })}
           @click=${this._tap}
           aria-label=${name}
           title=${name}
@@ -100,21 +101,16 @@ export class MtEntityTile extends LitElement {
       `;
     }
 
-    if (compact) {
-      return html`
-        <button
-          class=${classMap({ tile: true, compact: true, on })}
-          @click=${this._tap}
-          aria-label=${name}
-          title=${name}
-        >
-          <ha-icon icon=${icon}></ha-icon>
-        </button>
-      `;
-    }
-
+    // The chosen color tints the tile (via --mt-tile-accent); unset falls back to
+    // the primary in the shared tile styles. Only the full tile carries a color.
+    const accent = this.config.color ? `--mt-tile-accent: ${this.config.color}` : nothing;
     return html`
-      <button class=${classMap({ tile: true, on })} @click=${this._tap} aria-label=${name}>
+      <button
+        class=${classMap({ tile: true, on })}
+        style=${accent}
+        @click=${this._tap}
+        aria-label=${name}
+      >
         <div class="ic"><ha-icon icon=${icon}></ha-icon></div>
         <div class="text">
           <div class="title">${name}</div>
@@ -131,30 +127,17 @@ export class MtEntityTile extends LitElement {
       :host {
         display: block;
       }
-      /* Icon-only (width 1): a single centered icon, like a mode chip. Always a
-         full-round chip; muted when off, accent-colored (via .tile.on) when on. */
-      .tile.icon-only {
+      /* Icon display: a bare centered icon (no circle chip), at the same height
+         as the full tile (inherits the shared .tile min-height) so mixed rows
+         line up. Width is left to the user's configured column span. Still
+         follows the tile roundness/color rules via .tile / .tile.on. */
+      .tile.icon {
         justify-content: center;
-        gap: 0;
-        padding: 0;
-        min-height: 48px;
-        height: 100%;
-        border-radius: var(--mt-shape-full);
       }
-      .tile.icon-only:not(.on) {
+      .tile.icon:not(.on) {
         color: var(--mt-on-surface-variant);
       }
-      .tile.icon-only ha-icon {
-        --mdc-icon-size: 24px;
-      }
-      /* Compact: just a bare centered icon (no circle chip), at the same height
-         as the other tiles (inherits the shared .tile min-height). Width is left
-         to the user's configured column span. Still follows the tile
-         roundness/color rules via the shared .tile / .tile.on styles. */
-      .tile.compact {
-        justify-content: center;
-      }
-      .tile.compact ha-icon {
+      .tile.icon ha-icon {
         --mdc-icon-size: 24px;
       }
     `,

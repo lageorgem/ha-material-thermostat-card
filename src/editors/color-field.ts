@@ -155,6 +155,11 @@ export class MtColorField extends LitElement {
       z-index: 30;
       top: calc(100% + 6px);
       left: 0;
+      /* Fixed width so the color preview fills a proper rectangle — otherwise,
+         with no reset button (default color), a percentage-width input collapses
+         to a sliver inside a shrink-to-fit popover and shows no visible color. */
+      width: 180px;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -168,11 +173,12 @@ export class MtColorField extends LitElement {
     }
     .popover input[type='color'] {
       width: 100%;
-      height: 36px;
-      border: none;
+      height: 44px;
+      border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
+      border-radius: 10px;
       background: none;
       cursor: pointer;
-      padding: 0;
+      padding: 2px;
     }
     .reset {
       border: none;

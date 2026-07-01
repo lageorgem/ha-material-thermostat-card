@@ -58,6 +58,19 @@ describe('mt-color-field', () => {
       expect(colorInput(el)!.value).to.equal('#ff8800');
     });
 
+    it('renders a visibly wide color preview even on the default color (no reset button)', async () => {
+      const el = await fixture<MtColorField>(
+        html`<mt-color-field .defaultColor=${'#ff8800'}></mt-color-field>`
+      );
+      swatch(el).click();
+      await el.updateComplete;
+      // No custom value -> no reset button; the popover must still give the color
+      // input a real width so the preview is visible (regression: it collapsed to
+      // a sliver in a shrink-to-fit popover).
+      expect(el.shadowRoot!.querySelector('.reset')).to.equal(null);
+      expect(colorInput(el)!.offsetWidth).to.be.greaterThan(100);
+    });
+
     it('resolves a var()-based default color via the browser', async () => {
       const el = await fixture<MtColorField>(
         html`<mt-color-field .defaultColor=${'var(--nope, #010203)'}></mt-color-field>`

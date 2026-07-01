@@ -179,64 +179,64 @@ describe('mt-entity-tile', () => {
     });
   });
 
-  describe('variants by width / compact', () => {
-    it('width===1 -> .tile.icon-only (single ha-icon, no text)', async () => {
-      const hass = makeHass({
-        'switch.x': entityState('switch.x', 'off'),
-      });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
-      const tile = el.shadowRoot!.querySelector('.tile');
-      expect(tile).to.not.equal(null);
-      expect(tile!.classList.contains('icon-only')).to.be.true;
-      expect(tile!.querySelector('ha-icon')).to.not.equal(null);
-      expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
-    });
-
-    it('compact:true -> .tile.compact showing only a bare centered icon (no circle, no value/title)', async () => {
+  describe('layout by display', () => {
+    it("display:'icon' -> .tile.icon showing only a bare centered icon (no circle, no value/title)", async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', { unit_of_measurement: '°C' }),
       });
       const el = await mount(hass, {
         type: 'entity-tile',
         entity: 'sensor.temp',
-        compact: true,
+        display: 'icon',
       });
       const tile = el.shadowRoot!.querySelector('.tile');
-      expect(tile!.classList.contains('compact')).to.be.true;
+      expect(tile!.classList.contains('icon')).to.be.true;
       // the icon is rendered directly on the tile — no .ic circle chip
       expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
       expect(tile!.querySelector('ha-icon')).to.not.equal(null);
-      // compact shows only the icon — no value line and no title
+      // icon display shows only the icon — no value line and no title
       expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
       expect(el.shadowRoot!.querySelector('.title')).to.equal(null);
       expect(el.shadowRoot!.querySelector('.text')).to.equal(null);
     });
 
-    it('width<=2 -> .tile.compact', async () => {
+    it("legacy compact:true (no display) -> icon layout", async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21'),
       });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', width: 2 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', compact: true });
       const tile = el.shadowRoot!.querySelector('.tile');
-      expect(tile!.classList.contains('compact')).to.be.true;
-      // still icon-only even though the sensor has a value
+      expect(tile!.classList.contains('icon')).to.be.true;
       expect(el.shadowRoot!.querySelector('.value')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.ic')).to.equal(null);
     });
 
-    it('otherwise -> full .tile with .title and .value (when secondary)', async () => {
+    it("display wins over the legacy compact flag", async () => {
+      const hass = makeHass({
+        'sensor.temp': entityState('sensor.temp', '21', { friendly_name: 'Temp' }),
+      });
+      // compact:true would say icon, but an explicit display:'tile' takes over.
+      const el = await mount(hass, {
+        type: 'entity-tile',
+        entity: 'sensor.temp',
+        compact: true,
+        display: 'tile',
+      });
+      expect(el.shadowRoot!.querySelector('.tile')!.classList.contains('icon')).to.be.false;
+      expect(el.shadowRoot!.querySelector('.ic')).to.not.equal(null);
+    });
+
+    it("default (no display / no compact) -> full .tile with .title and .value (when secondary)", async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', {
           unit_of_measurement: '°C',
           friendly_name: 'Temp',
         }),
       });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp' });
       const tile = el.shadowRoot!.querySelector('.tile');
       expect(tile).to.not.equal(null);
-      expect(tile!.classList.contains('compact')).to.be.false;
-      expect(tile!.classList.contains('icon-only')).to.be.false;
+      expect(tile!.classList.contains('icon')).to.be.false;
       expect(el.shadowRoot!.querySelector('.ic')).to.not.equal(null);
       expect(el.shadowRoot!.querySelector('.title')!.textContent).to.equal('Temp');
       expect(el.shadowRoot!.querySelector('.value')!.textContent).to.equal('21 °C');
@@ -253,43 +253,70 @@ describe('mt-entity-tile', () => {
     });
   });
 
+  describe('color accent (tile display only)', () => {
+    it('full tile applies config.color as --mt-tile-accent', async () => {
+      const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
+      const el = await mount(hass, {
+        type: 'entity-tile',
+        entity: 'switch.x',
+        display: 'tile',
+        color: '#abcdef',
+      });
+      const tile = el.shadowRoot!.querySelector('.tile') as HTMLElement;
+      expect(tile.getAttribute('style') ?? '').to.contain('--mt-tile-accent: #abcdef');
+    });
+
+    it('full tile sets no accent style when no color is configured', async () => {
+      const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', display: 'tile' });
+      const tile = el.shadowRoot!.querySelector('.tile') as HTMLElement;
+      expect(tile.getAttribute('style') ?? '').to.not.contain('--mt-tile-accent');
+    });
+
+    it('icon display ignores config.color (no accent style)', async () => {
+      const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
+      const el = await mount(hass, {
+        type: 'entity-tile',
+        entity: 'switch.x',
+        display: 'icon',
+        color: '#abcdef',
+      });
+      const tile = el.shadowRoot!.querySelector('.tile') as HTMLElement;
+      expect(tile.getAttribute('style') ?? '').to.not.contain('--mt-tile-accent');
+    });
+  });
+
   describe('tile "on" treatment (color + roundness)', () => {
     /** The rendered `.tile` button. */
     const tileOf = (el: MtEntityTile) => el.shadowRoot!.querySelector('.tile')!;
 
-    it('icon-only tile gets `on` class when the value is not falsy', async () => {
+    it('icon tile gets `on` class when the value is not falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', display: 'icon' });
       expect(tileOf(el).classList.contains('on')).to.be.true;
     });
 
-    it('icon-only tile lacks `on` class when the value is falsy', async () => {
+    it('icon tile lacks `on` class when the value is falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', display: 'icon' });
       expect(tileOf(el).classList.contains('on')).to.be.false;
-    });
-
-    it('compact tile gets `on` class when the value is not falsy', async () => {
-      const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', compact: true });
-      expect(tileOf(el).classList.contains('on')).to.be.true;
     });
 
     it('full tile gets `on` class when the value is not falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x' });
       expect(tileOf(el).classList.contains('on')).to.be.true;
     });
 
     it('full tile lacks `on` class when the value is falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x' });
       expect(tileOf(el).classList.contains('on')).to.be.false;
     });
 
     it('a sensor with a real value reads as "on" (colored)', async () => {
       const hass = makeHass({ 'sensor.temp': entityState('sensor.temp', '21') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.temp' });
       expect(tileOf(el).classList.contains('on')).to.be.true;
     });
 
@@ -297,14 +324,14 @@ describe('mt-entity-tile', () => {
     falsyStates.forEach((s) => {
       it(`treats "${s || '(empty)'}" as off (no accent)`, async () => {
         const hass = makeHass({ 'sensor.x': entityState('sensor.x', s) });
-        const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x', width: 3 });
+        const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.x' });
         expect(tileOf(el).classList.contains('on')).to.be.false;
       });
     });
 
     it('is off when there is no state at all', async () => {
       const hass = makeHass({});
-      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.gone', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'sensor.gone' });
       expect(tileOf(el).classList.contains('on')).to.be.false;
     });
 
@@ -313,7 +340,7 @@ describe('mt-entity-tile', () => {
       const el = await fixture<MtEntityTile>(
         html`<mt-entity-tile
           .hass=${hass}
-          .config=${{ type: 'entity-tile', entity: 'switch.x', width: 3 } as EntityTileFeatureConfig}
+          .config=${{ type: 'entity-tile', entity: 'switch.x' } as EntityTileFeatureConfig}
           .forceOff=${true}
         ></mt-entity-tile>`
       );
@@ -324,7 +351,7 @@ describe('mt-entity-tile', () => {
   describe('tap', () => {
     it('no tap_action + switch -> callService(homeassistant, toggle)', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'off') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 3 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x' });
       const tile = el.shadowRoot!.querySelector('.tile') as HTMLButtonElement;
       tile.click();
       expect(hass.__calls.length).to.equal(1);
@@ -349,9 +376,9 @@ describe('mt-entity-tile', () => {
       expect(hass.__calls.length).to.equal(0);
     });
 
-    it('clicking an icon-only tile also runs the tap action', async () => {
+    it('clicking an icon tile also runs the tap action', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
-      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', width: 1 });
+      const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', display: 'icon' });
       const tile = el.shadowRoot!.querySelector('.tile') as HTMLButtonElement;
       tile.click();
       expect(hass.__calls.length).to.equal(1);

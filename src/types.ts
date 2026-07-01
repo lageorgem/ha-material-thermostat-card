@@ -3,6 +3,9 @@ import type { ActionConfig, LovelaceCardConfig } from 'custom-card-helpers';
 /** How a selector feature is laid out. */
 export type FeatureDisplay = 'icons' | 'dropdown' | 'tile';
 
+/** How an entity-tile is laid out: a bare icon chip, or a full tile with title + value. */
+export type EntityTileDisplay = 'icon' | 'tile';
+
 export type FeatureType =
   | 'climate-hvac-modes'
   | 'climate-fan-modes'
@@ -116,8 +119,12 @@ export interface EntityTileFeatureConfig {
   entity: string;
   name?: string;
   icon?: string;
+  /** Accent color override (hex), applied to the tile in `tile` display. */
+  color?: string;
+  /** Layout: a bare icon chip (`icon`) or the full tile with title + value (`tile`, default). */
+  display?: EntityTileDisplay;
   tap_action?: ActionConfig;
-  /** Compact variant: icon + value only (no title), for fitting many per row. */
+  /** @deprecated Legacy flag replaced by `display: 'icon'`; still read for back-compat. */
   compact?: boolean;
   /** Width as a percentage of the card (10–100, steps of 10). Unset = 50%. */
   width?: number;

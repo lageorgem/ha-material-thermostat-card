@@ -98,4 +98,34 @@ describe('mt-display-toggle', () => {
     cap.stop();
     expect(cap.events.length).to.equal(0);
   });
+
+  describe('custom options', () => {
+    const ICON_TILE = [
+      { value: 'icon', label: 'Icon', icon: 'mdi:card-outline' },
+      { value: 'tile', label: 'Tile', icon: 'mdi:card-text-outline' },
+    ];
+
+    it('renders exactly the provided options and labels', async () => {
+      const el = await fixture<MtDisplayToggle>(
+        html`<mt-display-toggle .value=${'tile'} .options=${ICON_TILE}></mt-display-toggle>`
+      );
+      const bs = buttons(el);
+      expect(bs.length).to.equal(2);
+      expect(bs[0].textContent!.trim()).to.equal('Icon');
+      expect(bs[1].textContent!.trim()).to.equal('Tile');
+      expect(bs[1].classList.contains('on')).to.be.true;
+      expect(bs[0].classList.contains('on')).to.be.false;
+    });
+
+    it('emits the custom value on click', async () => {
+      const el = await fixture<MtDisplayToggle>(
+        html`<mt-display-toggle .value=${'tile'} .options=${ICON_TILE}></mt-display-toggle>`
+      );
+      const cap = captureEvents('value-changed');
+      buttons(el)[0].click(); // icon
+      cap.stop();
+      expect(cap.events.length).to.equal(1);
+      expect(cap.events[0].detail).to.deep.equal({ value: 'icon' });
+    });
+  });
 });

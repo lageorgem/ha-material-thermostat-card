@@ -361,9 +361,12 @@ on/off). Runs `tap_action` if set, otherwise the entity's natural action.
 | `entity` | string | — | The entity **(required)** |
 | `name` | string | friendly name | Tile title |
 | `icon` | string | entity / domain icon | Tile icon |
+| `color` | string (hex) | theme / on‑accent | Accent tint, applied only in `tile` display |
+| `display` | `tile` \| `icon` | `tile` | `tile` shows icon + title + value; `icon` shows just a centered icon at the same height |
 | `tap_action` | [action](https://www.home-assistant.io/dashboards/actions/) | natural action | Standard Lovelace action (`toggle`, `more-info`, `navigate`, `call-service`, `url`, `none`, …) |
-| `compact` | boolean | `false` | Icon only (no title or value) — fits more per row |
 | `width` | number `10`–`100` | `50` | Width as a percentage of the card |
+
+> The legacy `compact: true` flag still works and maps to `display: icon`.
 
 **Default tap action** (when `tap_action` is unset): press for `button`/`input_button`/`scene`/`script`,
 toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
@@ -376,14 +379,15 @@ toggle for `switch`/`light`/`fan`/`input_boolean`, and more‑info otherwise.
 
 - type: entity-tile
   entity: switch.fan_lamp
+  color: '#8e24aa'
   tap_action:
     action: toggle
 
-# Compact tiles — two per row at 50% each
+# Icon-only tiles — two per row at 50% each
 - type: entity-tile
   entity: sensor.living_humidity
   icon: mdi:water-percent
-  compact: true
+  display: icon
   width: 50
 ```
 

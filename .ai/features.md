@@ -21,11 +21,12 @@ dispatches a `FeatureConfig` to the right element and applies grid placement.
 ### Shared config (`BaseSelectorFeature`)
 `display?: 'icons' | 'dropdown' | 'tile'` and `width?: number` — but **only the
 selector-style types** extend it (`climate-*`, `input-select`, `switch-group`).
-`switch-list`/`button-list`/`entity-tile` have **`width` but no `display`** (lists
-are always icon rows; the entity-tile is always a tile). Don't assume `display`
-exists on every feature. The `tile` display is a Google-Home-style card showing
-the current value (see the selector section below) — distinct from the standalone
-`entity-tile` feature.
+`switch-list`/`button-list` have **`width` but no `display`** (always icon rows).
+`entity-tile` has its **own** `display?: 'icon' | 'tile'` (`EntityTileDisplay`,
+default `tile`) — a *two*-value axis, not the selector's three. Don't assume the
+selector `display` exists on every feature. The selector `tile` display is a
+Google-Home-style card showing the current value (see the selector section
+below) — distinct from the standalone `entity-tile` feature.
 
 ### Per-option colors (`OptionOverride.color` / `EntityItem.color`)
 Per-option **`color?`** (hex) overrides the accent color. Editor UI: `mt-color-field`
@@ -34,8 +35,9 @@ title (`mt-text-field` gets `flatLeft`), opening a popover with a native color
 input + **Reset to default**. The swatch's `defaultColor` (shown when unset) is
 `climateModeColor(value)` for HVAC, `presetColor(value)` (eco→`#4caf50`,
 sleep→`#2196f3`, `theme.ts`) for presets, else the theme primary. Visibility: HVAC
-& preset in **any** display, every selector in **tile** display (and switch-group
-only, among entity lists). Where a color is applied at render time:
+& preset in **any** display, every selector in **tile** display (switch-group among
+entity lists, and the **entity-tile** in `tile` display — `EntityTileFeatureConfig.color`).
+Where a color is applied at render time:
 - **HVAC** — the card's `_hvacColors()` builds a `{mode: hex}` map → `mt-circular-dial.modeColors`; `_modeColor()` uses it for the halo/ring/number/mode-icon (+dual overshoot bands). Also the item `color` on the tile.
 - **Preset** — the card's `_presetColor()` → `mt-circular-dial.presetIconColor` colors the preset icon under the number. Also the tile.
 - **Others** — only the tile: `mt-dropdown._renderTile` sets `--mt-tile-accent` from the active item's `color`.
@@ -59,20 +61,32 @@ shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
 `_moveItem` reorders the array — the card renders items in array order).
 
 ### Entity tile specifics (`entity-tile.ts` + `actions.ts`)
-`{ entity, name?, icon?, tap_action?, compact?, width? }`.
+`{ entity, name?, icon?, color?, display?, tap_action?, compact?, width? }`.
 - Default tap (`pressOrToggle`): press for button/input_button/scene/script,
   toggle for switch/light/fan/input_boolean, more-info otherwise.
 - `tap_action` (standard Lovelace `ActionConfig`) overrides: supports `none`,
   `more-info`, `toggle`, `url`, `navigate`, `call-service`/`perform-action`,
   `default`.
-- Degradation by width: `width:1` → icon-only pill; `compact:true` **or**
-  `width ≤ 2` → icon only (no title, no value); else full tile (icon + title + value).
+- **Layout by `display`** (`EntityTileDisplay = 'icon' | 'tile'`, default `tile`):
+  `tile` = full tile (icon chip + title + value); `icon` = a bare centered icon
+  (no `.ic` chip) at the same height. Resolution: `display ?? (compact ? 'icon' : 'tile')`
+  — the legacy `compact` boolean still maps to the icon layout. There is **no
+  more width-based degradation** (width is a % of the card; the user picks the layout).
+- `color?` (hex) → `--mt-tile-accent` on the tile button, **only in `tile` display**
+  (icon display falls back to the primary when on). Editor gates the color pill
+  the same way (`showColor = display === 'tile'`).
 - Shares its look with the selector dropdown's tile variant via
-  `features/tile-styles.ts` (`tileStyles`). The tile takes the accent "on"
-  treatment (soft tint + extra-rounded corners) when its value is **not falsy**
-  (`isOffValue` in `theme.ts`: off/none/false/null/0/unavailable/unknown, else on),
-  and is forced to the off treatment via `forceOff` (threaded from `feature-row`)
-  when the card's **climate entity is off** — matching the climate selectors.
+  `features/tile-styles.ts` (`tileStyles`, `.tile` min-height **64px** + capped
+  title/value line-heights so every tile variant lines up). The tile takes the
+  accent "on" treatment (soft tint + extra-rounded corners) when its value is
+  **not falsy** (`isOffValue` in `theme.ts`: off/none/false/null/0/unavailable/
+  unknown, else on), and is forced to the off treatment via `forceOff` (threaded
+  from `feature-row`) when the card's **climate entity is off**.
+- Editor `mt-entity-tile-editor` mirrors the climate/list editors: an Icon/Tile
+  `mt-display-toggle` (its new `options` prop takes a custom `DisplayOption[]`),
+  the width slider, then a single item row — styled `mt-entity-picker` +
+  (`mt-color-field` in tile display) + `mt-text-field` (title) + `mt-icon-field`.
+  No `tap_action` control in the UI (still honored from YAML; preserved on edit).
 
 ### Feels‑like + the comfort feature (`calc/`, `features/comfort.ts`)
 Card‑level `feels_like: { temperature?, humidity?, show_as_current? }` (in

@@ -1645,91 +1645,47 @@ describe('mt-entity-list-editor', () => {
 // ---------------------------------------------------------------------------
 describe('mt-entity-tile-editor', () => {
   /** Mount the entity-tile editor. */
-  async function mount(feature: any): Promise<MtEntityTileEditor> {
-    const hass = makeHass({});
+  async function mount(feature: any, states: Record<string, any> = {}): Promise<MtEntityTileEditor> {
+    const hass = makeHass(states);
     return fixture<MtEntityTileEditor>(
       html`<mt-entity-tile-editor .hass=${hass} .feature=${feature}></mt-entity-tile-editor>`
     );
   }
 
-  it('_data getter reflects the feature with compact default false (no width in the form)', async () => {
-    const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
-    expect((el as any)._data).to.deep.equal({
-      entity: 'sensor.x',
-      name: undefined,
-      icon: undefined,
-      compact: false,
-      tap_action: undefined,
+  describe('_display (layout resolution)', () => {
+    it('defaults to tile when neither display nor compact is set', async () => {
+      const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
+      expect((el as any)._display).to.equal('tile');
+    });
+
+    it('falls back to icon for a legacy compact:true feature', async () => {
+      const el = await mount({ type: 'entity-tile', entity: 'sensor.x', compact: true });
+      expect((el as any)._display).to.equal('icon');
+    });
+
+    it('an explicit display wins over compact', async () => {
+      const el = await mount({
+        type: 'entity-tile',
+        entity: 'sensor.x',
+        compact: true,
+        display: 'tile',
+      });
+      expect((el as any)._display).to.equal('tile');
     });
   });
 
-  it('_data getter reflects all fields when set', async () => {
-    const el = await mount({
-      type: 'entity-tile',
-      entity: 'sensor.x',
-      name: 'X',
-      icon: 'mdi:home',
-      compact: true,
-      tap_action: { action: 'more-info' },
-    });
-    const d = (el as any)._data;
-    expect(d.compact).to.equal(true);
-    expect(d.tap_action).to.deep.equal({ action: 'more-info' });
-  });
-
-  it('_computeLabel covers each case', async () => {
-    const el = await mount({ type: 'entity-tile', entity: '' });
-    const cl = (el as any)._computeLabel;
-    expect(cl({ name: 'entity' })).to.equal('Entity');
-    expect(cl({ name: 'name' })).to.contain('Name');
-    expect(cl({ name: 'icon' })).to.contain('Icon');
-    expect(cl({ name: 'compact' })).to.contain('Compact');
-    expect(cl({ name: 'tap_action' })).to.equal('Tap action');
-    expect(cl({ name: 'mystery' })).to.equal('mystery');
-  });
-
-  it('_changed emits a normalized feature (falsy -> undefined), preserving width', async () => {
-    const el = await mount({ type: 'entity-tile', entity: 'sensor.x', width: 50 });
+  it('renders the Icon/Tile display toggle and a change emits {display} (compact stripped)', async () => {
+    const el = await mount({ type: 'entity-tile', entity: 'sensor.x', compact: true });
+    const toggle = el.shadowRoot!.querySelector('mt-display-toggle') as any;
+    expect(toggle).to.not.equal(null);
+    expect(toggle.value).to.equal('icon'); // reflects the legacy compact flag
+    expect(toggle.options.map((o: any) => o.value)).to.deep.equal(['icon', 'tile']);
     const cap = captureEvents('feature-changed');
-    emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
-      entity: 'sensor.y',
-      name: '',
-      icon: '',
-      compact: false,
-      tap_action: undefined,
-    });
+    emitValueChanged(toggle, 'tile');
     cap.stop();
-    // _changed spreads the existing feature then the form patch (width untouched)
-    expect((cap.events[0].detail as any).feature).to.deep.equal({
-      type: 'entity-tile',
-      entity: 'sensor.y',
-      name: undefined,
-      icon: undefined,
-      compact: undefined,
-      width: 50,
-      tap_action: undefined,
-    });
-  });
-
-  it('_changed keeps truthy values', async () => {
-    const el = await mount({ type: 'entity-tile', entity: 'sensor.x' });
-    const cap = captureEvents('feature-changed');
-    emitValueChanged(el.shadowRoot!.querySelector('ha-form')!, {
-      entity: 'sensor.z',
-      name: 'Tile',
-      icon: 'mdi:lamp',
-      compact: true,
-      tap_action: { action: 'toggle' },
-    });
-    cap.stop();
-    expect((cap.events[0].detail as any).feature).to.deep.equal({
-      type: 'entity-tile',
-      entity: 'sensor.z',
-      name: 'Tile',
-      icon: 'mdi:lamp',
-      compact: true,
-      tap_action: { action: 'toggle' },
-    });
+    const f = (cap.events[0].detail as any).feature;
+    expect(f.display).to.equal('tile');
+    expect('compact' in f).to.be.false; // migrated away from the legacy flag
   });
 
   it('renders a width field with the tile default (50) and emits width changes', async () => {
@@ -1743,6 +1699,104 @@ describe('mt-entity-tile-editor', () => {
     );
     cap.stop();
     expect((cap.events[0].detail as any).feature.width).to.equal(30);
+  });
+
+  it('uses the styled entity picker; its value drives the entity (falls back to "")', async () => {
+    const el = await mount({ type: 'entity-tile', entity: '' });
+    const picker = el.shadowRoot!.querySelector('mt-entity-picker') as any;
+    expect(picker).to.not.equal(null);
+    expect(picker.value).to.equal('');
+    const cap = captureEvents('feature-changed');
+    emitValueChanged(picker, 'switch.y');
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.entity).to.equal('switch.y');
+  });
+
+  it('entity picker value falls back to "" when the feature has no entity', async () => {
+    const el = await mount({ type: 'entity-tile' });
+    const picker = el.shadowRoot!.querySelector('mt-entity-picker') as any;
+    expect(picker.value).to.equal('');
+  });
+
+  it('title field emits {name} and prunes an empty title', async () => {
+    const el = await mount({ type: 'entity-tile', entity: 'sensor.x', width: 50 });
+    const tf = el.shadowRoot!.querySelector('.title-group mt-text-field') as Element;
+    const cap = captureEvents('feature-changed');
+    emitValueChanged(tf, 'My tile');
+    expect((cap.events[0].detail as any).feature.name).to.equal('My tile');
+    emitValueChanged(tf, '');
+    cap.stop();
+    const f = (cap.events[1].detail as any).feature;
+    expect('name' in f).to.be.false;
+    expect(f.width).to.equal(50); // untouched
+  });
+
+  it('icon field previews the entity icon, keeps "no icon" ("") and prunes undefined', async () => {
+    const el = await mount(
+      { type: 'entity-tile', entity: 'switch.x' },
+      { 'switch.x': entityState('switch.x', 'on', { icon: 'mdi:lamp' }) }
+    );
+    const field = el.shadowRoot!.querySelector('mt-icon-field') as any;
+    expect(field.defaultIcon).to.equal('mdi:lamp');
+
+    const cap1 = captureEvents('feature-changed');
+    emitValueChanged(field, 'mdi:home');
+    cap1.stop();
+    expect((cap1.events[0].detail as any).feature.icon).to.equal('mdi:home');
+
+    const cap2 = captureEvents('feature-changed');
+    emitValueChanged(field, ''); // '' = explicit "no icon" (kept)
+    cap2.stop();
+    expect((cap2.events[0].detail as any).feature.icon).to.equal('');
+
+    const cap3 = captureEvents('feature-changed');
+    emitValueChanged(field, undefined); // undefined = revert to default (pruned)
+    cap3.stop();
+    expect('icon' in (cap3.events[0].detail as any).feature).to.be.false;
+  });
+
+  describe('color picker (tile display only)', () => {
+    it('is shown in tile display and its value drives {color}', async () => {
+      const el = await mount({ type: 'entity-tile', entity: 'sensor.x', display: 'tile' });
+      const cf = el.shadowRoot!.querySelector('.title-group mt-color-field') as Element;
+      expect(cf).to.not.equal(null);
+      const cap = captureEvents('feature-changed');
+      emitValueChanged(cf, '#ff0000');
+      cap.stop();
+      expect((cap.events[0].detail as any).feature.color).to.equal('#ff0000');
+    });
+
+    it('is hidden in icon display', async () => {
+      const el = await mount({ type: 'entity-tile', entity: 'sensor.x', display: 'icon' });
+      expect(el.shadowRoot!.querySelector('mt-color-field')).to.equal(null);
+    });
+
+    it('prunes the color when reset to default', async () => {
+      const el = await mount({
+        type: 'entity-tile',
+        entity: 'sensor.x',
+        display: 'tile',
+        color: '#ff0000',
+      });
+      const cf = el.shadowRoot!.querySelector('.title-group mt-color-field') as any;
+      expect(cf.value).to.equal('#ff0000');
+      const cap = captureEvents('feature-changed');
+      emitValueChanged(cf, undefined);
+      cap.stop();
+      expect('color' in (cap.events[0].detail as any).feature).to.be.false;
+    });
+  });
+
+  it('_patch preserves an existing tap_action set in YAML', async () => {
+    const el = await mount({
+      type: 'entity-tile',
+      entity: 'sensor.x',
+      tap_action: { action: 'more-info' },
+    });
+    const cap = captureEvents('feature-changed');
+    emitValueChanged(el.shadowRoot!.querySelector('mt-entity-picker')!, 'sensor.y');
+    cap.stop();
+    expect((cap.events[0].detail as any).feature.tap_action).to.deep.equal({ action: 'more-info' });
   });
 });
 
