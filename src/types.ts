@@ -10,6 +10,7 @@ export type FeatureType =
   | 'climate-hvac-modes'
   | 'climate-fan-modes'
   | 'climate-swing-modes'
+  | 'climate-swing-horizontal-modes'
   | 'climate-preset-modes'
   | 'input-select'
   | 'switch-group'
@@ -67,6 +68,10 @@ export interface ClimateFanFeatureConfig extends BaseSelectorFeature, OrderedOpt
 
 export interface ClimateSwingFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'climate-swing-modes';
+}
+
+export interface ClimateSwingHorizontalFeatureConfig extends BaseSelectorFeature, OrderedOptions {
+  type: 'climate-swing-horizontal-modes';
 }
 
 export interface ClimatePresetFeatureConfig extends BaseSelectorFeature, OrderedOptions {
@@ -151,6 +156,7 @@ export type FeatureConfig =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
   | ClimateSwingFeatureConfig
+  | ClimateSwingHorizontalFeatureConfig
   | ClimatePresetFeatureConfig
   | InputSelectFeatureConfig
   | SwitchGroupFeatureConfig

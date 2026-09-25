@@ -34,6 +34,7 @@ const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes' },
   { type: 'climate-fan-modes', label: 'Climate fan modes' },
   { type: 'climate-swing-modes', label: 'Climate swing modes' },
+  { type: 'climate-swing-horizontal-modes', label: 'Climate horizontal swing modes' },
   { type: 'climate-preset-modes', label: 'Climate preset modes' },
   { type: 'comfort', label: 'Comfort & time to comfortable' },
   { type: 'input-select', label: 'Input select' },
@@ -49,6 +50,7 @@ const CLIMATE_FEATURE_ATTR: Partial<Record<FeatureType, string>> = {
   'climate-hvac-modes': 'hvac_modes',
   'climate-fan-modes': 'fan_modes',
   'climate-swing-modes': 'swing_modes',
+  'climate-swing-horizontal-modes': 'swing_horizontal_modes',
   'climate-preset-modes': 'preset_modes',
 };
 
@@ -82,6 +84,7 @@ const FEATURE_LABELS: Record<FeatureType, string> = {
   'climate-hvac-modes': 'Climate HVAC modes',
   'climate-fan-modes': 'Climate fan modes',
   'climate-swing-modes': 'Climate swing modes',
+  'climate-swing-horizontal-modes': 'Climate horizontal swing modes',
   'climate-preset-modes': 'Climate preset modes',
   comfort: 'Comfort & time to comfortable',
   'input-select': 'Input select',
@@ -375,6 +378,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
       case 'climate-swing-modes':
+      case 'climate-swing-horizontal-modes':
       case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
@@ -383,6 +387,8 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
               ? 'fan'
               : feature.type === 'climate-preset-modes'
                 ? 'preset'
+                : feature.type === 'climate-swing-horizontal-modes'
+                  ? 'swing-horizontal'
                 : 'swing';
         inner = html`<mt-climate-feature-editor
           .hass=${this.hass}

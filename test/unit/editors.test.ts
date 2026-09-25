@@ -283,6 +283,10 @@ describe('material-thermostat-card-editor', () => {
       { type: 'climate-hvac-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-hvac-modes' }) },
       { type: 'climate-fan-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-fan-modes' }) },
       { type: 'climate-swing-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-swing-modes' }) },
+      {
+        type: 'climate-swing-horizontal-modes',
+        check: (f) => expect(f).to.deep.equal({ type: 'climate-swing-horizontal-modes' }),
+      },
       { type: 'climate-preset-modes', check: (f) => expect(f).to.deep.equal({ type: 'climate-preset-modes' }) },
       { type: 'input-select', check: (f) => expect(f).to.deep.equal({ type: 'input-select', entity: '' }) },
       { type: 'switch-group', check: (f) => expect(f).to.deep.equal({ type: 'switch-group', entities: [] }) },
@@ -371,6 +375,22 @@ describe('material-thermostat-card-editor', () => {
       expect((added as any)._addableFeatures().map((f: any) => f.type)).to.not.include(
         'climate-preset-modes'
       );
+    });
+
+    it('offers horizontal swing only when swing_horizontal_modes is exposed', async () => {
+      const without = await mount({ features: [] });
+      expect((without as any)._addableFeatures().map((f: any) => f.type)).to.not.include(
+        'climate-swing-horizontal-modes'
+      );
+      const withHorizontalSwing = await mount(
+        { features: [] },
+        makeHass({
+          'climate.test': climateState({ swing_horizontal_modes: ['off', 'horizontal'] }),
+        })
+      );
+      expect(
+        (withHorizontalSwing as any)._addableFeatures().map((f: any) => f.type)
+      ).to.include('climate-swing-horizontal-modes');
     });
 
     it('treats a missing entity state as no attributes (the ?? {} fallback)', async () => {
@@ -520,6 +540,13 @@ describe('material-thermostat-card-editor', () => {
       const el = await expand('climate-swing-modes');
       expect((el.shadowRoot!.querySelector('mt-climate-feature-editor') as any).kind).to.equal(
         'swing'
+      );
+    });
+
+    it('climate-swing-horizontal-modes -> kind=swing-horizontal', async () => {
+      const el = await expand('climate-swing-horizontal-modes');
+      expect((el.shadowRoot!.querySelector('mt-climate-feature-editor') as any).kind).to.equal(
+        'swing-horizontal'
       );
     });
 
@@ -695,6 +722,19 @@ describe('mt-climate-feature-editor', () => {
   it('_values() returns swing_modes for kind=swing', async () => {
     const el = await mount('swing');
     expect((el as any)._values()).to.deep.equal(['off', 'vertical', 'horizontal', 'both']);
+  });
+
+  it('_values() returns swing_horizontal_modes for kind=swing-horizontal', async () => {
+    const el = await mount(
+      'swing-horizontal',
+      { type: 'climate-swing-horizontal-modes' },
+      {
+        'climate.test': climateState({
+          swing_horizontal_modes: ['off', 'left', 'right'],
+        }),
+      }
+    );
+    expect((el as any)._values()).to.deep.equal(['off', 'left', 'right']);
   });
 
   it('_values() returns preset_modes for kind=preset', async () => {

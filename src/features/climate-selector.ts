@@ -14,13 +14,14 @@ import {
 } from '../theme';
 import './selector-row';
 
-export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset';
+export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'swing-horizontal' | 'preset';
 
 /** Default tile title per selector kind (used in `tile` display when unlabeled). */
 const TILE_TITLE: Record<ClimateSelectorKind, string> = {
   hvac: 'Mode',
   fan: 'Fan',
   swing: 'Swing',
+  'swing-horizontal': 'Horizontal swing',
   preset: 'Preset',
 };
 
@@ -86,6 +87,11 @@ export class MtClimateSelector extends LitElement {
       active = state.attributes.preset_mode;
       defaultIcon = (v) => presetIcon(v);
       defaultColor = (v) => presetColor(v);
+    } else if (this.kind === 'swing-horizontal') {
+      values = state.attributes.swing_horizontal_modes ?? [];
+      active = state.attributes.swing_horizontal_mode;
+      defaultIcon = (v) => swingIcon(v);
+      defaultColor = () => undefined;
     } else {
       values = state.attributes.swing_modes ?? [];
       active = state.attributes.swing_mode;
@@ -118,6 +124,11 @@ export class MtClimateSelector extends LitElement {
       this.hass.callService('climate', 'set_fan_mode', { entity_id, fan_mode: value });
     } else if (this.kind === 'preset') {
       this.hass.callService('climate', 'set_preset_mode', { entity_id, preset_mode: value });
+    } else if (this.kind === 'swing-horizontal') {
+      this.hass.callService('climate', 'set_swing_horizontal_mode', {
+        entity_id,
+        swing_horizontal_mode: value,
+      });
     } else {
       this.hass.callService('climate', 'set_swing_mode', { entity_id, swing_mode: value });
     }

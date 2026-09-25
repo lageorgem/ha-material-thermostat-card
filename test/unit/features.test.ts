@@ -269,6 +269,70 @@ describe('mt-climate-selector', () => {
     });
   });
 
+  describe('kind: swing-horizontal', () => {
+    it('builds items from swing_horizontal_modes and applies custom options', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({
+          swing_horizontal_modes: ['off', 'horizontal'],
+          swing_horizontal_mode: 'horizontal',
+        }),
+      });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="swing-horizontal"
+          .options=${[{ value: 'horizontal', icon: 'mt:swing-horizontal-fixed-left' }]}
+        ></mt-climate-selector>`
+      );
+      const items = rowItems(el);
+      expect(items.map((i) => i.value)).to.deep.equal(['off', 'horizontal']);
+      expect(items.find((i) => i.value === 'horizontal')!.active).to.be.true;
+      expect(items.find((i) => i.value === 'off')!.active).to.be.false;
+      expect(items.find((i) => i.value === 'horizontal')!.icon).to.equal(
+        'mt:swing-horizontal-fixed-left'
+      );
+    });
+
+    it('falls back to [] when swing_horizontal_modes is missing', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="swing-horizontal"
+        ></mt-climate-selector>`
+      );
+      expect(selectorRow(el)).to.equal(null);
+    });
+
+    it('_onSelect calls climate.set_swing_horizontal_mode', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({
+          swing_horizontal_modes: ['off', 'horizontal'],
+          swing_horizontal_mode: 'off',
+        }),
+      });
+      const el = await fixture<MtClimateSelector>(
+        html`<mt-climate-selector
+          .hass=${hass}
+          entityId="climate.test"
+          kind="swing-horizontal"
+        ></mt-climate-selector>`
+      );
+      selectValue(el, 'horizontal');
+      expect(hass.__calls).to.have.lengthOf(1);
+      expect(hass.__calls[0]).to.deep.include({
+        domain: 'climate',
+        service: 'set_swing_horizontal_mode',
+      });
+      expect(hass.__calls[0].data).to.deep.equal({
+        entity_id: 'climate.test',
+        swing_horizontal_mode: 'horizontal',
+      });
+    });
+  });
+
   describe('kind: preset', () => {
     it('builds items from preset_modes, active = preset_mode, presetIcon defaults', async () => {
       const hass = makeHass({

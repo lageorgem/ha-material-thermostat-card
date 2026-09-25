@@ -87,6 +87,16 @@ describe('mt-feature-row', () => {
       expect(child.kind).to.equal('swing');
     });
 
+    it('climate-swing-horizontal-modes -> mt-climate-selector kind=swing-horizontal', async () => {
+      const hass = makeHass({
+        'climate.test': climateState({ swing_horizontal_modes: ['off', 'horizontal'] }),
+      });
+      const el = await mount(hass, { type: 'climate-swing-horizontal-modes' });
+      const child = el.shadowRoot!.querySelector('mt-climate-selector') as any;
+      expect(child).to.not.equal(null);
+      expect(child.kind).to.equal('swing-horizontal');
+    });
+
     it('climate-preset-modes -> mt-climate-selector kind=preset', async () => {
       const hass = makeHass({
         'climate.test': climateState({ preset_modes: ['none', 'eco'] }),

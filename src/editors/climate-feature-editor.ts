@@ -6,6 +6,7 @@ import type {
   ClimateModesFeatureConfig,
   ClimatePresetFeatureConfig,
   ClimateSwingFeatureConfig,
+  ClimateSwingHorizontalFeatureConfig,
   OptionOverride,
 } from '../types';
 import {
@@ -31,6 +32,7 @@ type ClimateFeature =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
   | ClimateSwingFeatureConfig
+  | ClimateSwingHorizontalFeatureConfig
   | ClimatePresetFeatureConfig;
 
 /**
@@ -42,7 +44,7 @@ type ClimateFeature =
 export class MtClimateFeatureEditor extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property() entityId!: string;
-  @property() kind!: 'hvac' | 'fan' | 'swing' | 'preset';
+  @property() kind!: 'hvac' | 'fan' | 'swing' | 'swing-horizontal' | 'preset';
   @property({ attribute: false }) feature!: ClimateFeature;
 
   /** The underlying option values from the entity attributes. */
@@ -52,6 +54,7 @@ export class MtClimateFeatureEditor extends LitElement {
     if (this.kind === 'hvac') return a.hvac_modes ?? [];
     if (this.kind === 'fan') return a.fan_modes ?? [];
     if (this.kind === 'preset') return a.preset_modes ?? [];
+    if (this.kind === 'swing-horizontal') return a.swing_horizontal_modes ?? [];
     return a.swing_modes ?? [];
   }
 

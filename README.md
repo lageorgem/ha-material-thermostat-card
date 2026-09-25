@@ -189,7 +189,8 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | --- | --- | --- |
 | `climate-hvac-modes` | the card's climate entity | sets the **HVAC mode** |
 | `climate-fan-modes` | the card's climate entity | sets the **fan mode** |
-| `climate-swing-modes` | the card's climate entity | sets the **swing mode** |
+| `climate-swing-modes` | the card's climate entity | sets the **vertical swing mode** |
+| `climate-swing-horizontal-modes` | the card's climate entity | sets the **horizontal swing mode** |
 | `climate-preset-modes` | the card's climate entity | sets the **preset** (eco / away / …) |
 | `input-select` | an `input_select` entity | selects an option |
 | `switch-group` | a list of switches | **mutually exclusive** — turns the others **off**, then the chosen one **on** |
@@ -232,6 +233,11 @@ features:
       - value: vertical
         label: Swing
         icon: mt:swing-vertical-full
+
+  - type: climate-swing-horizontal-modes
+    options:
+      - value: horizontal
+        icon: mt:swing-horizontal-fixed-left
 
   - type: climate-hvac-modes
     display: tile         # Google-Home-style tile showing the current mode
@@ -521,6 +527,11 @@ position selects one, a **partial swing** selects three, and **full swing** sele
       icon: mt:swing-vertical-full
     - value: 'off'
       icon: mt:swing-vertical-fixed-middle
+
+- type: climate-swing-horizontal-modes
+  options:
+    - value: horizontal
+      icon: mt:swing-horizontal-fixed-left
 ```
 
 > Searchable in the icon picker — type **`mt:`** (or `swing`, `ac`, `vane`). You can also just type

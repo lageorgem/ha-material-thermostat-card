@@ -63,6 +63,7 @@ export class MtFeatureRow extends LitElement {
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
       case 'climate-swing-modes':
+      case 'climate-swing-horizontal-modes':
       case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
@@ -71,6 +72,8 @@ export class MtFeatureRow extends LitElement {
               ? 'fan'
               : feature.type === 'climate-preset-modes'
                 ? 'preset'
+                : feature.type === 'climate-swing-horizontal-modes'
+                  ? 'swing-horizontal'
                 : 'swing';
         return html`<mt-climate-selector
           .hass=${this.hass}
