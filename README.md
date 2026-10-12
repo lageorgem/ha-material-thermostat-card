@@ -35,7 +35,7 @@ gracefully under any Home Assistant theme.
 - [Feels‑like temperature](#feels-like-temperature)
 - [Features](#features)
   - [Common feature options](#common-feature-options)
-  - [Climate selectors](#climate-selectors-hvac--fan--swing)
+  - [Climate selectors](#climate-selectors-hvac--fan--swing--preset)
   - [Option overrides](#option-overrides)
   - [`input-select`](#input-select)
   - [`switch-group`](#switch-group)
@@ -541,7 +541,7 @@ A rounded tile (à la Google Home) showing an icon, title, and a secondary line 
 
 > `tap_action` is YAML-only, not available in the visual editor. `confirmation`, `url_target`,
 > `navigation_replace`, hold actions, and double-tap actions are not supported.
-> Entity tiles use the same [off-state values](#climate-selectors-hvac--fan--swing) as selector tiles,
+> Entity tiles use the same [off-state values](#climate-selectors-hvac--fan--swing--preset) as selector tiles,
 > and are forced to the off look when the card's climate entity is off.
 
 **Default tap action** (when `tap_action` is unset or `action: default`): press for `button`/`input_button`/`scene`/`script`,
@@ -658,9 +658,9 @@ features:
 
 > The row shows a verdict **whenever the sensors read — including when the climate is off** (just
 > without a forecast). It is hidden when the feels‑like sensors aren't set, the climate entity is
-> missing/unavailable/unknown, humidity is non-numeric, or both the temperature sensor and the
-> climate's `current_temperature` are non-numeric. A non-numeric temperature sensor falls back to
-> the climate's `current_temperature`.
+> missing or its state is empty/unavailable/unknown, or the parsed humidity or resolved temperature
+> is not a finite number. Sensor readings use `parseFloat`; an invalid temperature reading falls back
+> to `Number(current_temperature)` on the climate entity (`null` or an empty string becomes `0`).
 
 ## Layout & responsiveness
 
@@ -728,8 +728,8 @@ so it looks native under `material-you-theme` and remains usable under any theme
 | `--md-sys-shape-corner-extra-large` | `28px` | Card corner radius |
 | `--md-sys-shape-corner-large` | `16px` | Off-tile corners |
 | `--md-sys-shape-corner-full` | `9999px` | Pills / chips |
-| `--md-sys-typescale-title-large-size` | `20px` (card title); `22px` (dial mode label max) | Card title / dial mode label |
-| `--md-sys-typescale-title-medium-size` | `16px` | Dial labels (maximum size) |
+| `--md-sys-typescale-title-large-size` | `20px` (card title); `22px` (dial temperature unit max) | Card title / dial temperature unit |
+| `--md-sys-typescale-title-medium-size` | `16px` | Dial mode label / marker & range labels (maximum size) |
 | `--md-sys-typescale-display-large-size` | `64px` | Dial number (maximum size) |
 | `--md-sys-typescale-label-large-size` | `13px` (section labels); `14px` (chips) | Selector / sensor-list headings and chip text |
 | `--md-sys-typescale-label-medium-size` | `13px` | Tile title |
