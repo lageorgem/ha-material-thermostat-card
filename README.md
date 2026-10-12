@@ -17,7 +17,10 @@ gracefully under any Home Assistant theme.
 [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=plugin)
 
 <p align="center">
-  <img src="assets/hero.png" alt="Material Thermostat Card cooling, with HVAC + fan selectors and sensor tiles" width="420">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
+    <img src="assets/hero-light.png" alt="Material Thermostat Card cooling, with HVAC + fan selectors and sensor tiles" width="420">
+  </picture>
 </p>
 
 ---
@@ -123,8 +126,14 @@ The dial mirrors the stock thermostat card's controls with a Nest‑style 270° 
 the bottom, where the `+/−` live).
 
 <p align="center">
-  <img src="assets/dial-heat-cool.png" alt="heat_cool dual setpoint with low/high handles" width="280">
-  <img src="assets/show-current.png" alt="Current temperature shown as the large primary number" width="280">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/dial-heat-cool-dark.png">
+    <img src="assets/dial-heat-cool-light.png" alt="heat_cool dual setpoint with low/high handles" width="280">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/show-current-dark.png">
+    <img src="assets/show-current-light.png" alt="Current temperature shown as the large primary number" width="280">
+  </picture>
 </p>
 
 | Interaction | Behavior |
@@ -215,9 +224,24 @@ and `climate-preset-modes` behave identically — shown here with `climate-hvac-
     <td align="center" width="33%"><code>display: tile</code></td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/hvac-icons.png" alt="HVAC modes as an icon row" width="240"></td>
-    <td align="center"><img src="assets/hvac-dropdown.png" alt="HVAC modes as a dropdown" width="240"></td>
-    <td align="center"><img src="assets/hvac-tile.png" alt="HVAC modes as a Google-Home-style tile" width="240"></td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-icons-dark.png">
+        <img src="assets/hvac-icons-light.png" alt="HVAC modes as an icon row" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-dropdown-dark.png">
+        <img src="assets/hvac-dropdown-light.png" alt="HVAC modes as a dropdown" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-tile-dark.png">
+        <img src="assets/hvac-tile-light.png" alt="HVAC modes as a Google-Home-style tile" width="240">
+      </picture>
+    </td>
   </tr>
 </table>
 
@@ -281,7 +305,10 @@ shown. Unlisted values keep their Home Assistant defaults.
 > The picker is shown for HVAC and preset modes in any display, and for every selector in `tile` display.
 
 <p align="center">
-  <img src="assets/option-overrides.png" alt="A selector with per-option label, icon and color overrides, and one option hidden" width="400">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/option-overrides-dark.png">
+    <img src="assets/option-overrides-light.png" alt="A selector with per-option label, icon and color overrides, and one option hidden" width="400">
+  </picture>
 </p>
 
 ### `input-select`
@@ -295,9 +322,24 @@ An `input_select` entity as a selector — the same three display modes as the c
     <td align="center" width="33%"><code>display: tile</code></td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/input-select-icons.png" alt="input_select as an icon row" width="240"></td>
-    <td align="center"><img src="assets/input-select-dropdown.png" alt="input_select as a dropdown" width="240"></td>
-    <td align="center"><img src="assets/input-select-tile.png" alt="input_select as a tile" width="240"></td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-icons-dark.png">
+        <img src="assets/input-select-icons-light.png" alt="input_select as an icon row" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-dropdown-dark.png">
+        <img src="assets/input-select-dropdown-light.png" alt="input_select as a dropdown" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-tile-dark.png">
+        <img src="assets/input-select-tile-light.png" alt="input_select as a tile" width="240">
+      </picture>
+    </td>
   </tr>
 </table>
 
@@ -330,9 +372,24 @@ chosen one. Items use the [`EntityItem`](#entityitem) shape. Renders in the same
     <td align="center" width="33%"><code>display: tile</code></td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/switch-group-icons.png" alt="switch group as an icon row" width="240"></td>
-    <td align="center"><img src="assets/switch-group-dropdown.png" alt="switch group as a dropdown" width="240"></td>
-    <td align="center"><img src="assets/switch-group-tile.png" alt="switch group as a tile" width="240"></td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-icons-dark.png">
+        <img src="assets/switch-group-icons-light.png" alt="switch group as an icon row" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-dropdown-dark.png">
+        <img src="assets/switch-group-dropdown-light.png" alt="switch group as a dropdown" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-tile-dark.png">
+        <img src="assets/switch-group-tile-light.png" alt="switch group as a tile" width="240">
+      </picture>
+    </td>
   </tr>
 </table>
 
@@ -349,7 +406,10 @@ chosen one. Items use the [`EntityItem`](#entityitem) shape. Renders in the same
 Independent toggles in a row (multiple can be on at once).
 
 <p align="center">
-  <img src="assets/switch-list.png" alt="A switch list — independent toggles, several on at once" width="400">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/switch-list-dark.png">
+    <img src="assets/switch-list-light.png" alt="A switch list — independent toggles, several on at once" width="400">
+  </picture>
 </p>
 
 ```yaml
@@ -364,7 +424,10 @@ Independent toggles in a row (multiple can be on at once).
 Independent presses for buttons, scenes, or scripts. **Note:** the key is `items` (not `entities`).
 
 <p align="center">
-  <img src="assets/button-list.png" alt="A button list — independent presses for buttons, scenes and scripts" width="400">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/button-list-dark.png">
+    <img src="assets/button-list-light.png" alt="A button list — independent presses for buttons, scenes and scripts" width="400">
+  </picture>
 </p>
 
 ```yaml
@@ -381,7 +444,10 @@ matching the Google Home app's sensor list. A lighter alternative to a stack of 
 when you just want to read several values. Uses `items` (not `entities`).
 
 <p align="center">
-  <img src="assets/sensor-list.png" alt="A sensor list — read-only rows of icon, title and current value" width="400">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/sensor-list-dark.png">
+    <img src="assets/sensor-list-light.png" alt="A sensor list — read-only rows of icon, title and current value" width="400">
+  </picture>
 </p>
 
 ```yaml
@@ -414,8 +480,18 @@ A rounded tile (à la Google Home) showing an icon, title, and a secondary line 
     <td align="center" width="50%"><code>display: icon</code></td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/entity-tile-tile.png" alt="Entity tile showing icon, title and value" width="240"></td>
-    <td align="center"><img src="assets/entity-tile-icon.png" alt="Entity tile as a bare centered icon" width="240"></td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/entity-tile-tile-dark.png">
+        <img src="assets/entity-tile-tile-light.png" alt="Entity tile showing icon, title and value" width="240">
+      </picture>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/entity-tile-icon-dark.png">
+        <img src="assets/entity-tile-icon-light.png" alt="Entity tile as a bare centered icon" width="240">
+      </picture>
+    </td>
   </tr>
 </table>
 
@@ -462,7 +538,10 @@ reached**. It reuses the [feels‑like sensors](#feels-like-temperature) (no pic
 be added **only once**.
 
 <p align="center">
-  <img src="assets/comfort.png" alt="Comfort feature: time until the room feels comfortable, with a thermometer icon" width="400">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/comfort-dark.png">
+    <img src="assets/comfort-light.png" alt="Comfort feature: time until the room feels comfortable, with a thermometer icon" width="400">
+  </picture>
 </p>
 
 #### How comfort is determined
@@ -637,6 +716,8 @@ combobox:
 | `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:e2e` | End-to-end tests against the built bundle (run `npm run build` first) |
 | `node tools/gen-icons.mjs` | Regenerate the `mt:` icon set into `src/icons.generated.ts` |
+| `node dev/push-dashboard.mjs` | Publish the showcase cards (`dev/showcase.mjs`) to a `material-thermostat` dashboard on your HA (needs `HA_URL`, `HA_TOKEN`; `--dry-run` prints the config) |
+| `node dev/ha-shots.mjs` | Regenerate README screenshots, light and dark, from `dev/showcase.mjs` (needs `npm run build`, `HA_URL`, `HA_TOKEN`) |
 
 ### Testing
 
