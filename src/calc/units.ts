@@ -28,11 +28,13 @@ export function normalizeTempUnit(unit: unknown): TempUnit | undefined {
   if (typeof unit !== 'string') return undefined;
   switch (unit.trim().toLowerCase()) {
     case '°c':
+    case 'ºc':
     case 'c':
     case '℃':
     case 'celsius':
       return '°C';
     case '°f':
+    case 'ºf':
     case 'f':
     case '℉':
     case 'fahrenheit':

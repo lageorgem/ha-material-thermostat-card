@@ -22,6 +22,8 @@ describe('calc/units', () => {
       expect(parseReading('0')).to.equal(0);
       expect(parseReading('-12.5')).to.equal(-12.5);
       expect(parseReading('1e2')).to.equal(100);
+      expect(parseReading('  21 ')).to.equal(21);
+      expect(parseReading('1e3')).to.equal(1000);
     });
 
     it('rejects empty, nonnumeric, nonfinite, and non-number/string values', () => {
@@ -72,6 +74,13 @@ describe('calc/units', () => {
         expect(normalizeTempUnit(unit)).to.equal(undefined);
       }
     });
+
+    it('accepts masculine-ordinal degree look-alikes', () => {
+      expect(normalizeTempUnit('ºF')).to.equal('°F');
+      expect(normalizeTempUnit('ºf')).to.equal('°F');
+      expect(normalizeTempUnit('ºC')).to.equal('°C');
+      expect(normalizeTempUnit('ºc')).to.equal('°C');
+    });
   });
 
   describe('systemTempUnit', () => {
@@ -100,6 +109,14 @@ describe('calc/units', () => {
   });
 
   describe('sensorTempUnit', () => {
+    it('prefers a masculine-ordinal Fahrenheit sensor unit over a Celsius system', () => {
+      const hass = {
+        config: { unit_system: { temperature: '°C' } },
+        states: { 'sensor.temperature': { attributes: { unit_of_measurement: 'ºF' } } },
+      };
+      expect(sensorTempUnit(hass, 'sensor.temperature')).to.equal('°F');
+    });
+
     it('prefers the normalized sensor unit over the system unit', () => {
       for (const [unit, expected] of [
         ['℃', '°C'],
