@@ -181,10 +181,6 @@ feels_like:
 
 Add any number of rows under `features:`. Each entry has a `type` and type‑specific options.
 
-<p align="center">
-  <img src="assets/features.png" alt="A card with HVAC modes, a switch group, a switch list and entity tiles" width="400">
-</p>
-
 | `type` | Controls | Selection behavior |
 | --- | --- | --- |
 | `climate-hvac-modes` | the card's climate entity | sets the **HVAC mode** |
@@ -208,6 +204,22 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | `width` | **all** feature types | number `10`–`100` (step 10) | `100` (selectors/lists) · `50` (tiles) | Width as a **percentage of the card** — see [Layout](#layout--responsiveness) |
 
 ### Climate selectors (HVAC / fan / swing / preset)
+
+Every climate selector renders in three display modes. `climate-fan-modes`, `climate-swing-modes`
+and `climate-preset-modes` behave identically — shown here with `climate-hvac-modes`:
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>display: icons</code></td>
+    <td align="center" width="33%"><code>display: dropdown</code></td>
+    <td align="center" width="33%"><code>display: tile</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/hvac-icons.png" alt="HVAC modes as an icon row" width="240"></td>
+    <td align="center"><img src="assets/hvac-dropdown.png" alt="HVAC modes as a dropdown" width="240"></td>
+    <td align="center"><img src="assets/hvac-tile.png" alt="HVAC modes as a Google-Home-style tile" width="240"></td>
+  </tr>
+</table>
 
 ```yaml
 features:
@@ -269,10 +281,25 @@ shown. Unlisted values keep their Home Assistant defaults.
 > The picker is shown for HVAC and preset modes in any display, and for every selector in `tile` display.
 
 <p align="center">
-  <img src="assets/selectors.png" alt="A card using a HVAC dropdown, fan-mode option overrides, and an input_select row" width="400">
+  <img src="assets/option-overrides.png" alt="A selector with per-option label, icon and color overrides, and one option hidden" width="400">
 </p>
 
 ### `input-select`
+
+An `input_select` entity as a selector — the same three display modes as the climate selectors:
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>display: icons</code></td>
+    <td align="center" width="33%"><code>display: dropdown</code></td>
+    <td align="center" width="33%"><code>display: tile</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/input-select-icons.png" alt="input_select as an icon row" width="240"></td>
+    <td align="center"><img src="assets/input-select-dropdown.png" alt="input_select as a dropdown" width="240"></td>
+    <td align="center"><img src="assets/input-select-tile.png" alt="input_select as a tile" width="240"></td>
+  </tr>
+</table>
 
 ```yaml
 - type: input-select
@@ -293,8 +320,21 @@ shown. Unlisted values keep their Home Assistant defaults.
 
 ### `switch-group`
 
-Mutually‑exclusive switches that behave like a selector — picking one turns the others off first,
-then turns on the chosen one. Items use the [`EntityItem`](#entityitem) shape.
+Mutually‑exclusive switches that behave like a selector — picking one turns the others off first, then turns on the
+chosen one. Items use the [`EntityItem`](#entityitem) shape. Renders in the same three display modes as the selectors:
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>display: icons</code></td>
+    <td align="center" width="33%"><code>display: dropdown</code></td>
+    <td align="center" width="33%"><code>display: tile</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/switch-group-icons.png" alt="switch group as an icon row" width="240"></td>
+    <td align="center"><img src="assets/switch-group-dropdown.png" alt="switch group as a dropdown" width="240"></td>
+    <td align="center"><img src="assets/switch-group-tile.png" alt="switch group as a tile" width="240"></td>
+  </tr>
+</table>
 
 ```yaml
 - type: switch-group
@@ -308,6 +348,10 @@ then turns on the chosen one. Items use the [`EntityItem`](#entityitem) shape.
 
 Independent toggles in a row (multiple can be on at once).
 
+<p align="center">
+  <img src="assets/switch-list.png" alt="A switch list — independent toggles, several on at once" width="400">
+</p>
+
 ```yaml
 - type: switch-list
   entities:
@@ -318,6 +362,10 @@ Independent toggles in a row (multiple can be on at once).
 ### `button-list`
 
 Independent presses for buttons, scenes, or scripts. **Note:** the key is `items` (not `entities`).
+
+<p align="center">
+  <img src="assets/button-list.png" alt="A button list — independent presses for buttons, scenes and scripts" width="400">
+</p>
 
 ```yaml
 - type: button-list
@@ -331,6 +379,10 @@ Independent presses for buttons, scenes, or scripts. **Note:** the key is `items
 Read‑only rows of an (optional) icon, a customizable title, and the entity's current value —
 matching the Google Home app's sensor list. A lighter alternative to a stack of `entity-tile`s
 when you just want to read several values. Uses `items` (not `entities`).
+
+<p align="center">
+  <img src="assets/sensor-list.png" alt="A sensor list — read-only rows of icon, title and current value" width="400">
+</p>
 
 ```yaml
 - type: sensor-list
@@ -353,8 +405,19 @@ Used by `switch-group.entities`, `switch-list.entities`, `button-list.items`, an
 
 ### `entity-tile`
 
-A rounded tile (à la Google Home) showing an icon, title, and a secondary line (sensor value, or
-on/off). Runs `tap_action` if set, otherwise the entity's natural action.
+A rounded tile (à la Google Home) showing an icon, title, and a secondary line (sensor value, or on/off). Runs
+`tap_action` if set, otherwise the entity's natural action. Two display modes:
+
+<table>
+  <tr>
+    <td align="center" width="50%"><code>display: tile</code></td>
+    <td align="center" width="50%"><code>display: icon</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/entity-tile-tile.png" alt="Entity tile showing icon, title and value" width="240"></td>
+    <td align="center"><img src="assets/entity-tile-icon.png" alt="Entity tile as a bare centered icon" width="240"></td>
+  </tr>
+</table>
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -544,11 +607,21 @@ so it looks native under `material-you-theme` and remains usable under any theme
 ## Visual editor
 
 Every option above is editable from the card's **visual editor**: a base form (entity, name, theme,
-"show current as primary") plus a **drag‑sortable list of features**. Each feature row expands to its
-own editor — per‑option label/icon/hide for selectors, entity pickers for lists, a `width` slider,
-and an icons / dropdown / tile display toggle. **Options and list items are drag‑to‑reorder** too (the order is saved
-to the config), so you control the order icons appear in. The **"Add feature"** menu only offers the
-climate selectors the entity actually exposes, and each climate selector can be added once.
+"show current as primary", plus the [feels‑like](#feels-like-temperature) sensors) and a **drag‑sortable list of
+features**. Each feature row expands to its own editor — per‑option **label / icon / color / hide** for selectors,
+entity pickers for lists, a `width` slider, and an icons / dropdown / tile display toggle. **Options and list items are
+drag‑to‑reorder** too (the order is saved to the config), so you control the order icons appear in. The **"Add
+feature"** menu only offers the climate selectors the entity actually exposes, and each climate selector can be added
+once.
+
+The editor uses **custom rounded search pickers** that match the card's aesthetic rather than Home Assistant's stock
+combobox:
+
+- an **entity picker** — a pill that opens one searchable, domain‑filtered dropdown;
+- an **icon picker** — the same searchable panel over a curated MDI set **plus every registered custom icon pack**
+  (including this card's [`mt:` swing icons](#ac-swing-icons-mt)), with free‑text
+  `mdi:<name>` entry for the long tail, and a **"No icon"** option;
+- a **color pill** that previews the current accent and resets to the theme/mode default.
 
 ## Development
 
