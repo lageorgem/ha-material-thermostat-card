@@ -24,6 +24,7 @@ import { pmv, cloForTemp, PMV_COMFORT_LIMIT } from './pmv';
 import { newtonFit, etaToThreshold, linearEta, MIN_SPAN_MIN } from './forecast';
 import { formatDuration } from './duration';
 import { mergeOnLeft } from './history';
+import { fromCelsius, type TempUnit } from './units';
 
 /** A numeric time series sample (minutes / value). */
 export interface TS {
@@ -56,8 +57,8 @@ export interface ComfortInput {
    * between (possibly sparse) sensor updates instead of leaving it frozen.
    */
   staleMin: number;
-  /** Temperature unit symbol for messages, e.g. '°C'. */
-  unit: string;
+  /** Display unit; all input temperatures remain Celsius. */
+  unit: TempUnit;
 }
 
 /** Result of {@link analyzeComfort}. */
@@ -102,11 +103,13 @@ function targetEta(i: ComfortInput): string | undefined {
   if (!fit) return undefined;
 
   const cooling = i.target < i.tempNow;
+  // Preserve Celsius setpoint precision; round other units only after conversion.
+  const target = i.unit === '°C' ? i.target : Math.round(fromCelsius(i.target, i.unit));
   const eta = etaToThreshold(i.tempNow, i.target, fit);
   if (eta != null) {
     const remaining = eta - i.staleMin; // count down from the last reading
-    if (remaining < ETA_SOON_MIN) return `Almost at ${i.target}${i.unit}`;
-    return `${formatDuration(remaining)} until ${cooling ? 'cooled' : 'heated'} to ${i.target}${i.unit}`;
+    if (remaining < ETA_SOON_MIN) return `Almost at ${target}${i.unit}`;
+    return `${formatDuration(remaining)} until ${cooling ? 'cooled' : 'heated'} to ${target}${i.unit}`;
   }
 
   // Unreachable: report the plateau, but only when actually moving toward it.
@@ -115,7 +118,7 @@ function targetEta(i: ComfortInput): string | undefined {
   // A plateau that's basically at the setpoint isn't worth flagging — "won't go
   // below 25°" when you set 25° (or it settles at 25.4°) just reads as a bug.
   if (Math.abs(fit.asymptote - i.target) <= TARGET_PLATEAU_EPS) return undefined;
-  const plateau = Math.round(fit.asymptote);
+  const plateau = Math.round(fromCelsius(fit.asymptote, i.unit));
   return `won't go ${cooling ? 'below' : 'above'} ${plateau}${i.unit}`;
 }
 
@@ -198,7 +201,8 @@ export function analyzeComfort(i: ComfortInput): ComfortResult {
   // linear extrapolation of the (real) trend. The ETA is anchored to the last
   // reading, so it counts down between updates and resolves to "…soon" near zero.
   const fit = newtonFit(series);
-  const eta = (fit ? etaToThreshold(metricNow, threshold, fit) : null) ?? linearEta(series, threshold);
+  const eta =
+    (fit ? etaToThreshold(metricNow, threshold, fit) : null) ?? linearEta(series, threshold);
   let line = verdict;
   if (eta != null) {
     const remaining = eta - i.staleMin;

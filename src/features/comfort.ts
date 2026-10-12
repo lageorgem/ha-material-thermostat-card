@@ -5,6 +5,13 @@ import type { ComfortFeatureConfig } from '../types';
 import { tokens, climateModeColor } from '../theme';
 import { fetchHistory, numericSeries, OFF_STATES } from '../calc/history';
 import {
+  parseReading,
+  sensorTempUnit,
+  systemTempUnit,
+  toCelsius,
+  type TempUnit,
+} from '../calc/units';
+import {
   analyzeComfort,
   type ComfortResult,
   type ComfortStatus,
@@ -68,7 +75,7 @@ export class MtComfort extends LitElement {
   private _fetching = false;
   private _lastFetchMs = 0;
   /** Last fetched history series, reused for cheap recomputes on hass updates. */
-  private _cache?: { tempSeries: TS[]; rhSeries: TS[] };
+  private _cache?: { tempSeries: TS[]; rhSeries: TS[]; unit: TempUnit };
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -111,14 +118,16 @@ export class MtComfort extends LitElement {
    * `current_temperature` when the sensor reads non-numeric. Only ever called
    * once {@link _hasReadings} has confirmed `tempSensor` is set.
    */
-  private _tempNow(): number {
-    const v = parseFloat(String(this.hass?.states?.[this.tempSensor!]?.state));
-    return isFinite(v) ? v : Number(this._climate?.attributes?.current_temperature);
+  private _tempNow(): number | undefined {
+    const v = parseReading(this.hass?.states?.[this.tempSensor!]?.state);
+    if (v !== undefined) return toCelsius(v, sensorTempUnit(this.hass, this.tempSensor!));
+    const fallback = parseReading(this._climate?.attributes?.current_temperature);
+    return fallback === undefined ? undefined : toCelsius(fallback, systemTempUnit(this.hass));
   }
 
   /** Current humidity reading (%). Called only once `humiditySensor` is set. */
-  private _rhNow(): number {
-    return parseFloat(String(this.hass?.states?.[this.humiditySensor!]?.state));
+  private _rhNow(): number | undefined {
+    return parseReading(this.hass?.states?.[this.humiditySensor!]?.state);
   }
 
   /**
@@ -139,18 +148,24 @@ export class MtComfort extends LitElement {
    * so the row just shows the comfort verdict). auto/dry/fan_only can move
    * either way, so their target is kept. Only called once {@link _hasReadings}
    * has confirmed the climate entity exists.
-   * @param tempNow the current temperature reading
+   * @param tempNow the current temperature reading in Celsius
    */
   private _target(tempNow: number): number | null {
     const c = this._climate!;
     const a = c.attributes;
-    if (c.state === 'heat_cool' && a.target_temp_low != null && a.target_temp_high != null) {
-      if (tempNow < a.target_temp_low) return Number(a.target_temp_low);
-      if (tempNow > a.target_temp_high) return Number(a.target_temp_high);
+    const unit = systemTempUnit(this.hass);
+    const low = parseReading(a.target_temp_low);
+    const high = parseReading(a.target_temp_high);
+    if (c.state === 'heat_cool' && low !== undefined && high !== undefined) {
+      const lowC = toCelsius(low, unit);
+      const highC = toCelsius(high, unit);
+      if (tempNow < lowC) return lowC;
+      if (tempNow > highC) return highC;
       return null; // within band
     }
-    const t = Number(a.temperature);
-    if (!isFinite(t)) return null;
+    const reading = parseReading(a.temperature);
+    if (reading === undefined) return null;
+    const t = toCelsius(reading, unit);
     if (c.state === 'cool' && tempNow <= t) return null; // already at/below — nothing to cool
     if (c.state === 'heat' && tempNow >= t) return null; // already at/above — nothing to heat
     return t;
@@ -169,8 +184,8 @@ export class MtComfort extends LitElement {
       !DEAD_STATES.has(c.state) &&
       this.tempSensor &&
       this.humiditySensor &&
-      isFinite(this._tempNow()) &&
-      isFinite(this._rhNow())
+      this._tempNow() !== undefined &&
+      this._rhNow() !== undefined
     );
   }
 
@@ -186,21 +201,24 @@ export class MtComfort extends LitElement {
       this._set({ visible: false, comfortable: false });
       return;
     }
-    const tempNow = this._tempNow();
+    const tempNow = this._tempNow()!;
+    // Cached history is Celsius, but a sensor unit change invalidates its source.
+    const cache =
+      this._cache?.unit === sensorTempUnit(this.hass, this.tempSensor!) ? this._cache : undefined;
     // Forecasts (time-to-comfortable, target ETA) only make sense while running;
     // when off, analyzeComfort shows the bare verdict from the current readings.
     const running = this._isRunning();
     this._set(
       analyzeComfort({
         tempNow,
-        rhNow: this._rhNow(),
-        tempSeries: running ? (this._cache?.tempSeries ?? []) : [],
-        rhSeries: running ? (this._cache?.rhSeries ?? []) : [],
+        rhNow: this._rhNow()!,
+        tempSeries: running ? (cache?.tempSeries ?? []) : [],
+        rhSeries: running ? (cache?.rhSeries ?? []) : [],
         target: running ? this._target(tempNow) : null,
         showTargetEta: running && (this.feature.show_target_eta ?? false),
         running,
         staleMin: this._staleMin(),
-        unit: this.hass.config?.unit_system?.temperature ?? '°C',
+        unit: systemTempUnit(this.hass),
       })
     );
   }
@@ -234,8 +252,13 @@ export class MtComfort extends LitElement {
       const hist = await fetchHistory(this.hass, ids, start, now);
       // fetchHistory always returns an array for every requested id (empty when
       // it has no data), so these lookups are never undefined.
+      const unit = sensorTempUnit(this.hass, this.tempSensor!);
       this._cache = {
-        tempSeries: numericSeries(hist[this.tempSensor!], start, start),
+        unit,
+        tempSeries: numericSeries(hist[this.tempSensor!], start, start).map((p) => ({
+          t: p.t,
+          v: toCelsius(p.v, unit),
+        })),
         rhSeries: numericSeries(hist[this.humiditySensor!], start, start),
       };
       this._recompute();
@@ -246,7 +269,9 @@ export class MtComfort extends LitElement {
     }
   }
 
-  /** Store a result and notify the row so it can collapse when not visible. */
+  /** Store a result and notify the row so it can collapse when not visible.
+   * @param r analyzed comfort result
+   */
   private _set(r: ComfortResult): void {
     this._result = r;
     this.dispatchEvent(

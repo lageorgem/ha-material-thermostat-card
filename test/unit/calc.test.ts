@@ -561,7 +561,9 @@ describe('calc/comfort-analysis', () => {
     };
     expect(analyzeComfort({ ...i, staleMin: 0 }).line).to.equal('59m until comfortable');
     expect(analyzeComfort({ ...i, staleMin: 5 }).line).to.equal('54m until comfortable'); // counted down
-    expect(analyzeComfort({ ...i, staleMin: 1000 }).line).to.equal('Room should be comfortable soon');
+    expect(analyzeComfort({ ...i, staleMin: 1000 }).line).to.equal(
+      'Room should be comfortable soon'
+    );
   });
 
   it('counts the target ETA down too, resolving to "Almost at {target}"', () => {
@@ -648,6 +650,26 @@ describe('calc/comfort-analysis', () => {
     });
     expect(r.comfortable).to.equal(true);
     expect(r.line).to.match(/^\S+ until heated to 26°C$/);
+  });
+
+  it('converts target and plateau text to Fahrenheit before rounding, keeping Celsius decimals', () => {
+    const input = {
+      ...base,
+      tempNow: 25,
+      rhNow: 45,
+      target: 21.2,
+      showTargetEta: true,
+      tempSeries: exp(20, 25, 0.05),
+      rhSeries: flat(45),
+    };
+    expect(analyzeComfort(input).line).to.match(/until cooled to 21.2°C$/);
+    expect(analyzeComfort({ ...input, unit: '°F' }).line).to.match(/until cooled to 70°F$/);
+    expect(analyzeComfort({ ...input, unit: '°F', staleMin: 1000 }).line).to.equal(
+      'Almost at 70°F'
+    );
+    expect(
+      analyzeComfort({ ...input, unit: '°F', tempSeries: exp(24.4, 28, 0.06, 24, 2) }).line
+    ).to.equal("won't go below 76°F");
   });
 
   it("comfortable + target unreachable → won't go below the plateau", () => {

@@ -19,6 +19,7 @@ interface MountOpts {
   feature?: Partial<ComfortFeatureConfig>;
   climateStateStr?: string;
   tempNow?: string;
+  tempUnit?: string;
   rhNow?: string;
   history?: Record<string, { s: string; lu: number }[]>;
   noSensors?: boolean;
@@ -49,19 +50,29 @@ describe('mt-comfort', () => {
     sinon.restore();
   });
 
-  /** Mount mt-comfort and let its async history fetch settle. */
+  /** Mount mt-comfort and let its async history fetch settle.
+   * @param opts readings, units, and history fixture
+   */
   async function mount(opts: MountOpts = {}): Promise<MtComfort> {
     const climate = climateState(
-      { current_temperature: Number(opts.tempNow ?? 25), temperature: 21, ...(opts.climateAttrs ?? {}) },
+      {
+        current_temperature: Number(opts.tempNow ?? 25),
+        temperature: 21,
+        ...(opts.climateAttrs ?? {}),
+      },
       opts.climateStateStr ?? 'cool'
     );
     // The session anchors on the climate's last_changed (since it turned on).
     if (opts.sessionStartRaw !== undefined) {
       (climate as any).last_changed = opts.sessionStartRaw;
     } else if (!opts.noSessionStart) {
-      (climate as any).last_changed = new Date((opts.sessionStartSec ?? baseSec) * 1000).toISOString();
+      (climate as any).last_changed = new Date(
+        (opts.sessionStartSec ?? baseSec) * 1000
+      ).toISOString();
     }
-    const tSensor = entityState(T_SENSOR, opts.tempNow ?? '25');
+    const tSensor = entityState(T_SENSOR, opts.tempNow ?? '25', {
+      unit_of_measurement: opts.tempUnit,
+    });
     if (opts.tStaleSec != null) {
       (tSensor as any).last_changed = new Date(Date.now() - opts.tStaleSec * 1000).toISOString();
     }
@@ -129,6 +140,137 @@ describe('mt-comfort', () => {
   it('shows "Room feels comfortable" immediately (no history needed)', async () => {
     const el = await mount({ tempNow: '25', rhNow: '50' });
     expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('normalizes current readings and sensor history for Fahrenheit and mixed installs', async () => {
+    const temps = Array.from({ length: 16 }, (_, i) => 22 + 10 * Math.exp(-0.05 * i * 2));
+    const baseline = await mount({
+      tempNow: '27',
+      rhNow: '60',
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(60), baseSec) },
+    });
+    expect(line(baseline)).to.match(/until comfortable$/);
+    for (const [system, sensor] of [
+      ['°F', '°F'],
+      ['°F', '°C'],
+      ['°C', '°F'],
+    ]) {
+      const el = await mount({
+        tempNow: sensor === '°F' ? '80.6' : '27',
+        tempUnit: sensor,
+        rhNow: '60',
+        config: { unit_system: { temperature: system } },
+        history: {
+          [T_SENSOR]: pts(sensor === '°F' ? temps.map((v) => v * 1.8 + 32) : temps, baseSec),
+          [H_SENSOR]: pts(Array(16).fill(60), baseSec),
+        },
+      });
+      expect(line(el)).to.equal(line(baseline));
+      expect(icon(el)!.getAttribute('icon')).to.equal(icon(baseline)!.getAttribute('icon'));
+    }
+  });
+
+  it('hides missing or blank temperatures and humidity instead of interpreting them as zero', async () => {
+    for (const missing of [null, '', '   ', undefined]) {
+      const el = await mount({
+        tempNow: 'unknown',
+        climateAttrs: { current_temperature: missing },
+      });
+      expect(line(el)).to.equal(null);
+    }
+    for (const missing of ['', '   ', 'unknown']) {
+      const el = await mount({ tempNow: missing, climateAttrs: { current_temperature: null } });
+      expect(line(el)).to.equal(null);
+      expect(line(await mount({ rhNow: missing }))).to.equal(null);
+    }
+  });
+
+  it('converts the climate fallback with the HA unit, not the sensor unit', async () => {
+    const el = await mount({
+      tempNow: 'unknown',
+      tempUnit: '°C',
+      config: { unit_system: { temperature: '°F' } },
+      climateAttrs: { current_temperature: 77 },
+      rhNow: '45',
+    });
+    expect(line(el)).to.equal('Room feels comfortable');
+  });
+
+  it('does not forecast toward missing or blank targets, including heat_cool bands', async () => {
+    const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
+    for (const missing of [null, '', '   ']) {
+      for (const mode of ['cool', 'heat_cool']) {
+        const el = await mount({
+          tempNow: '25',
+          rhNow: '45',
+          climateStateStr: mode,
+          climateAttrs: { temperature: missing, target_temp_low: missing, target_temp_high: 28 },
+          feature: { show_target_eta: true },
+          history: {
+            [T_SENSOR]: pts(temps, baseSec),
+            [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+          },
+        });
+        expect(line(el)).to.equal('Room feels comfortable');
+      }
+    }
+  });
+
+  it('converts HA targets before selecting a heat_cool band and displays Fahrenheit', async () => {
+    const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      tempNow: '25',
+      tempUnit: '°C',
+      rhNow: '45',
+      config: { unit_system: { temperature: '°F' } },
+      climateStateStr: 'heat_cool',
+      climateAttrs: { target_temp_low: 64.4, target_temp_high: 71.6 },
+      feature: { show_target_eta: true },
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+    });
+    expect(line(el)).to.match(/until cooled to 72°F$/);
+  });
+
+  it('discards cached history when the sensor unit changes', async () => {
+    const temps = Array.from({ length: 16 }, (_, i) => 22 + 10 * Math.exp(-0.05 * i * 2));
+    const el = await mount({
+      tempNow: '27',
+      tempUnit: '°C',
+      rhNow: '60',
+      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(60), baseSec) },
+    });
+    expect(line(el)).to.match(/until comfortable$/);
+    el.hass.states[T_SENSOR] = entityState(T_SENSOR, '80.6', { unit_of_measurement: '°F' });
+    (el as any)._recompute();
+    await el.updateComplete;
+    expect(line(el)).to.equal('Room feels warm');
+  });
+
+  it('shows a single target and a converted plateau rounded in Fahrenheit', async () => {
+    for (const [plateau, expected] of [
+      [20, /until cooled to 70°F$/],
+      [24.4, /^won't go below 76°F$/],
+    ] as const) {
+      const temps = Array.from(
+        { length: 24 },
+        (_, i) => plateau + (28 - plateau) * Math.exp(-0.06 * i * 2)
+      );
+      const el = await mount({
+        tempNow: '77',
+        rhNow: '45',
+        config: { unit_system: { temperature: '°F' } },
+        climateAttrs: { temperature: 70 },
+        feature: { show_target_eta: true },
+        history: {
+          [T_SENSOR]: pts(
+            temps.map((v) => v * 1.8 + 32),
+            baseSec
+          ),
+          [H_SENSOR]: pts(Array(24).fill(45), baseSec),
+        },
+      });
+      expect(line(el)).to.match(expected);
+    }
   });
 
   it('still shows the verdict when the climate is off (no forecast)', async () => {
@@ -266,7 +408,10 @@ describe('mt-comfort', () => {
       tempNow: '24',
       rhNow: '45',
       feature: { show_target_eta: true },
-      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+      history: {
+        [T_SENSOR]: pts(Array(16).fill(24), baseSec),
+        [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+      },
     });
     expect(line(el)).to.equal('Room feels comfortable');
   });
@@ -292,7 +437,10 @@ describe('mt-comfort', () => {
       rhNow: '45',
       climateAttrs: { temperature: undefined },
       feature: { show_target_eta: true },
-      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+      history: {
+        [T_SENSOR]: pts(Array(16).fill(24), baseSec),
+        [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+      },
     });
     expect(line(el)).to.equal('Room feels comfortable');
   });
@@ -306,7 +454,10 @@ describe('mt-comfort', () => {
       rhNow: '45',
       climateAttrs: { temperature: 26 },
       feature: { show_target_eta: true },
-      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+      history: {
+        [T_SENSOR]: pts(Array(16).fill(24), baseSec),
+        [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+      },
     });
     expect(line(el)).to.equal('Room feels comfortable');
   });
@@ -318,7 +469,10 @@ describe('mt-comfort', () => {
       rhNow: '45',
       climateAttrs: { temperature: 22 },
       feature: { show_target_eta: true },
-      history: { [T_SENSOR]: pts(Array(16).fill(24), baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+      history: {
+        [T_SENSOR]: pts(Array(16).fill(24), baseSec),
+        [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+      },
     });
     expect(line(el)).to.equal('Room feels comfortable');
   });
@@ -403,7 +557,9 @@ describe('mt-comfort', () => {
   it('dispatches feature-visibility and cleans up its timer on disconnect', async () => {
     const events: boolean[] = [];
     const el = await mount({ tempNow: '25' });
-    el.addEventListener('feature-visibility', (e) => events.push((e as CustomEvent).detail.visible));
+    el.addEventListener('feature-visibility', (e) =>
+      events.push((e as CustomEvent).detail.visible)
+    );
     el.hass = makeHass(
       {
         [CLIMATE]: climateState({ current_temperature: 25 }, 'cool'),
