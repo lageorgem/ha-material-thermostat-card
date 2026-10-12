@@ -153,7 +153,22 @@ export const SHOTS = [
         type: 'climate-swing-modes',
         label: 'Swing',
         options: [
-          { value: 'Fixed Middle', label: 'Fixed', icon: 'mt:swing-vertical-fixed-middle' },
+          { value: 'Fixed Top', label: 'Top', icon: 'mt:swing-vertical-fixed-top' },
+          {
+            value: 'Fixed Top-Middle',
+            label: 'Upper',
+            icon: 'mt:swing-vertical-fixed-upper-middle',
+          },
+          { value: 'Fixed Middle', label: 'Middle', icon: 'mt:swing-vertical-fixed-middle' },
+          {
+            value: 'Fixed Bottom-Middle',
+            label: 'Lower',
+            icon: 'mt:swing-vertical-fixed-lower-middle',
+          },
+          { value: 'Fixed Bottom', label: 'Bottom', icon: 'mt:swing-vertical-fixed-bottom' },
+          { value: 'Swing Bottom', hide: true },
+          { value: 'Swing Middle', hide: true },
+          { value: 'Swing Top', hide: true },
           { value: 'Full Swing', label: 'Swing', icon: 'mt:swing-vertical-full' },
         ],
       },
