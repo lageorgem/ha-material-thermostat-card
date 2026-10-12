@@ -142,11 +142,14 @@ export class MtComfort extends LitElement {
 
   /**
    * Resolve the relevant target setpoint, or null when there's no sensible
-   * forecast toward one — at/within the heat_cool band, or a single setpoint
+   * forecast toward one — at/within the heat_cool band, an incomplete band,
+   * or a single setpoint
    * the active mode can't drive the room toward (a `cool` setpoint above the
    * current temp, or a `heat` setpoint below it — there's nothing to cool/heat,
    * so the row just shows the comfort verdict). auto/dry/fan_only can move
-   * either way, so their target is kept. Only called once {@link _hasReadings}
+   * either way, so their target is kept. heat_cool uses the single setpoint
+   * only when neither band bound is a valid reading; one valid bound means no
+   * target. Only called once {@link _hasReadings}
    * has confirmed the climate entity exists.
    * @param tempNow the current temperature reading in Celsius
    */
@@ -162,6 +165,9 @@ export class MtComfort extends LitElement {
       if (tempNow < lowC) return lowC;
       if (tempNow > highC) return highC;
       return null; // within band
+    }
+    if (c.state === 'heat_cool' && (low !== undefined || high !== undefined)) {
+      return null;
     }
     const reading = parseReading(a.temperature);
     if (reading === undefined) return null;

@@ -416,18 +416,45 @@ describe('mt-comfort', () => {
     expect(line(el)).to.equal('Room feels comfortable');
   });
 
+  for (const missing of [null, '', '   ', undefined]) {
+    for (const missingBound of ['target_temp_low', 'target_temp_high']) {
+      it(`heat_cool with ${missingBound}=${String(missing)} ignores the single setpoint`, async () => {
+        const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
+        const el = await mount({
+          climateStateStr: 'heat_cool',
+          climateAttrs: {
+            temperature: 21,
+            target_temp_low: 18,
+            target_temp_high: 24,
+            [missingBound]: missing,
+          },
+          tempNow: '25',
+          rhNow: '45',
+          feature: { show_target_eta: true },
+          history: {
+            [T_SENSOR]: pts(temps, baseSec),
+            [H_SENSOR]: pts(Array(16).fill(45), baseSec),
+          },
+        });
+        expect(line(el)).to.equal('Room feels comfortable');
+      });
+    }
+  }
+
   it('heat_cool without low/high setpoints falls back to the single `temperature`', async () => {
-    // A malformed heat_cool entity (no target_temp_low/high) → _target() drops to
-    // the single setpoint (climateState default 21).
+    // Single-setpoint heat_cool devices use temperature when neither bound is valid.
     const temps = Array.from({ length: 16 }, (_, i) => 20 + 6 * Math.exp(-0.05 * i * 2));
-    const el = await mount({
-      climateStateStr: 'heat_cool',
-      tempNow: '24',
-      rhNow: '45',
-      feature: { show_target_eta: true },
-      history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
-    });
-    expect(line(el)).to.match(/until cooled to 21°C$/);
+    for (const missing of [null, '', '   ', undefined]) {
+      const el = await mount({
+        climateStateStr: 'heat_cool',
+        climateAttrs: { temperature: 21, target_temp_low: missing, target_temp_high: missing },
+        tempNow: '24',
+        rhNow: '45',
+        feature: { show_target_eta: true },
+        history: { [T_SENSOR]: pts(temps, baseSec), [H_SENSOR]: pts(Array(16).fill(45), baseSec) },
+      });
+      expect(line(el)).to.match(/until cooled to 21°C$/);
+    }
   });
 
   it('single-setpoint with no `temperature` attribute → no target ETA clause', async () => {
