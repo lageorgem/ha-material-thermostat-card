@@ -28,6 +28,7 @@ import type {
   MaterialThermostatCardConfig,
 } from './types';
 import { feelsLikeC } from './calc/comfort-metrics';
+import { parseReading, sensorTempUnit, systemTempUnit, toCelsius, fromCelsius } from './calc/units';
 import { registerMtIcons } from './register-icons';
 import './dial/circular-dial';
 import './features/feature-row';
@@ -132,17 +133,19 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
 
   /**
    * The current temperature to display on the dial: the computed feels-like
-   * value when enabled and both sensors read numerically, else the climate's own
+   * value in the system unit when enabled and both sensors read numerically,
+   * else the climate's own
    * `current_temperature`.
    * @param fallback the climate entity's current_temperature
    */
   private _displayCurrent(fallback: number | undefined): number | undefined {
     const fl = this._config.feels_like;
     if (!fl?.show_as_current || !fl.temperature || !fl.humidity) return fallback;
-    const t = parseFloat(String(this.hass?.states?.[fl.temperature]?.state));
-    const rh = parseFloat(String(this.hass?.states?.[fl.humidity]?.state));
-    if (!isFinite(t) || !isFinite(rh)) return fallback;
-    return feelsLikeC(t, rh);
+    const t = parseReading(this.hass?.states?.[fl.temperature]?.state);
+    const rh = parseReading(this.hass?.states?.[fl.humidity]?.state);
+    if (t === undefined || rh === undefined) return fallback;
+    const tC = toCelsius(t, sensorTempUnit(this.hass, fl.temperature));
+    return fromCelsius(feelsLikeC(tC, rh), systemTempUnit(this.hass));
   }
 
   protected shouldUpdate(changed: PropertyValues): boolean {
@@ -470,14 +473,15 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
                 })}
               >
                 ${this._config.features.map(
-                  (feature: FeatureConfig) => html`<mt-feature-row
-                    .hass=${this.hass}
-                    .entityId=${this._config.entity}
-                    .feature=${feature}
-                    .span=${this._featureSpan(feature)}
-                    .feelsLikeTemp=${this._config.feels_like?.temperature}
-                    .feelsLikeHumidity=${this._config.feels_like?.humidity}
-                  ></mt-feature-row>`
+                  (feature: FeatureConfig) =>
+                    html`<mt-feature-row
+                      .hass=${this.hass}
+                      .entityId=${this._config.entity}
+                      .feature=${feature}
+                      .span=${this._featureSpan(feature)}
+                      .feelsLikeTemp=${this._config.feels_like?.temperature}
+                      .feelsLikeHumidity=${this._config.feels_like?.humidity}
+                    ></mt-feature-row>`
                 )}
               </div>`
             : nothing}

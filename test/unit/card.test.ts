@@ -4,6 +4,7 @@ import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import { makeHass, climateState, entityState } from '../helpers';
 import { feelsLikeC } from '../../src/calc/comfort-metrics';
+import { fromCelsius, type TempUnit } from '../../src/calc/units';
 import type { MaterialThermostatCardConfig } from '../../src/types';
 
 // The benign "ResizeObserver loop completed with undelivered notifications"
@@ -70,9 +71,9 @@ describe('material-thermostat-card', () => {
   describe('setConfig', () => {
     it('throws when entity is missing', () => {
       const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
-      expect(() => el.setConfig({ type: 'x', entity: '' } as MaterialThermostatCardConfig)).to.throw(
-        'You must specify a climate entity.'
-      );
+      expect(() =>
+        el.setConfig({ type: 'x', entity: '' } as MaterialThermostatCardConfig)
+      ).to.throw('You must specify a climate entity.');
     });
 
     it('throws when the entity is not a climate.* entity', () => {
@@ -143,9 +144,7 @@ describe('material-thermostat-card', () => {
   describe('customCards getEntitySuggestion', () => {
     /** The card's entry on window.customCards (registered at module import). */
     function entry(): any {
-      return (window as any).customCards.find(
-        (c: any) => c.type === 'material-thermostat-card'
-      );
+      return (window as any).customCards.find((c: any) => c.type === 'material-thermostat-card');
     }
 
     it('registers an entry with a getEntitySuggestion function', () => {
@@ -195,9 +194,7 @@ describe('material-thermostat-card', () => {
     });
 
     it('renders unavailable state: disabled dial + Unavailable label', async () => {
-      const el = track(
-        await mount(baseConfig(), { [ENTITY]: climateState({}, 'unavailable') })
-      );
+      const el = track(await mount(baseConfig(), { [ENTITY]: climateState({}, 'unavailable') }));
       const d = dial(el);
       expect(d.disabled).to.equal(true);
       expect(d.modeLabel).to.equal('Unavailable');
@@ -331,7 +328,9 @@ describe('material-thermostat-card', () => {
       const el = track(
         await mount(
           baseConfig({
-            features: [{ type: 'climate-preset-modes', options: [{ value: 'eco', icon: 'mdi:sprout' }] }],
+            features: [
+              { type: 'climate-preset-modes', options: [{ value: 'eco', icon: 'mdi:sprout' }] },
+            ],
           }),
           { [ENTITY]: presetState('eco') }
         )
@@ -418,10 +417,7 @@ describe('material-thermostat-card', () => {
     it('true when heat_cool with low+high present', async () => {
       const el = track(
         await mount(baseConfig(), {
-          [ENTITY]: climateState(
-            { target_temp_low: 18, target_temp_high: 24 },
-            'heat_cool'
-          ),
+          [ENTITY]: climateState({ target_temp_low: 18, target_temp_high: 24 }, 'heat_cool'),
         })
       );
       expect((el as any)._isDual).to.equal(true);
@@ -759,10 +755,7 @@ describe('material-thermostat-card', () => {
     async function mountDual(): Promise<MaterialThermostatCard> {
       return track(
         await mount(baseConfig(), {
-          [ENTITY]: climateState(
-            { target_temp_low: 18, target_temp_high: 24 },
-            'heat_cool'
-          ),
+          [ENTITY]: climateState({ target_temp_low: 18, target_temp_high: 24 }, 'heat_cool'),
         })
       );
     }
@@ -837,7 +830,12 @@ describe('material-thermostat-card', () => {
       el.setConfig(baseConfig({ theme: 'my-theme' }));
       el.hass = makeHass(
         { [ENTITY]: climateState() },
-        { themes: { themes: { 'my-theme': { 'primary-color': '#abcdef' } }, default_theme: 'default' } as any }
+        {
+          themes: {
+            themes: { 'my-theme': { 'primary-color': '#abcdef' } },
+            default_theme: 'default',
+          } as any,
+        }
       );
       document.body.appendChild(el);
       await el.updateComplete;
@@ -845,7 +843,12 @@ describe('material-thermostat-card', () => {
       // change just the hass.themes object reference → re-applies without throwing
       el.hass = makeHass(
         { [ENTITY]: climateState() },
-        { themes: { themes: { 'my-theme': { 'primary-color': '#123456' } }, default_theme: 'default' } as any }
+        {
+          themes: {
+            themes: { 'my-theme': { 'primary-color': '#123456' } },
+            default_theme: 'default',
+          } as any,
+        }
       );
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('ha-card')).to.not.equal(null);
@@ -905,13 +908,7 @@ describe('material-thermostat-card', () => {
         )
       );
       const ids = (el as any)._trackedEntityIds();
-      expect(ids).to.include.members([
-        ENTITY,
-        'sensor.temp',
-        'switch.a',
-        'switch.b',
-        'button.c',
-      ]);
+      expect(ids).to.include.members([ENTITY, 'sensor.temp', 'switch.a', 'switch.b', 'button.c']);
       // deduped set
       expect(new Set(ids).size).to.equal(ids.length);
     });
@@ -1016,20 +1013,85 @@ describe('material-thermostat-card', () => {
     const T = 'sensor.room_temp';
     const H = 'sensor.room_hum';
 
-    /** Mount with the feels-like sensors present. */
+    /**
+     * Mount with the feels-like sensors present.
+     * @param feels_like feels-like configuration
+     * @param tempState temperature sensor reading
+     * @param humState humidity sensor reading
+     * @param systemUnit Home Assistant temperature unit
+     * @param sensorUnit temperature sensor unit, if supplied
+     */
     async function mountFeels(
       feels_like: MaterialThermostatCardConfig['feels_like'],
       tempState = '30',
-      humState = '60'
+      humState = '60',
+      systemUnit: TempUnit = '°C',
+      sensorUnit?: TempUnit
     ): Promise<MaterialThermostatCard> {
-      return track(
-        await mount(baseConfig({ feels_like }), {
+      const el = track(
+        document.createElement('material-thermostat-card') as MaterialThermostatCard
+      );
+      el.setConfig(baseConfig({ feels_like }));
+      el.hass = makeHass(
+        {
           [ENTITY]: climateState({ current_temperature: 24 }),
-          [T]: entityState(T, tempState),
+          [T]: entityState(T, tempState, { unit_of_measurement: sensorUnit }),
           [H]: entityState(H, humState),
+        },
+        { config: { unit_system: { temperature: systemUnit } } as any }
+      );
+      document.body.appendChild(el);
+      await el.updateComplete;
+      return el;
+    }
+
+    for (const [systemUnit, sensorUnit, reading] of [
+      ['°C', '°C', '30'],
+      ['°F', '°F', '86'],
+      ['°F', '°C', '30'],
+      ['°C', '°F', '86'],
+      ['°F', undefined, '86'],
+    ] as const) {
+      it(`converts ${sensorUnit ?? 'unitless'} sensor to ${systemUnit} dial current`, async () => {
+        const el = await mountFeels(
+          { temperature: T, humidity: H, show_as_current: true },
+          reading,
+          '40',
+          systemUnit,
+          sensorUnit
+        );
+        expect(dial(el).current).to.be.closeTo(fromCelsius(feelsLikeC(30, 40), systemUnit), 0.05);
+        expect(dial(el).unit).to.equal(systemUnit);
+      });
+    }
+
+    for (const [tempState, humState] of [
+      ['', '40'],
+      ['   ', '40'],
+      ['30', ''],
+      ['30', 'unknown'],
+    ]) {
+      it(`falls back for invalid readings ${JSON.stringify([tempState, humState])}`, async () => {
+        const el = await mountFeels(
+          { temperature: T, humidity: H, show_as_current: true },
+          tempState,
+          humState
+        );
+        expect(dial(el).current).to.equal(24);
+      });
+    }
+
+    it('does not turn a null climate current into zero with feels-like disabled', async () => {
+      const el = track(
+        await mount(baseConfig({ feels_like: { show_as_current: false } }), {
+          [ENTITY]: climateState({ current_temperature: null }),
         })
       );
-    }
+      const d = dial(el);
+      await d.updateComplete;
+      expect(d.current).to.not.equal(0);
+      expect(d.shadowRoot.querySelector('.current-marker')).to.equal(null);
+    });
 
     it('replaces the dial current with the computed feels-like when enabled', async () => {
       const el = await mountFeels({ temperature: T, humidity: H, show_as_current: true });
