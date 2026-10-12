@@ -186,7 +186,10 @@ feels_like:
 > (no indoor wind sensor). If a sensor is missing or non‑numeric, the card falls back to the climate
 > entity's own `current_temperature`.
 
-> `feels_like.temperature` is read as **°C**, regardless of the sensor's unit; no unit conversion is performed.
+> `feels_like.temperature` uses the sensor's `unit_of_measurement` (**°C, °F or K**). A sensor
+> without a unit is assumed to use Home Assistant's temperature unit. The heat index is calculated
+> in °C internally, then shown on the dial in **Home Assistant's temperature unit**, matching the
+> setpoints.
 
 ## Features
 
@@ -658,9 +661,18 @@ features:
 
 > The row shows a verdict **whenever the sensors read — including when the climate is off** (just
 > without a forecast). It is hidden when the feels‑like sensors aren't set, the climate entity is
-> missing or its state is empty/unavailable/unknown, or the parsed humidity or resolved temperature
-> is not a finite number. Sensor readings use `parseFloat`; an invalid temperature reading falls back
-> to `Number(current_temperature)` on the climate entity (`null` or an empty string becomes `0`).
+> missing or its state is empty/unavailable/unknown, humidity has no reading, or neither the
+> temperature sensor nor the climate's `current_temperature` has a reading. **`null`, empty/blank
+> and non‑numeric values mean “no reading”, never 0**, for sensor readings, `current_temperature`
+> and target temperatures. If the temperature sensor has no reading, the row uses the climate's
+> `current_temperature` when available.
+>
+> The temperature sensor's current reading and recorder history use its `unit_of_measurement`
+> (**°C, °F or K**); without a unit, they use Home Assistant's temperature unit. History is assumed
+> to use the sensor's **current unit**. The climate's `current_temperature` fallback and targets
+> (`temperature`, `target_temp_low` and `target_temp_high`) use Home Assistant's temperature unit.
+> All comfort calculations run in °C internally; **target and plateau temperatures in the comfort
+> text use Home Assistant's temperature unit** (the examples above show a Celsius installation).
 
 ## Layout & responsiveness
 
