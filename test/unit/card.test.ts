@@ -1089,8 +1089,8 @@ describe('material-thermostat-card', () => {
       );
       const d = dial(el);
       await d.updateComplete;
-      expect(d.current).to.not.equal(0);
-      expect(d.shadowRoot.querySelector('.current-marker')).to.equal(null);
+      expect(d.current).to.equal(null);
+      expect(d.shadowRoot.querySelector('.o-dot.current')).to.equal(null);
     });
 
     it('replaces the dial current with the computed feels-like when enabled', async () => {
@@ -1100,7 +1100,10 @@ describe('material-thermostat-card', () => {
 
     it('uses the climate current_temperature when show_as_current is off', async () => {
       const el = await mountFeels({ temperature: T, humidity: H, show_as_current: false });
-      expect(dial(el).current).to.equal(24);
+      const d = dial(el);
+      await d.updateComplete;
+      expect(d.current).to.equal(24);
+      expect(d.shadowRoot.querySelector('.o-dot.current')).to.not.equal(null);
     });
 
     it('falls back to current_temperature when a sensor is non-numeric', async () => {
