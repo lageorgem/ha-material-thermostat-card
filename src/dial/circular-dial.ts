@@ -642,10 +642,11 @@ export class MtCircularDial extends LitElement {
    * the label into place (and labels cross/swap smoothly as setpoints pass).
    * @param angle angle in degrees
    * @param content the label content
+   * @param iconLabel whether the label contains only a setpoint mode icon
    */
-  private _labelOrbit(angle: number, content: TemplateResult): TemplateResult {
+  private _labelOrbit(angle: number, content: TemplateResult, iconLabel = false): TemplateResult {
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
-      <div class="o-label" style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
+      <div class=${classMap({ 'o-label': true, 'icon-label': iconLabel })} style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
         ${content}
       </div>
     </div>`;
@@ -946,8 +947,8 @@ export class MtCircularDial extends LitElement {
                 ${this._dotOrbit(lowAngle, `setpoint${selSide === 'low' ? ' sel' : ''}`)}
                 ${this._dotOrbit(highAngle, `setpoint${selSide === 'high' ? ' sel' : ''}`)}
                 ${showCurrent ? this._dotOrbit(curAngle, 'current') : nothing}
-                ${this._labelOrbit(dualLabelSpread[0], lowLabel)}
-                ${this._labelOrbit(dualLabelSpread[1], highLabel)}
+                 ${this._labelOrbit(dualLabelSpread[0], lowLabel, lowLabel === dualSetIconEl)}
+                 ${this._labelOrbit(dualLabelSpread[1], highLabel, highLabel === dualSetIconEl)}
                 ${showCurLabel ? this._labelOrbit(dualLabelSpread[2], currentLabel) : nothing}
                 ${this._handleOrbit(lowAngle, 'low')}
                 ${this._handleOrbit(highAngle, 'high')}
@@ -971,7 +972,7 @@ export class MtCircularDial extends LitElement {
                         >`
                       )
                     : html`
-                        ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl)}
+                         ${isOff ? nothing : this._labelOrbit(spAngle, modeIconEl, true)}
                         ${showCurrent ? this._labelOrbit(curAngle, currentLabel) : nothing}
                       `}
                 ${this._handleOrbit(spAngle, null)}
@@ -1290,12 +1291,12 @@ export class MtCircularDial extends LitElement {
         top: 10.469%; /* (160-126.5)/320 — follow the drag band centerline */
       }
       .dial.dragging .o-dot.setpoint {
-        width: clamp(3px, 1.875cqi, 6px);
+        width: clamp(3px, 1.75cqi, 6px);
         height: 6.875cqi;
         border-radius: 999px;
       }
       .dial.dragging .o-dot.current {
-        width: clamp(2px, 1.25cqi, 4px);
+        width: clamp(2px, 1.2cqi, 4px);
         height: 5.9375cqi;
         border-radius: 999px;
       }
@@ -1307,20 +1308,23 @@ export class MtCircularDial extends LitElement {
           transform var(--mt-motion-dur) var(--mt-motion-ease),
           top var(--mt-motion-dur) var(--mt-motion-ease);
       }
+      .o-label.icon-label {
+        top: 17%; /* (160-105.6)/320 — standalone setpoint mode icons only */
+      }
       .o-label sup {
         font-size: 0.6em;
         vertical-align: super;
         line-height: 0;
       }
       .o-label .num {
-        font-size: clamp(8px, 4.6cqi, var(--md-sys-typescale-title-medium-size, 16px));
+        font-size: clamp(8px, 4.95cqi, 16px);
         font-weight: 500;
         line-height: 1;
         color: var(--mt-on-surface);
         white-space: nowrap;
       }
       .o-label .num.current {
-        color: var(--mt-on-surface-variant);
+        color: var(--mt-on-surface);
       }
       /* The selected setpoint's number, tinted to match its highlighted dot. */
       .o-label .num.sel {

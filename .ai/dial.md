@@ -38,13 +38,18 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   `rotate(angle)`, with a child dot pinned on the ring centerline
   (`top: 9.375%` = (160−130)/320 at rest, `10.469%` ≈ (160−126.5)/320
   while dragging). Invisible `.handle` targets follow the same centerline.
-- `_labelOrbit(angle, content)` — same, but the label counter-rotates
+- `_labelOrbit(angle, content, iconLabel)` — same, but the label counter-rotates
   (`rotate(-angle)`) to stay upright; `top: 17.5%` (radius 104) at rest AND
-  while dragging; the top transition remains harmless.
+  while dragging for numbers and merged inline icons. Standalone single-mode and
+  collapsed dual setpoint icons use `.icon-label` at `top:17%` (radius 105.6).
+  The top transition remains harmless.
 - Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
   in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
   `-1<sup>5</sup>`). Superscripts use `0.6em`, `vertical-align:super`, line-height 0.
   Current, setpoint, dual low/high and merged labels share this format.
+  Orbit numbers use `clamp(8px, 4.95cqi, 16px)` (15.84px at a 320px dial),
+  independent of HA's title-medium token. Current numbers use `var(--mt-on-surface)`,
+  matching unselected setpoint numbers.
   `_fmtCompact` and centre formatting are unchanged.
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
@@ -189,11 +194,12 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
   Base paths set `transform-box:view-box; transform-origin:160px 160px`;
   `.hit`, `.disc` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
   `.o-dot.setpoint` becomes a
-  radial pill (`width:clamp(3px, 1.875cqi, 6px)`, `height:6.875cqi`, 6×22 units);
-  `.o-dot.current` a thinner pill (`width:clamp(2px, 1.25cqi, 4px)`,
-  `height:5.9375cqi`, 4×19 units). Both use `border-radius:999px`.
+  radial pill (`width:clamp(3px, 1.75cqi, 6px)`, `height:6.875cqi`, 5.6×22 units);
+  `.o-dot.current` a thinner pill (`width:clamp(2px, 1.2cqi, 4px)`,
+  `height:5.9375cqi`, 3.84×19 units). Both use `border-radius:999px`.
   Markers and handles move to `top:10.469%` (radius 126.5).
-  `.o-label` stays at radius 104. Path transform/stroke width, marker top/width/height/radius and
+  Number/merged `.o-label` stays at radius 104; standalone `.icon-label` at 105.6.
+  Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:
   `top:87.9%`, a centered 34%-wide two-column grid puts their centers at 41.5%/58.5%

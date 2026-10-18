@@ -117,6 +117,20 @@ describe('mt-circular-dial', () => {
       expect([...el.shadowRoot!.querySelectorAll('.o-label sup')].map(n => n.textContent)).to.deep.equal(['5', '5', '8']);
     });
 
+    it('uses measured orbit number size, position and current colour independently of HA tokens', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.style.setProperty('--md-sys-typescale-title-medium-size', '12px');
+      el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
+      el.style.setProperty('--mt-on-surface-variant', 'rgb(100, 100, 100)');
+      el.current = 18;
+      await el.updateComplete;
+      const number = el.shadowRoot!.querySelector('.num.current')!;
+      expect(parseFloat(getComputedStyle(number).fontSize)).to.be.closeTo(15.84, 0.001);
+      expect(getComputedStyle(number).color).to.equal('rgb(237, 225, 212)');
+      expect(getComputedStyle(number.closest('.o-label')!).top).to.equal('56px');
+    });
+
     it('uses the measured single centre size independently of HA display tokens', async () => {
       const el = await mount();
       el.style.setProperty('--md-sys-typescale-display-large-size', '57px');
@@ -161,6 +175,9 @@ describe('mt-circular-dial', () => {
         const icon = el.shadowRoot!.querySelector('.mode-icon')!;
         expect(icon.getAttribute('icon')).to.equal('mdi:heat-wave');
         expect(icon.classList.contains('inline')).to.equal(merged);
+        const label = icon.closest('.o-label')!;
+        expect(label.classList.contains('icon-label')).to.equal(!merged);
+        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(merged ? 56 : 54.4, 0.02);
       });
     }
 
@@ -192,6 +209,9 @@ describe('mt-circular-dial', () => {
         expect(el.shadowRoot!.querySelector('.mode-icon')!.getAttribute('icon')).to.equal(
           'mdi:heat-wave'
         );
+        const label = el.shadowRoot!.querySelector('.mode-icon')!.closest('.o-label')!;
+        expect(label.classList.contains('icon-label')).to.be.true;
+        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(54.4, 0.02);
       });
     }
   });
@@ -252,8 +272,8 @@ describe('mt-circular-dial', () => {
           const style = getComputedStyle(dot);
           expect(parseFloat(style.height)).to.be.closeTo(dot.classList.contains('setpoint') ? 22 : 19, 0.1);
           expect(parseFloat(style.width)).to.be.closeTo(
-            dot.classList.contains('setpoint') ? 6 : 4,
-            0.01
+            dot.classList.contains('setpoint') ? 5.6 : 3.84,
+            0.02
           );
           expect(style.borderRadius).to.equal('999px');
           if (dot.classList.contains('current')) expect(style.opacity).to.equal('1');
@@ -262,7 +282,7 @@ describe('mt-circular-dial', () => {
           expect(style.transitionProperty).to.include('border-radius');
         }
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(getComputedStyle(label).top).to.equal('56px');
+          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 54.4 : 56, 0.02);
           expect(getComputedStyle(label).transitionProperty).to.include('top');
         }
         if (dual) {
@@ -283,7 +303,9 @@ describe('mt-circular-dial', () => {
           expect(getComputedStyle(marker).top).to.equal('30px');
         }
         expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
-        expect(getComputedStyle(sr.querySelector('.o-label')!).top).to.equal('56px');
+        for (const label of sr.querySelectorAll('.o-label')) {
+          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 54.4 : 56, 0.02);
+        }
       });
     }
 
