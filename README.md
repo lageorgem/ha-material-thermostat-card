@@ -12,15 +12,12 @@ gracefully under any Home Assistant theme.
 [![Validate](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/validate.yml/badge.svg)](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/validate.yml)
 [![Tests](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/test.yml/badge.svg)](https://github.com/lageorgem/ha-material-thermostat-card/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/lageorgem/ha-material-thermostat-card/branch/main/graph/badge.svg)](https://codecov.io/gh/lageorgem/ha-material-thermostat-card)
-[![License: MIT](https://img.shields.io/github/license/lageorgem/ha-material-thermostat-card)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lageorgem/ha-material-thermostat-card/blob/main/LICENSE)
 
 [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lageorgem&repository=ha-material-thermostat-card&category=plugin)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
-    <img src="assets/hero-light.png" alt="Material Thermostat Card cooling, with HVAC + fan selectors and sensor tiles" width="420">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/hero.png" alt="Bedroom AC cooling, with a mode tile, fan-speed dropdown and temperature/humidity tiles" width="420">
 </p>
 
 ---
@@ -31,11 +28,16 @@ gracefully under any Home Assistant theme.
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Card options](#card-options)
+  - [Theme font](#theme-font)
 - [The dial](#the-dial)
+  - [Dial styles](#dial-styles)
+  - [Dial states](#dial-states)
+  - [Dragging](#dragging)
 - [Feels‑like temperature](#feels-like-temperature)
 - [Features](#features)
   - [Common feature options](#common-feature-options)
   - [Climate selectors](#climate-selectors-hvac--fan--swing--preset)
+    - [Fan, swing and preset modes](#fan-swing-and-preset-modes)
   - [Option overrides](#option-overrides)
   - [`input-select`](#input-select)
   - [`switch-group`](#switch-group)
@@ -126,6 +128,14 @@ visually, or write the YAML directly.
 > Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). If Google Fonts is unreachable, the
 > theme font is used. Choose `font: theme` to avoid this external request.
 
+### Theme font
+
+`font: theme` uses the Home Assistant theme font instead of the default Google Sans Flex rounded font.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/font-theme.png" alt="Heating dial using the Home Assistant theme font with font: theme" width="280">
+</p>
+
 ## The dial
 
 The dial mirrors the stock thermostat card's controls with a Google‑Home‑matched 306° arc (the gap
@@ -136,14 +146,8 @@ without a degree sign or unit. Per‑mode **icon overrides** from the `climate-h
 also appear on the dial.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/dial-heat-cool-dark.png">
-    <img src="assets/dial-heat-cool-light.png" alt="heat_cool dual setpoint with low/high handles" width="280">
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/show-current-dark.png">
-    <img src="assets/show-current-light.png" alt="Current temperature shown as the large primary number" width="280">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-heat-cool.png" alt="Idle heat_cool dial showing the low/high setpoint range" width="280">
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/show-current.png" alt="Heating dial with current temperature as the large primary number" width="280">
 </p>
 
 | Interaction | Behavior |
@@ -176,6 +180,61 @@ collapses to the single setpoint it's targeting, with the active mode icon on th
 Changes are **optimistic** (the UI updates immediately) and the `climate.set_temperature` call is
 debounced so dragging doesn't spam the backend. Color changes **cross‑fade**, and the temperature
 segment **slides in/out** on power changes and when switching between modes.
+
+### Dial styles
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>dial_style: halo</code> (default)</td>
+    <td align="center" width="33%"><code>dial_style: minimal</code></td>
+    <td align="center" width="33%"><code>dial_style: google</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-halo-heat.png" alt="Active heating with the halo dial's orange glow" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-minimal.png" alt="Active heating with the minimal dial, without a glow" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-google.png" alt="Active heating with the flat Google-style background disc" width="240"></td>
+  </tr>
+</table>
+
+### Dial states
+
+<table>
+  <tr>
+    <td align="center" width="25%">Heating</td>
+    <td align="center" width="25%">Cooling</td>
+    <td align="center" width="25%">Idle</td>
+    <td align="center" width="25%">Off</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-halo-heat.png" alt="Actively heating from 21 to 23 degrees with an orange halo" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-halo-cool.png" alt="Actively cooling from 26.5 to 23 degrees with a blue halo" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-idle.png" alt="Idle heating dial with a 20-degree target below the 22-degree room temperature and no gap band" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/dial-off.png" alt="Thermostat off with a neutral dial" width="240"></td>
+  </tr>
+  <tr>
+    <td align="center">Halo and number light up orange only while actively heating.</td>
+    <td align="center">Halo and number light up blue only while actively cooling.</td>
+    <td align="center">Halo dims; the band hides when the setpoint is on the wrong side of room temperature.</td>
+    <td align="center">The dial is neutral when off.</td>
+  </tr>
+</table>
+
+### Dragging
+
+While dragging, the band thickens inward without moving its outer edge, and dot markers become lines.
+
+<table>
+  <tr>
+    <td align="center" width="34%">Single setpoint — halo</td>
+    <td align="center" width="33%">Single setpoint — google</td>
+    <td align="center" width="33%">Dual setpoint — high handle</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/drag-single.png" alt="Halo heating dial being dragged to 24.5 degrees, with a thicker inward band and line markers" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/drag-google.png" alt="Google-style heating dial being dragged to 24.5 degrees with line markers" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/drag-heat-cool.png" alt="Dual-setpoint dial with the high handle dragged to 25.5 degrees and the low setpoint at 20" width="240"></td>
+  </tr>
+</table>
 
 ## Feels‑like temperature
 
@@ -247,22 +306,13 @@ and `climate-preset-modes` behave identically — shown here with `climate-hvac-
   </tr>
   <tr>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-icons-dark.png">
-        <img src="assets/hvac-icons-light.png" alt="HVAC modes as an icon row" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/hvac-icons.png" alt="HVAC modes as an icon row" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-dropdown-dark.png">
-        <img src="assets/hvac-dropdown-light.png" alt="HVAC modes as a dropdown" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/hvac-dropdown.png" alt="HVAC modes as a dropdown" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/hvac-tile-dark.png">
-        <img src="assets/hvac-tile-light.png" alt="HVAC modes as a Google-Home-style tile" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/hvac-tile.png" alt="HVAC modes as a Google-Home-style tile" width="240">
     </td>
   </tr>
 </table>
@@ -305,6 +355,23 @@ features:
 > selectors tint with the theme primary. Pair with `width: 50` to sit two tiles side by side.
 > Climate-selector tiles also use the off look whenever the card's climate entity is off.
 
+#### Fan, swing and preset modes
+
+The same display options apply to fan, swing and preset selectors; these examples show one of each.
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>climate-fan-modes</code><br><code>display: icons</code></td>
+    <td align="center" width="33%"><code>climate-swing-modes</code><br><code>display: dropdown</code></td>
+    <td align="center" width="33%"><code>climate-preset-modes</code><br><code>display: tile</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/fan-modes.png" alt="Fan-speed icon row with medium selected" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/swing-modes.png" alt="Swing dropdown with Full Swing selected" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/preset-modes.png" alt="Preset tile with eco selected and the preset leaf icon under the dial number" width="240"></td>
+  </tr>
+</table>
+
 ### Option overrides
 
 `climate-*` and `input-select` accept an `options:` list to customize how each underlying value is
@@ -345,10 +412,7 @@ shown. Unlisted values keep their Home Assistant defaults.
 > hex (`'#8e24aa'`), named (`purple`), `rgb(142, 36, 170)`, or `var(--primary-color)`. The editor writes hex.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/option-overrides-dark.png">
-    <img src="assets/option-overrides-light.png" alt="A selector with per-option label, icon and color overrides, and one option hidden" width="400">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/option-overrides.png" alt="HVAC label and color overrides, a fan-speed dropdown and custom swing icons with hidden options" width="400">
 </p>
 
 ### `input-select`
@@ -363,22 +427,13 @@ An `input_select` entity as a selector — the same three display modes as the c
   </tr>
   <tr>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-icons-dark.png">
-        <img src="assets/input-select-icons-light.png" alt="input_select as an icon row" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/input-select-icons.png" alt="Fan-speed input_select as an icon row with medium selected" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-dropdown-dark.png">
-        <img src="assets/input-select-dropdown-light.png" alt="input_select as a dropdown" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/input-select-dropdown.png" alt="Fan-speed input_select as a dropdown with medium selected" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/input-select-tile-dark.png">
-        <img src="assets/input-select-tile-light.png" alt="input_select as a tile" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/input-select-tile.png" alt="Fan-speed input_select as a tile with medium selected" width="240">
     </td>
   </tr>
 </table>
@@ -414,22 +469,13 @@ chosen one. Items use the [`EntityItem`](#entityitem) shape. Renders in the same
   </tr>
   <tr>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-icons-dark.png">
-        <img src="assets/switch-group-icons-light.png" alt="switch group as an icon row" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/switch-group-icons.png" alt="Eco, Boost and Lamp switch group as an icon row with Eco selected" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-dropdown-dark.png">
-        <img src="assets/switch-group-dropdown-light.png" alt="switch group as a dropdown" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/switch-group-dropdown.png" alt="Switch group as a dropdown with Eco selected" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/switch-group-tile-dark.png">
-        <img src="assets/switch-group-tile-light.png" alt="switch group as a tile" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/switch-group-tile.png" alt="Switch group as a preset tile with Eco selected" width="240">
     </td>
   </tr>
 </table>
@@ -447,10 +493,7 @@ chosen one. Items use the [`EntityItem`](#entityitem) shape. Renders in the same
 Independent toggles in a row (multiple can be on at once).
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/switch-list-dark.png">
-    <img src="assets/switch-list-light.png" alt="A switch list — independent toggles, several on at once" width="400">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/switch-list.png" alt="Independent Eco, Boost and Lamp toggles, with Eco and Lamp on" width="400">
 </p>
 
 ```yaml
@@ -465,10 +508,7 @@ Independent toggles in a row (multiple can be on at once).
 Independent presses for buttons, scenes, or scripts. **Note:** the key is `items` (not `entities`).
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/button-list-dark.png">
-    <img src="assets/button-list-light.png" alt="A button list — independent presses for buttons, scenes and scripts" width="400">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/button-list.png" alt="Quick actions button list with a Restart action" width="400">
 </p>
 
 ```yaml
@@ -485,10 +525,7 @@ matching the Google Home app's sensor list. A lighter alternative to a stack of 
 when you just want to read several values. Uses `items` (not `entities`).
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/sensor-list-dark.png">
-    <img src="assets/sensor-list-light.png" alt="A sensor list — read-only rows of icon, title and current value" width="400">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/sensor-list.png" alt="Read-only indoor temperature and humidity rows with icons and current values" width="400">
 </p>
 
 ```yaml
@@ -523,16 +560,10 @@ A rounded tile (à la Google Home) showing an icon, title, and a secondary line 
   </tr>
   <tr>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/entity-tile-tile-dark.png">
-        <img src="assets/entity-tile-tile-light.png" alt="Entity tile showing icon, title and value" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/entity-tile-tile.png" alt="Temperature and humidity tiles showing icons, titles and values" width="240">
     </td>
     <td align="center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/entity-tile-icon-dark.png">
-        <img src="assets/entity-tile-icon-light.png" alt="Entity tile as a bare centered icon" width="240">
-      </picture>
+      <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/entity-tile-icon.png" alt="Temperature and humidity tiles as bare centered icons" width="240">
     </td>
   </tr>
 </table>
@@ -595,10 +626,7 @@ reached**. It reuses the [feels‑like sensors](#feels-like-temperature) (no pic
 be added **only once in the visual editor**. YAML does not enforce uniqueness.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/comfort-dark.png">
-    <img src="assets/comfort-light.png" alt="Comfort feature: time until the room feels comfortable, with a thermometer icon" width="400">
-  </picture>
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/comfort.png" alt="Cooling dial with HVAC controls and a comfort forecast based on temperature and humidity history" width="400">
 </p>
 
 #### How comfort is determined
@@ -709,11 +737,17 @@ in both **sections** and **masonry** views, since sizing is measured from the ca
 The `width` control in the visual editor is a slider (**10–100%**, dots on the tens). Leave it unset
 for full width (all types except `entity-tile`) or the 50% default (`entity-tile`, both displays).
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/wide.png" alt="Wide layout with the dial on the left and HVAC, fan, swing and preset controls on the right, each configured at 50% width" width="760">
+</p>
+
+On a wide card, features with explicit widths below 100% sit beside the dial instead of below it.
+
 ## AC swing icons (`mt:`)
 
 The card registers a set of **AC swing icons** with Home Assistant, usable anywhere an icon is
 (this card's overrides, other cards, the icon picker) as `mt:<name>`. Preview the SVGs in
-[`icons/`](icons/).
+[`icons/`](https://github.com/lageorgem/ha-material-thermostat-card/tree/main/icons/).
 
 Each icon shows **five positions** (vertical cones top→bottom, or horizontal rays left→right). Active
 positions are drawn solid (**dark**); the rest are dimmed (**gray**) for context — a **fixed**
@@ -809,7 +843,7 @@ combobox:
 | `npm run test:e2e` | End-to-end tests against the built bundle (run `npm run build` first) |
 | `node tools/gen-icons.mjs` | Regenerate the `mt:` icon set into `src/icons.generated.ts` |
 | `node dev/push-dashboard.mjs` | Publish the showcase cards (`dev/showcase.mjs`) to a `material-thermostat` dashboard on your HA (needs `HA_URL`, `HA_TOKEN`; `--dry-run` prints the config) |
-| `node dev/ha-shots.mjs` | Regenerate README screenshots, light and dark, from `dev/showcase.mjs` (needs `npm run build`, `HA_URL`, `HA_TOKEN`) |
+| `node dev/ha-shots.mjs` | Regenerate README screenshots from `dev/showcase.mjs` (needs `npm run build`, `HA_URL`, `HA_TOKEN`) |
 
 ### Testing
 
@@ -831,10 +865,10 @@ source change. Open `dev/index.html` (after a build, served over HTTP) for a qui
 harness — note that Home Assistant's web components are stubbed there, so icons render as dots; always
 verify final fidelity inside Home Assistant.
 
-> 🤖 **Working on this repo with an AI agent?** Start with [`.ai/`](.ai/) — it documents the
+> 🤖 **Working on this repo with an AI agent?** Start with [`.ai/`](https://github.com/lageorgem/ha-material-thermostat-card/tree/main/.ai/) — it documents the
 > architecture, the dial internals, the layout/grid system, the feature system, the icon generator,
 > and the non‑obvious gotchas.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/lageorgem/ha-material-thermostat-card/blob/main/LICENSE)
