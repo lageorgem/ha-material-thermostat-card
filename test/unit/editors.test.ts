@@ -327,12 +327,12 @@ describe('material-thermostat-card-editor', () => {
     await el.updateComplete;
     expect(el.shadowRoot!.querySelector('.add-menu')).to.not.equal(null);
     expect(el.shadowRoot!.activeElement).to.equal(add);
-    await sendKeys({ press: 'ESC' });
+    await sendKeys({ press: 'Escape' });
     await el.updateComplete;
     expect(el.shadowRoot!.querySelector('.add-menu')).to.equal(null);
     expect(el.shadowRoot!.activeElement).to.equal(add);
     expect(escaped).to.equal(0);
-    await sendKeys({ press: 'ESC' });
+    await sendKeys({ press: 'Escape' });
     expect(escaped).to.equal(1);
   });
 
