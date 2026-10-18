@@ -384,7 +384,11 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           @value-changed=${this._baseChanged}
         ></ha-form>
 
-        <ha-expansion-panel outlined header="Feels-like temperature" .leftChevron=${true}>
+        <ha-expansion-panel outlined .hass=${this.hass}>
+          <div slot="header" class="panel-header">
+            <ha-icon icon="mdi:thermometer-water"></ha-icon>
+            <span>Feels-like temperature</span>
+          </div>
           <div class="fields">
             <div class="field-row halves">
               ${(['temperature', 'humidity'] as const).map((key) => {
@@ -597,6 +601,18 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       display: block;
       container-type: inline-size;
     }
+    ha-expansion-panel {
+      --ha-card-border-radius: var(--ha-border-radius-lg, 12px);
+      --expansion-panel-border-radius: var(--ha-border-radius-lg, 12px);
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-header ha-icon {
+      --mdc-icon-size: 24px;
+    }
     .fields {
       display: flex;
       flex-direction: column;
@@ -621,7 +637,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     .halves {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    @container (width < 360px) {
+    @container (width < 480px) {
       .field-row {
         grid-template-columns: minmax(0, 1fr);
       }

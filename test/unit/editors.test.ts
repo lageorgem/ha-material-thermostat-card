@@ -254,7 +254,12 @@ describe('material-thermostat-card-editor', () => {
   it('renders labelled sensor pickers and preserves sibling feels-like fields on changes', async () => {
     const el = await mount();
     const panel = el.shadowRoot!.querySelector('ha-expansion-panel')!;
-    expect(panel.getAttribute('header')).to.equal('Feels-like temperature');
+    expect(panel.hasAttribute('outlined')).to.equal(true);
+    expect(panel.hasAttribute('left-chevron')).to.equal(false);
+    expect((panel as HTMLElement & { leftChevron?: boolean }).leftChevron).to.not.equal(true);
+    const header = panel.querySelector('[slot="header"]')!;
+    expect(header.querySelector('ha-icon')!.getAttribute('icon')).to.equal('mdi:thermometer-water');
+    expect(header.querySelector('span')!.textContent).to.equal('Feels-like temperature');
     const pickers = panel.querySelectorAll('mt-entity-picker');
     expect(pickers.length).to.equal(2);
     expect(Array.from(panel.querySelectorAll('.field-label')).map((n) => n.textContent)).to.deep.equal(['Temperature sensor', 'Humidity sensor']);
@@ -279,6 +284,39 @@ describe('material-thermostat-card-editor', () => {
     pickers[1].shadowRoot!.querySelector<HTMLButtonElement>('.clear')!.click();
     cap.stop();
     expect((cap.events[5].detail as any).config.feels_like).to.equal(undefined);
+  });
+
+  it('passes hass to every form and the feels-like panel, including after updates', async () => {
+    const el = await mount();
+    for (const hass of [el.hass, makeHass({ 'climate.other': climateState() })]) {
+      el.hass = hass;
+      await el.updateComplete;
+      const forms = el.shadowRoot!.querySelectorAll<HTMLElement & { hass: TestHass }>('ha-form');
+      expect(forms.length).to.equal(2);
+      for (const form of forms) expect(form.hass).to.equal(hass);
+      expect((el.shadowRoot!.querySelector('ha-expansion-panel') as HTMLElement & { hass: TestHass }).hass).to.equal(hass);
+    }
+  });
+
+  it('waits for hass before creating HA forms when config arrives first', async () => {
+    const el = await fixture<MaterialThermostatCardEditor>(
+      html`<material-thermostat-card-editor></material-thermostat-card-editor>`
+    );
+    el.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test' });
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('ha-form')).to.equal(null);
+    el.hass = makeHass();
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelectorAll('ha-form').length).to.equal(2);
+  });
+
+  it('stacks sensor fields below 480px and keeps two columns at 480px', async () => {
+    const el = await mount();
+    const row = el.shadowRoot!.querySelector<HTMLElement>('.field-row.halves')!;
+    for (const [width, columns] of [[380, 1], [479, 1], [480, 2]] as const) {
+      el.style.width = `${width}px`;
+      expect(getComputedStyle(row).gridTemplateColumns.split(' ').length).to.equal(columns);
+    }
   });
 
   it('renders empty guidance and dismisses the add menu with Escape, restoring focus', async () => {
