@@ -171,6 +171,45 @@ describe('mt-circular-dial', () => {
       }
     }
 
+    it('announces the target until a primary current temperature is available', async () => {
+      const el = await mount();
+      el.showCurrentAsPrimary = true;
+      el.current = undefined;
+      el.value = 21.5;
+      el.step = 0.5;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent)
+        .to.equal('Target temperature 21.5 °C');
+      expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent).to.equal('215');
+
+      el.current = 21.1;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent)
+        .to.equal('Current temperature 21.1 °C');
+      expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent).to.equal('211');
+    });
+
+    for (const step of [0.01, 1]) {
+      it(`uses target precision when the primary current temperature is unavailable (step=${step})`, async () => {
+        const el = await mount();
+        el.showCurrentAsPrimary = true;
+        el.current = undefined;
+        el.value = 21.55;
+        el.step = step;
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent)
+          .to.equal(step < 1 ? 'Target temperature 21.6 °C' : 'Target temperature 22 °C');
+        expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent)
+          .to.equal(step < 1 ? '216' : '22');
+        const decimal = el.shadowRoot!.querySelector('.center .value-text sup');
+        if (step < 1) {
+          expect(decimal!.textContent).to.equal('6');
+        } else {
+          expect(decimal).to.equal(null);
+        }
+      });
+    }
+
     it('updates backdrops reactively while off', async () => {
       const el = await mount();
       el.style.setProperty('--mt-motion-dur', '0s');

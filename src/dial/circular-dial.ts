@@ -286,9 +286,9 @@ export class MtCircularDial extends LitElement {
    * big-number choice in {@link _renderSingleCenter}.
    */
   private get _singleReadoutWide(): boolean {
-    const big =
-      this.showCurrentAsPrimary && this.current != null ? this.current : this._displayValue;
-    const precision = this.showCurrentAsPrimary ? 1 : this._precision;
+    const showingCurrent = this.showCurrentAsPrimary && this.current != null;
+    const big = showingCurrent ? this.current : this._displayValue;
+    const precision = showingCurrent ? 1 : this._precision;
     return this._fmt(big, precision).length >= 4;
   }
 
@@ -1074,8 +1074,10 @@ export class MtCircularDial extends LitElement {
   /** Center readout for single mode. */
   private _renderSingleCenter(): TemplateResult {
     const target = this._displayValue;
-    const big = this.showCurrentAsPrimary && this.current != null ? this.current : target;
-    const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
+    const current = this.current;
+    const showingCurrent = this.showCurrentAsPrimary && current != null;
+    const big = showingCurrent ? current : target;
+    const bigPrecision = showingCurrent ? 1 : this._precision;
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
         ${this._renderStatus()}
@@ -1083,7 +1085,7 @@ export class MtCircularDial extends LitElement {
           <span class="value-text">${this._fmtCenter(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
-        <span class="sr-only">${this.showCurrentAsPrimary ? 'Current' : 'Target'} temperature ${this._fmt(big, bigPrecision).replace(/\.0$/, '')} ${this.unit}</span>
+        <span class="sr-only">${showingCurrent ? 'Current' : 'Target'} temperature ${this._fmt(big, bigPrecision).replace(/\.0$/, '')} ${this.unit}</span>
       </div>
     `;
   }
@@ -1116,8 +1118,9 @@ export class MtCircularDial extends LitElement {
     const target = active === 'cool' ? this._displayHigh : this._displayLow;
     // Honor show_current_as_primary: the big number is the current temperature
     // (the targeted setpoint is shown by the mode-icon marker on the ring).
-    const big = this.showCurrentAsPrimary && this.current != null ? this.current : target;
-    const bigPrecision = this.showCurrentAsPrimary ? 1 : this._precision;
+    const showingCurrent = this.showCurrentAsPrimary && this.current != null;
+    const big = showingCurrent ? this.current : target;
+    const bigPrecision = showingCurrent ? 1 : this._precision;
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
         ${this._renderStatus()}
