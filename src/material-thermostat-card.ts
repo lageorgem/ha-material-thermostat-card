@@ -449,6 +449,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .step=${a.target_temp_step ?? 0.5}
               .current=${this._displayCurrent(a.current_temperature)}
               .mode=${colorMode}
+              .hvacAction=${a.hvac_action}
               .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
               .presetIcon=${this._presetIcon()}
               .presetIconColor=${this._presetColor()}

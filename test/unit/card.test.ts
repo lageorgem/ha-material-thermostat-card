@@ -207,6 +207,18 @@ describe('material-thermostat-card', () => {
       expect(d.modeLabel).to.equal('Unavailable');
     });
 
+    it('passes the raw idle hvac_action to the dial', async () => {
+      const el = track(
+        await mount(baseConfig(), { [ENTITY]: climateState({ hvac_action: 'idle' }) })
+      );
+      expect(dial(el).hvacAction).to.equal('idle');
+    });
+
+    it('passes undefined to the dial when hvac_action is absent', async () => {
+      const el = track(await mount(baseConfig(), { [ENTITY]: entityState(ENTITY, 'cool') }));
+      expect(dial(el).hvacAction).to.equal(undefined);
+    });
+
     it('uses config.name over friendly_name when provided', async () => {
       const el = track(await mount(baseConfig({ name: 'My Thermostat' })));
       const name = el.shadowRoot!.querySelector('.name');
