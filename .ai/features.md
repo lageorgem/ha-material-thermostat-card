@@ -229,8 +229,15 @@ document-level `mt-dropdown-open` event.
 
 ## The visual editor (`editor.ts`)
 
-- Base form is an `ha-form` (entity/name/theme/show_current_as_primary).
-- Features are a drag-sortable list (`ha-sortable`, `handle-selector=".handle"`);
+- Base `ha-form` keeps entity/name/theme at top level; expandable **Style** groups
+  dial_style (halo/minimal/google), show_current_as_primary, and font (rounded/theme).
+  Defaults halo/rounded/false are omitted from saved YAML. Font helper discloses Google Fonts loading.
+- Outlined **Feels-like temperature** expansion uses labelled sensor-only
+  `mt-entity-picker`s and a boolean form; edits preserve sibling fields and an empty config is pruned.
+- Features use token-styled icon/summary rows with 44px controls and an empty state.
+  They are a drag-sortable list (`ha-sortable`, `handle-selector=".handle"`);
+  focused handles also reorder with Up/Down, retaining focus. Escape dismisses
+  the icon-labelled add menu and returns focus to Add feature;
   each row expands to its sub-editor; an "Add feature" menu appends a
   `defaultFeature(type)` and opens it.
 - **Add-menu filtering** (`_addableFeatures()`): climate selectors are offered

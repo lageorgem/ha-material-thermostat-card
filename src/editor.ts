@@ -9,39 +9,66 @@ import './editors/entity-list-editor';
 import './editors/entity-tile-editor';
 import './editors/comfort-editor';
 import { ensureHaComponents } from './editors/load-ha';
+import './editors/entity-picker';
+import { tokens } from './theme';
 
 interface FormSchemaItem {
   name: string;
-  selector: Record<string, unknown>;
+  selector?: Record<string, unknown>;
+  type?: 'expandable';
+  title?: string;
+  icon?: string;
+  flatten?: boolean;
+  schema?: FormSchemaItem[];
 }
+
+/**
+ * Build a dropdown selector.
+ * @param options labelled selector values
+ */
+const select = (options: { value: string; label: string }[]) => ({
+  select: { mode: 'dropdown', options },
+});
 
 const BASE_SCHEMA: FormSchemaItem[] = [
   { name: 'entity', selector: { entity: { domain: 'climate' } } },
   { name: 'name', selector: { text: {} } },
   { name: 'theme', selector: { theme: {} } },
-  { name: 'show_current_as_primary', selector: { boolean: {} } },
+  {
+    name: '', type: 'expandable', title: 'Style', icon: 'mdi:palette-outline', flatten: true,
+    schema: [
+      { name: 'dial_style', selector: select([
+        { value: 'halo', label: 'Halo' },
+        { value: 'minimal', label: 'Minimal' },
+        { value: 'google', label: 'Google Home' },
+      ]) },
+      { name: 'show_current_as_primary', selector: { boolean: {} } },
+      { name: 'font', selector: select([
+        { value: 'rounded', label: 'Google Sans Flex (rounded)' },
+        { value: 'theme', label: 'Theme font' },
+      ]) },
+    ],
+  },
 ];
 
 /** "Feels like" sensors + dial-replacement toggle (card-level). */
 const FEELS_LIKE_SCHEMA: FormSchemaItem[] = [
-  { name: 'temperature', selector: { entity: { domain: 'sensor' } } },
-  { name: 'humidity', selector: { entity: { domain: 'sensor' } } },
   { name: 'show_as_current', selector: { boolean: {} } },
 ];
 
 /** Feature types that can be added from the editor. */
-const ADDABLE_FEATURES: { type: FeatureType; label: string }[] = [
-  { type: 'climate-hvac-modes', label: 'Climate HVAC modes' },
-  { type: 'climate-fan-modes', label: 'Climate fan modes' },
-  { type: 'climate-swing-modes', label: 'Climate swing modes' },
-  { type: 'climate-preset-modes', label: 'Climate preset modes' },
-  { type: 'comfort', label: 'Comfort & time to comfortable' },
-  { type: 'input-select', label: 'Input select' },
-  { type: 'switch-group', label: 'Switch group' },
-  { type: 'switch-list', label: 'Switch list' },
-  { type: 'button-list', label: 'Button list' },
-  { type: 'entity-tile', label: 'Entity tile' },
-  { type: 'sensor-list', label: 'Sensor list' },
+const ADDABLE_FEATURES: { type: FeatureType; label: string; icon: string }[] = [
+  { type: 'climate-hvac-modes', label: 'Climate HVAC modes', icon: 'mdi:thermostat' },
+  { type: 'climate-fan-modes', label: 'Climate fan modes', icon: 'mdi:fan' },
+  { type: 'climate-swing-modes', label: 'Climate swing modes', icon: 'mdi:arrow-oscillating' },
+  { type: 'climate-preset-modes', label: 'Climate preset modes', icon: 'mdi:leaf' },
+  { type: 'comfort', label: 'Comfort & time to comfortable', icon: 'mdi:emoticon-happy-outline' },
+  { type: 'input-select', label: 'Input select', icon: 'mdi:form-select' },
+  { type: 'switch-group', label: 'Switch group', icon: 'mdi:toggle-switch-outline' },
+  { type: 'switch-list', label: 'Switch list', icon: 'mdi:format-list-checks' },
+  { type: 'button-list', label: 'Button list', icon: 'mdi:gesture-tap-button' },
+  { type: 'entity-tile', label: 'Entity tile', icon: 'mdi:card-outline' },
+  { type: 'sensor-list', label: 'Sensor list', icon: 'mdi:format-list-bulleted' },
 ];
 
 /** The climate selector types and the entity attribute that exposes each. */
@@ -120,6 +147,8 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       entity: this._config.entity,
       name: this._config.name,
       theme: this._config.theme,
+      dial_style: this._config.dial_style ?? 'halo',
+      font: this._config.font ?? 'rounded',
       show_current_as_primary: this._config.show_current_as_primary ?? false,
     };
   }
@@ -155,6 +184,10 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         return 'Name';
       case 'theme':
         return 'Theme';
+      case 'dial_style':
+        return 'Dial style';
+      case 'font':
+        return 'Font';
       case 'show_current_as_primary':
         return 'Show current temperature as primary information';
       case 'temperature':
@@ -169,6 +202,21 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   };
 
   /**
+   * Explain optional style settings.
+   * @param s the schema item
+   */
+  private _computeHelper = (s: FormSchemaItem): string | undefined => {
+    switch (s.name) {
+      case 'dial_style':
+        return 'Halo glows in the mode colour; Minimal has no glow; Google Home adds a flat dial background like the Google Home app.';
+      case 'font':
+        return "Rounded loads Google Sans Flex from Google Fonts; Theme font uses your Home Assistant theme's font.";
+      default:
+        return undefined;
+    }
+  };
+
+  /**
    * Merge changes from the base form into the config.
    * @param e ha-form's value-changed event
    */
@@ -179,6 +227,8 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       entity: data.entity,
       name: data.name || undefined,
       theme: data.theme || undefined,
+      dial_style: data.dial_style === 'halo' ? undefined : data.dial_style,
+      font: data.font === 'rounded' ? undefined : data.font,
       show_current_as_primary: data.show_current_as_primary || undefined,
     };
     this._emit(config);
@@ -189,7 +239,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
    * @param e ha-form's value-changed event
    */
   private _feelsLikeChanged(e: CustomEvent): void {
-    const data = e.detail.value;
+    const data = { ...this._feelsLikeData, ...e.detail.value };
     const feels_like = {
       temperature: data.temperature || undefined,
       humidity: data.humidity || undefined,
@@ -197,6 +247,16 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     };
     const empty = !feels_like.temperature && !feels_like.humidity && !feels_like.show_as_current;
     this._emit({ ...this._config, feels_like: empty ? undefined : feels_like });
+  }
+
+  /**
+   * Update one sensor without losing the other feels-like settings.
+   * @param key sensor configuration key
+   * @param e picker value change
+   */
+  private _feelsLikeSensorChanged(key: 'temperature' | 'humidity', e: CustomEvent<{ value: string }>): void {
+    e.stopPropagation();
+    this._feelsLikeChanged(new CustomEvent('value-changed', { detail: { value: { [key]: e.detail.value } } }));
   }
 
   /** The configured features. */
@@ -210,7 +270,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
    * unique); custom features (input_select, switch/button lists, tiles) are
    * always available and repeatable.
    */
-  private _addableFeatures(): { type: FeatureType; label: string }[] {
+  private _addableFeatures(): typeof ADDABLE_FEATURES {
     const attrs = this.hass?.states?.[this._config.entity]?.attributes ?? {};
     const existing = new Set(this._features.map((f) => f.type));
     return ADDABLE_FEATURES.filter(({ type }) => {
@@ -265,6 +325,42 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   }
 
   /**
+   * Reorder with arrow keys and retain focus on the moved feature.
+   * @param index current feature index
+   * @param e handle key event
+   */
+  private async _handleReorder(index: number, e: KeyboardEvent): Promise<void> {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const newIndex = index + (e.key === 'ArrowUp' ? -1 : 1);
+    if (newIndex < 0 || newIndex >= this._features.length) return;
+    this._moveFeature(new CustomEvent('item-moved', { detail: { oldIndex: index, newIndex } }));
+    await this.updateComplete;
+    this.shadowRoot!.querySelectorAll<HTMLElement>('.handle')[newIndex].focus();
+  }
+
+  /**
+   * Dismiss the add menu without losing keyboard position.
+   * @param e menu key event
+   */
+  private _addMenuKeydown(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._addOpen = false;
+    this.shadowRoot!.querySelector<HTMLButtonElement>('.add-btn')!.focus();
+  }
+
+  /**
+   * Wrap a control in the sibling cards' labelled field layout.
+   * @param label visible field label
+   * @param control accessible labelled control
+   */
+  private _labeledField(label: string, control: TemplateResult): TemplateResult {
+    return html`<div class="field-column"><span class="field-label">${label}</span>${control}</div>`;
+  }
+
+  /**
    * Replace a feature with its edited version.
    * @param index the feature index
    * @param e the sub-editor's feature-changed event
@@ -284,12 +380,24 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           .data=${this._baseData}
           .schema=${BASE_SCHEMA}
           .computeLabel=${this._computeLabel}
+          .computeHelper=${this._computeHelper}
           @value-changed=${this._baseChanged}
         ></ha-form>
 
-        <div class="features-header">
-          <span>Feels-like temperature</span>
-        </div>
+        <ha-expansion-panel outlined header="Feels-like temperature" .leftChevron=${true}>
+          <div class="fields">
+            <div class="field-row halves">
+              ${(['temperature', 'humidity'] as const).map((key) => {
+                const label = this._computeLabel({ name: key });
+                return this._labeledField(label, html`<mt-entity-picker
+                  .hass=${this.hass}
+                  .label=${label}
+                  .includeDomains=${['sensor']}
+                  .value=${this._feelsLikeData[key] ?? ''}
+                  @value-changed=${(e: CustomEvent<{ value: string }>) => this._feelsLikeSensorChanged(key, e)}
+                ></mt-entity-picker>`);
+              })}
+            </div>
         <ha-form
           .hass=${this.hass}
           .data=${this._feelsLikeData}
@@ -297,11 +405,14 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           .computeLabel=${this._computeLabel}
           @value-changed=${this._feelsLikeChanged}
         ></ha-form>
+          </div>
+        </ha-expansion-panel>
 
         <div class="features-header">
           <span>Features</span>
         </div>
 
+        ${this._features.length ? nothing : html`<p class="hint">No features yet. Add a feature below.</p>`}
         <ha-sortable handle-selector=".handle" @item-moved=${this._moveFeature}>
           <div class="features">
             ${this._features.map((feature, index) => this._renderFeatureRow(feature, index))}
@@ -318,10 +429,10 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
             <span>Add feature</span>
           </button>
           ${this._addOpen
-            ? html`<div class="add-menu">
+            ? html`<div class="add-menu" @keydown=${this._addMenuKeydown}>
                 ${this._addableFeatures().map(
                   (f) => html`<button class="add-opt" @click=${() => this._pickFeature(f.type)}>
-                    ${f.label}
+                    <ha-icon icon=${f.icon}></ha-icon>${f.label}
                   </button>`
                 )}
               </div>`
@@ -332,20 +443,40 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   }
 
   /**
+   * Summarize a feature without opening its editor.
+   * @param feature the configured feature
+   */
+  private _summary(feature: FeatureConfig): string {
+    if ('entities' in feature) return `${feature.entities.length} entities`;
+    if ('items' in feature) return `${feature.items.length} entities`;
+    if ('entity' in feature) return feature.entity || 'No entity selected';
+    if (feature.type === 'comfort') return 'Comfort';
+    if ('options' in feature && feature.options) return `${feature.options.length} modes`;
+    return 'All modes';
+  }
+
+  /**
    * Render a single feature list entry plus its inline editor when expanded.
    * @param feature the feature config
    * @param index the feature index
    */
   private _renderFeatureRow(feature: FeatureConfig, index: number): TemplateResult {
     const expanded = this._editingIndex === index;
+    const label = FEATURE_LABELS[feature.type] ?? feature.type;
+    const info = ADDABLE_FEATURES.find((f) => f.type === feature.type);
     return html`
       <div class="feature">
         <div class="feature-head">
-          <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
-          <div class="feature-title">${FEATURE_LABELS[feature.type] ?? feature.type}</div>
+          <div class="handle" tabindex="0" role="button"
+            aria-label=${`Reorder ${label}. Use up and down arrow keys.`}
+            @keydown=${(e: KeyboardEvent) => this._handleReorder(index, e)}
+          ><ha-icon icon="mdi:drag"></ha-icon></div>
+          <ha-icon icon=${info?.icon ?? 'mdi:card-outline'}></ha-icon>
+          <div class="feature-title"><div>${label}</div><div class="hint">${this._summary(feature)}</div></div>
           <button
             class="icon-btn"
             aria-label="Edit feature"
+            aria-expanded=${String(expanded)}
             @click=${() => (this._editingIndex = expanded ? null : index)}
           >
             <ha-icon icon=${expanded ? 'mdi:chevron-up' : 'mdi:pencil'}></ha-icon>
@@ -460,7 +591,40 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     return html`<div class="feature-editor">${inner}</div>`;
   }
 
-  static styles = css`
+  static styles = [tokens, css`
+    :host {
+      display: block;
+      container-type: inline-size;
+    }
+    .fields {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+      padding: 12px;
+    }
+    .field-row {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .field-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: var(--mt-on-surface-variant);
+    }
+    .field-row > * {
+      min-width: 0;
+    }
+    .halves {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    @container (width < 360px) {
+      .field-row {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
     .editor {
       display: flex;
       flex-direction: column;
@@ -468,7 +632,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     }
     .features-header {
       font-weight: 500;
-      color: var(--primary-text-color);
+      color: var(--mt-on-surface);
     }
     .features {
       display: flex;
@@ -476,49 +640,64 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       gap: 8px;
     }
     .feature {
-      border: 1px solid var(--divider-color);
-      border-radius: 12px;
+      border: 1px solid var(--mt-outline-variant);
+      border-radius: var(--mt-shape-chip-square);
       /* visible (not hidden) so a feature's icon-picker popover can extend past
          the card edge instead of being clipped inside it */
       overflow: visible;
-      background: var(--secondary-background-color);
+      background: var(--mt-surface-container);
     }
     .feature-head {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 8px 8px 4px;
+      padding: 8px;
     }
     .handle {
       cursor: grab;
-      color: var(--secondary-text-color);
+      color: var(--mt-on-surface-variant);
       display: grid;
       place-items: center;
+      min-width: 44px;
+      min-height: 44px;
+      flex-shrink: 0;
     }
     .feature-title {
       flex: 1;
-      color: var(--primary-text-color);
+      min-width: 0;
+      color: var(--mt-on-surface);
+      overflow-wrap: anywhere;
     }
     .icon-btn {
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
       border: none;
       background: transparent;
-      border-radius: 50%;
-      color: var(--secondary-text-color);
+      border-radius: var(--mt-shape-full);
+      color: var(--mt-on-surface-variant);
       cursor: pointer;
     }
-    .icon-btn:hover {
-      background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08);
+    button {
+      font: inherit;
+    }
+    button:hover {
+      background: var(--mt-surface-container-highest);
+    }
+    button:focus-visible,
+    .handle:focus-visible {
+      outline: 2px solid var(--mt-primary);
+      outline-offset: 2px;
     }
     .feature-editor {
       padding: 8px 12px 12px;
-      border-top: 1px solid var(--divider-color);
+      border-top: 1px solid var(--mt-outline-variant);
     }
     .hint {
-      color: var(--secondary-text-color);
+      color: var(--mt-on-surface-variant);
       font-size: 13px;
       margin: 0;
+      overflow-wrap: anywhere;
     }
     .add {
       position: relative;
@@ -527,15 +706,19 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      min-height: 44px;
       padding: 10px 18px;
       border: none;
-      border-radius: 999px;
-      background: var(--primary-color);
-      color: var(--text-primary-color, #fff);
+      border-radius: var(--mt-shape-full);
+      background: var(--mt-primary);
+      color: var(--mt-on-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 14px;
       font-weight: 500;
+    }
+    .add-btn:hover {
+      background: var(--mt-primary);
+      filter: brightness(0.95);
     }
     .add-btn ha-icon {
       --mdc-icon-size: 18px;
@@ -544,28 +727,25 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       margin-top: 8px;
       display: flex;
       flex-direction: column;
-      background: var(--card-background-color, var(--secondary-background-color));
-      border: 1px solid var(--divider-color);
-      border-radius: 12px;
+      background: var(--mt-surface);
+      border: 1px solid var(--mt-outline-variant);
+      border-radius: var(--mt-shape-chip-square);
       overflow: hidden;
     }
     .add-opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
       text-align: left;
       padding: 12px 16px;
       border: none;
       background: transparent;
-      color: var(--primary-text-color);
+      color: var(--mt-on-surface);
       cursor: pointer;
       font: inherit;
-      font-size: 14px;
     }
-    .add-opt:hover {
-      background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08);
-    }
-    .add-opt:not(:last-child) {
-      border-bottom: 1px solid var(--divider-color);
-    }
-  `;
+  `];
 }
 
 declare global {

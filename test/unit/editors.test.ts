@@ -208,6 +208,132 @@ describe('material-thermostat-card-editor', () => {
     expect((el2 as any)._baseData.show_current_as_primary).to.equal(true);
   });
 
+  it('groups style fields, supplies defaults/helpers, and prunes default selections', async () => {
+    const el = await mount();
+    const form = el.shadowRoot!.querySelector('ha-form') as any;
+    const style = form.schema[3];
+    expect(style).to.include({ name: '', type: 'expandable', title: 'Style', flatten: true, icon: 'mdi:palette-outline' });
+    expect(style.schema.map((s: any) => s.name)).to.deep.equal(['dial_style', 'show_current_as_primary', 'font']);
+    expect(style.schema[0].selector.select.mode).to.equal('dropdown');
+    expect(style.schema[0].selector.select.options).to.deep.equal([
+      { value: 'halo', label: 'Halo' },
+      { value: 'minimal', label: 'Minimal' },
+      { value: 'google', label: 'Google Home' },
+    ]);
+    expect(style.schema[2].selector.select.mode).to.equal('dropdown');
+    expect(style.schema[2].selector.select.options).to.deep.equal([
+      { value: 'rounded', label: 'Google Sans Flex (rounded)' },
+      { value: 'theme', label: 'Theme font' },
+    ]);
+    expect(form.data).to.include({ dial_style: 'halo', font: 'rounded' });
+    expect(form.computeLabel({ name: 'dial_style' })).to.equal('Dial style');
+    expect(form.computeLabel({ name: 'font' })).to.equal('Font');
+    expect(form.computeHelper({ name: 'dial_style' })).to.contain('Halo glows');
+    expect(form.computeHelper({ name: 'font' })).to.contain('Google Fonts');
+    expect(form.computeHelper({ name: 'entity' })).to.equal(undefined);
+    const cap = captureEvents('config-changed');
+    emitValueChanged(form, { ...form.data, dial_style: 'google', font: 'theme' });
+    await el.updateComplete;
+    expect(form.data).to.include({ dial_style: 'google', font: 'theme' });
+    expect((cap.events[0].detail as any).config).to.include({ dial_style: 'google', font: 'theme' });
+    emitValueChanged(form, { ...form.data, dial_style: 'halo', font: 'rounded' });
+    cap.stop();
+    expect((cap.events[1].detail as any).config).to.include({ dial_style: undefined, font: undefined });
+  });
+
+  it('persists the minimal dial style', async () => {
+    const el = await mount();
+    const form = el.shadowRoot!.querySelector('ha-form') as any;
+    const cap = captureEvents('config-changed');
+    emitValueChanged(form, { ...form.data, dial_style: 'minimal' });
+    cap.stop();
+    expect((cap.events[0].detail as any).config.dial_style).to.equal('minimal');
+  });
+
+  it('renders labelled sensor pickers and preserves sibling feels-like fields on changes', async () => {
+    const el = await mount();
+    const panel = el.shadowRoot!.querySelector('ha-expansion-panel')!;
+    expect(panel.getAttribute('header')).to.equal('Feels-like temperature');
+    const pickers = panel.querySelectorAll('mt-entity-picker');
+    expect(pickers.length).to.equal(2);
+    expect(Array.from(panel.querySelectorAll('.field-label')).map((n) => n.textContent)).to.deep.equal(['Temperature sensor', 'Humidity sensor']);
+    expect((pickers[0] as any).label).to.equal('Temperature sensor');
+    expect((pickers[1] as any).label).to.equal('Humidity sensor');
+    expect((pickers[0] as any).includeDomains).to.deep.equal(['sensor']);
+    expect((pickers[0] as any).value).to.equal('');
+    const cap = captureEvents('config-changed');
+    emitValueChanged(pickers[0], 'sensor.t');
+    emitValueChanged(pickers[1], 'sensor.h');
+    emitValueChanged(panel.querySelector('ha-form')!, { show_as_current: true });
+    expect((cap.events[2].detail as any).config.feels_like).to.deep.equal({ temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true });
+    emitValueChanged(pickers[0], '');
+    emitValueChanged(pickers[1], '');
+    emitValueChanged(panel.querySelector('ha-form')!, { show_as_current: false });
+    cap.stop();
+    expect((cap.events[5].detail as any).config.feels_like).to.equal(undefined);
+  });
+
+  it('renders empty guidance and dismisses the add menu with Escape, restoring focus', async () => {
+    const el = await mount();
+    expect(el.shadowRoot!.textContent).to.contain('No features yet. Add a feature below.');
+    const add = el.shadowRoot!.querySelector<HTMLButtonElement>('.add-btn')!;
+    add.click();
+    await el.updateComplete;
+    const option = el.shadowRoot!.querySelector<HTMLButtonElement>('.add-opt')!;
+    expect(option.querySelector('ha-icon')).to.not.equal(null);
+    option.focus();
+    option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('.add-menu')).to.not.equal(null);
+    option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('.add-menu')).to.equal(null);
+    expect(el.shadowRoot!.activeElement).to.equal(add);
+  });
+
+  it('supports keyboard reorder in both directions, ignores edges/other keys, and restores focus', async () => {
+    const el = await mount({ features: [{ type: 'comfort' }, { type: 'climate-hvac-modes' }] });
+    const handles = () => el.shadowRoot!.querySelectorAll<HTMLElement>('.handle');
+    expect(handles()[0].getAttribute('role')).to.equal('button');
+    expect(handles()[0].tabIndex).to.equal(0);
+    expect(handles()[0].getAttribute('aria-label')).to.contain('Use up and down arrow keys.');
+    const cap = captureEvents('config-changed');
+    for (const [index, key] of [[0, 'ArrowUp'], [1, 'ArrowDown'], [0, 'Enter']] as const) {
+      handles()[index].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
+    expect(cap.events.length).to.equal(0);
+    handles()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await el.updateComplete;
+    expect((cap.events[0].detail as any).config.features[1].type).to.equal('comfort');
+    expect(el.shadowRoot!.activeElement).to.equal(handles()[1]);
+    handles()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    await el.updateComplete;
+    cap.stop();
+    expect((cap.events[1].detail as any).config.features[0].type).to.equal('comfort');
+    expect(el.shadowRoot!.activeElement).to.equal(handles()[0]);
+  });
+
+  it('renders feature icons and summaries for each config shape', async () => {
+    const el = await mount({ features: [
+      { type: 'switch-group', entities: [] },
+      { type: 'switch-list', entities: [{ entity: 'switch.x' }] },
+      { type: 'button-list', items: [] },
+      { type: 'sensor-list', items: [{ entity: 'sensor.x' }] },
+      { type: 'input-select', entity: 'input_select.x' },
+      { type: 'entity-tile', entity: '' },
+      { type: 'comfort' },
+      { type: 'climate-hvac-modes' },
+      { type: 'climate-fan-modes', options: [{ value: 'auto' }] },
+      { type: 'climate-swing-modes', options: [] },
+      { type: 'climate-preset-modes', options: [{ value: 'eco' }, { value: 'none' }] },
+      { type: 'climate-hvac-modes', options: undefined },
+    ] });
+    expect(Array.from(el.shadowRoot!.querySelectorAll('.feature-title .hint')).map((n) => n.textContent)).to.deep.equal([
+      '0 entities', '1 entities', '0 entities', '1 entities', 'input_select.x', 'No entity selected', 'Comfort', 'All modes', '1 modes', '0 modes', '2 modes', 'All modes',
+    ]);
+    expect(el.shadowRoot!.querySelectorAll('.feature-head > ha-icon').length).to.equal(12);
+  });
+
   describe('feels-like section', () => {
     /** The second ha-form in the editor is the feels-like form. */
     function feelsForm(el: MaterialThermostatCardEditor): Element {
@@ -493,13 +619,13 @@ describe('material-thermostat-card-editor', () => {
     it('shows FEATURE_LABELS in the row title', async () => {
       const el = await mount({ features: [{ type: 'entity-tile', entity: '' }] });
       const title = el.shadowRoot!.querySelector('.feature-title')!;
-      expect(title.textContent!.trim()).to.equal('Entity tile');
+      expect(title.querySelector('div')!.textContent!.trim()).to.equal('Entity tile');
     });
 
     it('falls back to feature.type for an unknown label', async () => {
       const el = await mount({ features: [{ type: 'bogus' } as any] });
       const title = el.shadowRoot!.querySelector('.feature-title')!;
-      expect(title.textContent!.trim()).to.equal('bogus');
+      expect(title.querySelector('div')!.textContent!.trim()).to.equal('bogus');
     });
 
     it('climate-hvac-modes -> mt-climate-feature-editor kind=hvac', async () => {
