@@ -37,12 +37,27 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   (`top: 9.375%` = (160−130)/320 at rest, `10.469%` ≈ (160−126.5)/320
   while dragging). Invisible `.handle` targets follow the same centerline.
 - `_labelOrbit(angle, content, iconLabel)` — same, but the label counter-rotates
-  (`rotate(-angle)`) to stay upright. Numbers and merged inline icons use
-  `top:15.3125%` (radius 111) at rest and `top:17.5%` (radius 104) while dragging.
-  Standalone single-mode and collapsed dual setpoint icons use `.icon-label` at
-  `top:14.8125%` (radius 112.6) at rest and `top:17%` (radius 105.6) while dragging.
-  Labels move 7u inward with the band's inner edge (radius 125 → 118), keeping
-  the band-to-label gap constant; `top` transitions with the band's motion tokens.
+  (`rotate(-angle)`) to stay upright. `data-angle` records the rendered label
+  angle (including dual spreading), not necessarily its marker's angle.
+  `_measureLabels()` runs after every render and on host ResizeObserver callbacks.
+  It unions the label box with `sup` and `.mode-icon.inline` rectangles, relative
+  to the in-flow label box's centre, converting CSS pixels with `320 / svg.width`.
+  For direction `u = (sin θ, −cos θ)`, support `s = max(corner · u)` accounts
+   for asymmetric superscript and merged-icon overhang. This is the support
+   of the **enclosing union rectangle**, not just the separate child
+   rectangles: a union corner can combine one child's right edge with another's
+   top edge. Geometry tests must project those union corners too.
+   Inline `--s` stores this
+  support in viewBox units; writes occur only for changes >0.05u (or the initial
+  measurement), without requesting a Lit update. Hidden zero-width dials wait
+  for resize; the observer disconnects/reobserves with the host lifecycle.
+  CSS sets `top:calc((160 - (var(--edge) - 5.5 - var(--s, 6))) / 320 * 100%)`.
+  Plain-number `--edge` is 125 at rest and 118 dragging: radius is
+  `edge − 5.5 − support`, default support 6 before measurement. All label types
+  share this rule; `.icon-label` remains a semantic class, not a positioning rule.
+   Labels move 7u inward with the band; `top` retains the band's motion tokens.
+   Geometry assertions disable motion **before** changing dial properties;
+   otherwise they can observe the initial fallback radius during its transition.
 - Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
   in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
   `-1<sup>5</sup>`). A relative inline-block `.label-number` wrapper keeps only
@@ -170,7 +185,7 @@ only while **emphasized** (`_dragging || _showRangeTimer`); once it settles
 (idle, >5s) the `.settled` class shrinks it so it isn't oversized at rest.
 
 **Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
-sit at radius 111 at rest / 104 while dragging and can collide with the (horizontally widest) centre readout
+use measured, angle-dependent radii and can collide with the (horizontally widest) centre readout
 when a marker lands near 3 or 9 o'clock. `_centerTight` is true when any numeric
 marker is within `SIDE_GUARD_DEG` (26°) of 90°/270° (dual: low/high/current;
 single: current only — the single setpoint marker is a small icon). When true the
@@ -202,9 +217,9 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
   `.o-dot.current` a thinner pill (`width:clamp(2px, 1.2cqi, 4px)`,
   `height:5.9375cqi`, 3.84×19 units). Both use `border-radius:999px`.
   Markers and handles move to `top:10.469%` (radius 126.5).
-  Number/merged `.o-label` moves from radius 111 to 104; standalone `.icon-label`
-  from 112.6 to 105.6. This matches the inner edge's 7u inward growth and keeps
-  the band-to-label gap constant, with labels closer to the band at rest.
+  Every `.o-label` uses its measured whole-box support to keep a 5.5u radial
+  support gap from the inner edge. The radius moves 7u inward during drag,
+  rather than using fixed radii for numbers versus standalone icons.
   Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:
@@ -240,6 +255,8 @@ single-only typography rules from affecting those collapsed readouts.
 The ring retains its 10-unit rest stroke and opacity 0.18.
 
 Activity-only changes cross-fade without a wipe or off/on segment slide.
+Tests of these changes settle the initial off→colored slide first, then allow
+only opacity/stroke CSS transitions on the segment (no dash transitions or WAAPI wipe).
 `updated()` gates `_runWipe()` on a `mode` change between colored modes with a
 changed color **and both previous/new single segments visible**;
 `hvacAction`/temperature changes alone do not trigger it. `_prevSegVisible` is

@@ -133,6 +133,7 @@ export class MtCircularDial extends LitElement {
   private _rangeTimer?: number;
   private _prevLow?: number;
   private _prevHigh?: number;
+  private readonly _labelResizeObserver = new ResizeObserver(() => this._measureLabels());
 
   @query('svg') private _svg!: SVGSVGElement;
 
@@ -298,9 +299,45 @@ export class MtCircularDial extends LitElement {
     }, 5000);
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    this._labelResizeObserver.observe(this);
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._labelResizeObserver.disconnect();
     if (this._rangeTimer) clearTimeout(this._rangeTimer);
+  }
+
+  /** Measure upright label overhang in viewBox units without scheduling a Lit update. */
+  private _measureLabels(): void {
+    const width = this._svg.getBoundingClientRect().width;
+    if (width <= 0) return; // Hidden dials are measured when their host becomes visible.
+    const scale = VIEW / width;
+    for (const label of this.renderRoot.querySelectorAll<HTMLElement>('.o-label')) {
+      const box = label.getBoundingClientRect();
+      const cx = box.left + box.width / 2;
+      const cy = box.top + box.height / 2;
+      const rects = [box, ...Array.from(label.querySelectorAll('sup, .mode-icon.inline'),
+        child => child.getBoundingClientRect())];
+      const left = Math.min(...rects.map(rect => rect.left));
+      const right = Math.max(...rects.map(rect => rect.right));
+      const top = Math.min(...rects.map(rect => rect.top));
+      const bottom = Math.max(...rects.map(rect => rect.bottom));
+      const angle = Number(label.dataset.angle) * Math.PI / 180;
+      const ux = Math.sin(angle);
+      const uy = -Math.cos(angle);
+      const support = Math.max(
+        (left - cx) * ux, (right - cx) * ux
+      ) * scale + Math.max(
+        (top - cy) * uy, (bottom - cy) * uy
+      ) * scale;
+      const previous = parseFloat(label.style.getPropertyValue('--s'));
+      if (!Number.isFinite(previous) || Math.abs(support - previous) > 0.05) {
+        label.style.setProperty('--s', String(support));
+      }
+    }
   }
 
   /** Decimal precision implied by the step (0 for integers, 1 for halves). */
@@ -648,7 +685,7 @@ export class MtCircularDial extends LitElement {
    */
   private _labelOrbit(angle: number, content: TemplateResult, iconLabel = false): TemplateResult {
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
-      <div class=${classMap({ 'o-label': true, 'icon-label': iconLabel })} style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
+      <div class=${classMap({ 'o-label': true, 'icon-label': iconLabel })} data-angle=${angle} style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
         ${content}
       </div>
     </div>`;
@@ -679,6 +716,7 @@ export class MtCircularDial extends LitElement {
    * @param changed changed properties
    */
   protected updated(changed: PropertyValues): void {
+    this._measureLabels();
     // Dual mode: show the "Heat/Cool" range for 5s after a setpoint changes
     // (skip the initial set, when there's no previous value to compare).
     if (this.dual && (changed.has('lowValue') || changed.has('highValue'))) {
@@ -1107,6 +1145,7 @@ export class MtCircularDial extends LitElement {
         -webkit-tap-highlight-color: transparent;
       }
       .dial {
+        --edge: 125;
         position: relative;
         width: 100%;
         max-width: 320px;
@@ -1304,19 +1343,13 @@ export class MtCircularDial extends LitElement {
       .o-label {
         position: absolute;
         left: 50%;
-        top: 15.3125%; /* (160-111)/320 — follow the band's inner edge */
+        top: calc((160 - (var(--edge) - 5.5 - var(--s, 6))) / 320 * 100%);
         transition:
           transform var(--mt-motion-dur) var(--mt-motion-ease),
           top var(--mt-motion-dur) var(--mt-motion-ease);
       }
-      .o-label.icon-label {
-        top: 14.8125%; /* (160-112.6)/320 — standalone setpoint mode icons only */
-      }
-      .dial.dragging .o-label {
-        top: 17.5%; /* (160-104)/320 — 7u inward, like the band's inner edge */
-      }
-      .dial.dragging .o-label.icon-label {
-        top: 17%; /* (160-105.6)/320 */
+      .dial.dragging {
+        --edge: 118;
       }
       /* Only the integer participates in centring; the decimal hangs top-right. */
       .o-label .label-number {

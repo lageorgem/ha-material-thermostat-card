@@ -63,6 +63,35 @@ function stubCapture(svg: SVGSVGElement): void {
   (svg as any).releasePointerCapture = (): void => {};
 }
 
+/**
+ * Check measured support and the resulting CSS radius against actual browser boxes.
+ * @param el dial under test
+ * @param label upright orbit label
+ * @param edge inner band radius in viewBox units
+ */
+function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void {
+  const { scale } = svgGeometry(el);
+  const box = label.getBoundingClientRect();
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2;
+  const rects = [box, ...[...label.querySelectorAll('sup, .mode-icon.inline')].map(child => child.getBoundingClientRect())];
+  const angle = Number(label.getAttribute('data-angle')) * Math.PI / 180;
+  const ux = Math.sin(angle);
+  const uy = -Math.cos(angle);
+  // The contract uses the enclosing union rectangle, including corners that
+  // belong to neither the integer nor the out-of-flow superscript/icon alone.
+  const left = Math.min(...rects.map(rect => rect.left));
+  const right = Math.max(...rects.map(rect => rect.right));
+  const top = Math.min(...rects.map(rect => rect.top));
+  const bottom = Math.max(...rects.map(rect => rect.bottom));
+  const support = Math.max(...[left, right].flatMap(x =>
+    [top, bottom].map(y => ((x - cx) * ux + (y - cy) * uy) / scale)
+  ));
+  const style = getComputedStyle(label);
+  expect(parseFloat(style.getPropertyValue('--s'))).to.be.closeTo(support, 0.05);
+  expect(parseFloat(style.top) / scale).to.be.closeTo(160 - edge + 5.5 + support, 0.05);
+}
+
 describe('mt-circular-dial', () => {
   describe('measured Google presentation', () => {
     for (const dual of [false, true]) {
@@ -181,7 +210,7 @@ describe('mt-circular-dial', () => {
       const number = el.shadowRoot!.querySelector('.num.current')!;
       expect(parseFloat(getComputedStyle(number).fontSize)).to.be.closeTo(15.84, 0.001);
       expect(getComputedStyle(number).color).to.equal('rgb(237, 225, 212)');
-      expect(getComputedStyle(number.closest('.o-label')!).top).to.equal('49px');
+      expectLabelGap(el, number.closest('.o-label')!, 125);
     });
 
     it('uses the measured single centre size independently of HA display tokens', async () => {
@@ -220,6 +249,7 @@ describe('mt-circular-dial', () => {
     for (const merged of [false, true]) {
       it(`uses the heat override for a single setpoint (merged=${merged})`, async () => {
         const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
         el.mode = 'heat';
         el.value = 22;
         el.current = merged ? 22 : 14;
@@ -230,7 +260,7 @@ describe('mt-circular-dial', () => {
         expect(icon.classList.contains('inline')).to.equal(merged);
         const label = icon.closest('.o-label')!;
         expect(label.classList.contains('icon-label')).to.equal(!merged);
-        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(merged ? 49 : 47.4, 0.02);
+        expectLabelGap(el, label, 125);
       });
     }
 
@@ -252,6 +282,7 @@ describe('mt-circular-dial', () => {
     for (const mode of ['heat', 'cool']) {
       it(`uses the ${mode} override for the active dual setpoint`, async () => {
         const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
         el.dual = true;
         el.mode = 'heat_cool';
         el.lowValue = 18;
@@ -264,12 +295,102 @@ describe('mt-circular-dial', () => {
         );
         const label = el.shadowRoot!.querySelector('.mode-icon')!.closest('.o-label')!;
         expect(label.classList.contains('icon-label')).to.be.true;
-        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(47.4, 0.02);
+        expectLabelGap(el, label, 125);
       });
     }
   });
 
   describe('dragging presentation', () => {
+    for (const scenario of ['fraction', 'integer', 'icon', 'merged', 'dual'] as const) {
+      for (const dragging of [false, true]) {
+        it(`measures the whole ${scenario} label at its rendered angle (dragging=${dragging})`, async () => {
+          const el = await mount();
+          el.style.setProperty('--mt-motion-dur', '0s');
+          const angle = scenario === 'integer' ? 90 : scenario === 'icon' ? 0 : 50;
+          const current = scenario === 'integer' ? 22 : 21.1;
+          el.min = current - (angle + 360 - ARC_START) / SWEEP * 30;
+          el.max = el.min + 30;
+          el.mode = scenario === 'dual' ? 'heat_cool' : 'heat';
+          el.dual = scenario === 'dual';
+          el.current = scenario === 'icon' ? undefined : current;
+          el.value = scenario === 'merged' || scenario === 'icon' ? current : 28;
+          el.lowValue = 20.9;
+          el.highValue = 21.3;
+          Object.assign(el, { _dragging: dragging, _dragValue: el.value, _dragLow: el.lowValue, _dragHigh: el.highValue });
+          await el.updateComplete;
+          await nextFrame();
+          const labels = [...el.shadowRoot!.querySelectorAll<HTMLElement>('.o-label')];
+          expect(labels.length).to.equal(scenario === 'dual' ? 3 : scenario === 'merged' || scenario === 'icon' ? 1 : 2);
+          const edge = dragging ? 118 : 125;
+          for (const label of labels) expectLabelGap(el, label, edge);
+          if (scenario === 'dual') {
+            expect(labels.some(label => Number(label.dataset.angle) !== ARC_START + (current - el.min) / 30 * SWEEP)).to.be.true;
+          } else if (scenario !== 'merged') {
+            const label = scenario === 'icon' ? labels[0] : el.shadowRoot!.querySelector('.num.current')!.closest('.o-label')!;
+            const rects = [label, ...label.querySelectorAll('sup')].map(node => node.getBoundingClientRect());
+            const left = Math.min(...rects.map(rect => rect.left));
+            const right = Math.max(...rects.map(rect => rect.right));
+            const top = Math.min(...rects.map(rect => rect.top));
+            const bottom = Math.max(...rects.map(rect => rect.bottom));
+            const { cx, cy, scale } = svgGeometry(el);
+            for (const x of [left, right]) for (const y of [top, bottom]) {
+              expect(Math.hypot(x - cx, y - cy) / scale).to.be.at.most(edge - 5.5 + 0.5);
+            }
+          }
+        });
+      }
+    }
+
+    it('skips hidden geometry and unchanged support without requesting an update', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.current = 21.1;
+      await el.updateComplete;
+      const measure = el as unknown as { _measureLabels(): void };
+      const label = el.shadowRoot!.querySelector<HTMLElement>('.o-label')!;
+      const set = sinon.spy(label.style, 'setProperty');
+      const update = sinon.spy(el, 'requestUpdate');
+      measure._measureLabels();
+      expect(set.called).to.be.false;
+      const previous = Number(label.style.getPropertyValue('--s'));
+      label.style.setProperty('--s', String(previous + 0.04));
+      set.resetHistory();
+      measure._measureLabels();
+      expect(set.called).to.be.false;
+      label.style.setProperty('--s', String(previous + 1));
+      set.resetHistory();
+      measure._measureLabels();
+      expect(set.calledOnce).to.be.true;
+      const rect = sinon.stub(svgGeometry(el).svg, 'getBoundingClientRect').returns(new DOMRect());
+      set.resetHistory();
+      measure._measureLabels();
+      expect(set.called).to.be.false;
+      expect(update.called).to.be.false;
+      rect.restore();
+      set.restore();
+      update.restore();
+    });
+
+    it('remeasures on host resize and disconnects/reobserves on reconnect', async () => {
+      const el = await mount();
+      const measure = sinon.spy(el as unknown as { _measureLabels(): void }, '_measureLabels');
+      const observer = (el as unknown as { _labelResizeObserver: ResizeObserver })._labelResizeObserver;
+      const disconnect = sinon.spy(observer, 'disconnect');
+      const observe = sinon.spy(observer, 'observe');
+      el.parentElement!.style.width = '160px';
+      await aTimeout(100);
+      expect(measure.called).to.be.true;
+      const parent = el.parentElement!;
+      el.remove();
+      expect(disconnect.calledOnce).to.be.true;
+      parent.append(el);
+      expect(observe.calledOnceWithExactly(el)).to.be.true;
+      await nextFrame();
+      measure.restore();
+      disconnect.restore();
+      observe.restore();
+    });
+
     for (const dual of [false, true]) {
       it(`keeps label gaps constant as the band grows inward (dual=${dual})`, async () => {
         const el = await mount();
@@ -289,10 +410,9 @@ describe('mt-circular-dial', () => {
         for (const dragging of [false, true, false]) {
           dial.classList.toggle('dragging', dragging);
           for (const label of labels) {
-            const icon = label.classList.contains('icon-label');
-            const top = dragging ? (icon ? 17 : 17.5) : (icon ? 14.8125 : 15.3125);
             const style = getComputedStyle(label);
-            expect(parseFloat(style.top) / 320 * 100).to.be.closeTo(top, 0.005);
+            expectLabelGap(el, label, dragging ? 118 : 125);
+            expect(style.getPropertyValue('--edge').trim()).to.equal(dragging ? '118' : '125');
             expect(style.transitionProperty).to.include('top');
           }
         }
@@ -364,7 +484,7 @@ describe('mt-circular-dial', () => {
           expect(style.transitionProperty).to.include('border-radius');
         }
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 54.4 : 56, 0.02);
+          expectLabelGap(el, label, 118);
           expect(getComputedStyle(label).transitionProperty).to.include('top');
         }
         if (dual) {
@@ -386,7 +506,7 @@ describe('mt-circular-dial', () => {
         }
         expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 47.4 : 49, 0.02);
+          expectLabelGap(el, label, 125);
         }
       });
     }
@@ -2534,6 +2654,8 @@ describe('mt-circular-dial', () => {
       el.current = 20.6;
       await el.updateComplete;
       const segment = el.shadowRoot!.querySelector('.value')!;
+      // Settle the initial off→heat slide before checking the activity change.
+      el.shadowRoot!.getAnimations().forEach(animation => animation.finish());
       const dash = segment.getAttribute('stroke-dasharray');
       const offset = segment.getAttribute('stroke-dashoffset');
       const wipe = sinon.spy(el as any, '_runWipe');
@@ -2547,7 +2669,11 @@ describe('mt-circular-dial', () => {
       expect(segment.getAttribute('style')).to.contain('opacity:1;');
       expect((el as any)._wipeFrom).to.equal(null);
       expect(el.shadowRoot!.querySelector('.wipe-value')).to.equal(null);
-      expect(segment.getAnimations()).to.have.length(0);
+      // Opacity/stroke fades are intentional; dash slides and WAAPI wipes are not.
+      const animations = segment.getAnimations();
+      expect(animations.every(animation => animation instanceof CSSTransition)).to.be.true;
+      expect(animations.map(animation => (animation as CSSTransition).transitionProperty))
+        .to.have.members(['opacity', 'stroke']);
       el.mode = 'heat';
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(null);
