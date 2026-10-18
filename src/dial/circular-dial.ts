@@ -23,14 +23,14 @@ try {
 /** HVAC modes that carry a color (everything else is treated as "off"). */
 const COLORED_MODES = ['cool', 'heat', 'heat_cool', 'auto', 'dry', 'fan_only'];
 
-// Geometry: a 320x320 viewBox. The draggable range spans 270° with a gap at
+// Geometry: a 320x320 viewBox. The draggable range spans 300° with a gap at
 // the bottom, so mid-range values sit near the top (à la Google Home / Nest).
 const VIEW = 320;
 const CENTER = VIEW / 2;
 const RADIUS = 130; // ring / marker-dot radius
-const ARC_START = 225; // degrees, clockwise from top — bottom-left (= min)
-const SWEEP = 270; // total degrees the range spans
-const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 135 — bottom-right (= max)
+const ARC_START = 210; // degrees, clockwise from top — bottom-left (= min)
+const SWEEP = 300; // total degrees the range spans
+const ARC_END_WRAP = (ARC_START + SWEEP) % 360; // 150 — bottom-right (= max)
 const OVERLAP_DEG = 18; // angular gap under which setpoint icon + current temp merge
 const SIDE_GUARD_DEG = 26; // a numeric marker this close to 3/9 o'clock crowds the centre readout
 const TAP_SLOP_PX = 10; // movement past this turns a ring press from a tap into a scroll/scrub
@@ -55,7 +55,7 @@ function polar(angleDeg: number, r: number): { x: number; y: number } {
 function arcPath(startAngle: number, endAngle: number, r: number): string {
   const start = polar(startAngle, r);
   const end = polar(endAngle, r);
-  /* c8 ignore next -- the sole caller spans the full 270° ring, always > 180° */
+  /* c8 ignore next -- the sole caller spans the full 300° ring, always > 180° */
   const largeArc = endAngle - startAngle > 180 ? 1 : 0;
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
@@ -201,7 +201,7 @@ export class MtCircularDial extends LitElement {
     const near = (v?: number): boolean => {
       if (v == null) return false;
       const a = ((this._angleOf(v) % 360) + 360) % 360;
-      return Math.min(Math.abs(a - 90), Math.abs(a - 270)) <= SIDE_GUARD_DEG;
+      return Math.min(Math.abs(a - 90), Math.abs(a - (360 - 90))) <= SIDE_GUARD_DEG;
     };
     // With show_current_as_primary the current dot carries no label, while the
     // setpoint(s) do — so the marker that can crowd the centre flips.
@@ -795,7 +795,7 @@ export class MtCircularDial extends LitElement {
 
     return html`
       <div
-        class=${classMap({ dial: true, off: isOff, disabled: this.disabled })}
+        class=${classMap({ dial: true, off: isOff, disabled: this.disabled, dragging: this._dragging })}
         style=${`--dial-color: ${color}`}
       >
         <svg
@@ -1099,6 +1099,7 @@ export class MtCircularDial extends LitElement {
         stroke-width: 10;
         stroke-linecap: round;
         opacity: 0.18;
+        transition: stroke-width var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .value {
         fill: none;
@@ -1106,6 +1107,7 @@ export class MtCircularDial extends LitElement {
         stroke-width: 10;
         stroke-linecap: round;
         transition:
+          stroke-width var(--mt-motion-dur) var(--mt-motion-ease),
           stroke-dasharray var(--mt-motion-dur) var(--mt-motion-ease),
           stroke-dashoffset var(--mt-motion-dur) var(--mt-motion-ease),
           stroke var(--mt-motion-dur) var(--mt-motion-ease),
@@ -1123,7 +1125,12 @@ export class MtCircularDial extends LitElement {
          while the new color slides in from the left behind it. */
       .wipe-value {
         pointer-events: none;
-        transition: none;
+        transition: stroke-width var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dial.dragging .ring,
+      .dial.dragging .value,
+      .dial.dragging .wipe-value {
+        stroke-width: 35;
       }
 
       /* Markers orbit the center so they ride the arc and stay on the ring. */
@@ -1150,6 +1157,9 @@ export class MtCircularDial extends LitElement {
         width: clamp(9px, 4.4cqi, 14px);
         height: clamp(9px, 4.4cqi, 14px);
         transition:
+          width var(--mt-motion-dur) var(--mt-motion-ease),
+          height var(--mt-motion-dur) var(--mt-motion-ease),
+          border-radius var(--mt-motion-dur) var(--mt-motion-ease),
           box-shadow var(--mt-motion-dur) var(--mt-motion-ease),
           transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
@@ -1162,12 +1172,31 @@ export class MtCircularDial extends LitElement {
         width: clamp(7px, 3.1cqi, 10px);
         height: clamp(7px, 3.1cqi, 10px);
         opacity: 0.55;
+        transition:
+          width var(--mt-motion-dur) var(--mt-motion-ease),
+          height var(--mt-motion-dur) var(--mt-motion-ease),
+          border-radius var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dial.dragging .o-dot.setpoint {
+        width: clamp(4px, 2.2cqi, 7px);
+        height: 11cqi;
+        border-radius: 999px;
+      }
+      .dial.dragging .o-dot.current {
+        width: clamp(2px, 1.1cqi, 4px);
+        height: 11cqi;
+        border-radius: 999px;
       }
       .o-label {
         position: absolute;
         left: 50%;
         top: 18.75%; /* (160-100)/320 — just inside the ring */
-        transition: transform var(--mt-motion-dur) var(--mt-motion-ease);
+        transition:
+          transform var(--mt-motion-dur) var(--mt-motion-ease),
+          top var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dial.dragging .o-label {
+        top: 21.25%; /* (160-92)/320 — clear of the thick band */
       }
       .o-label .num {
         font-size: clamp(8px, 4.6cqi, var(--md-sys-typescale-title-medium-size, 16px));
@@ -1289,11 +1318,12 @@ export class MtCircularDial extends LitElement {
       .adjust {
         position: absolute;
         left: 50%;
-        top: 80%;
+        top: 88%;
         transform: translate(-50%, -50%);
-        display: flex;
-        /* gap scales with the dial (low floor) so +/- track the circle's size */
-        gap: clamp(10px, 8.5cqi, 30px);
+        display: grid;
+        width: 36%;
+        grid-template-columns: repeat(2, 1fr);
+        justify-items: center; /* button centres at 50% ± 9% of the dial */
         pointer-events: none;
       }
       .step {

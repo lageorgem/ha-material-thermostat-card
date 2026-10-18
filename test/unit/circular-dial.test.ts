@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions -- Chai property assertions execute through getters. */
 import { fixture, html, expect, aTimeout, nextFrame } from '@open-wc/testing';
 import sinon from 'sinon';
 import { oncePromise, captureEvents } from '../helpers';
@@ -11,16 +12,16 @@ const IDLE_COLOR = 'var(--mt-on-surface-variant)';
 /** Geometry constants mirrored from src/dial/circular-dial.ts. */
 const VIEW = 320;
 const RADIUS = 130;
-const ARC_START = 225;
-const SWEEP = 270;
+const ARC_START = 210;
+const SWEEP = 300;
 
 /**
  * Make a fixture wide enough that the SVG has a real, non-zero bounding box so
  * pointer/geometry math is exercised against actual layout.
- * @param attrs lit template for the element
+ * @param _attrs lit template for the element
  */
 async function mount(
-  attrs = html``
+  _attrs = html``
 ): Promise<MtCircularDial> {
   // Wrap in a sized container so the 100%-width host has definite dimensions.
   const wrap = await fixture<HTMLDivElement>(html`
@@ -63,6 +64,79 @@ function stubCapture(svg: SVGSVGElement): void {
 }
 
 describe('mt-circular-dial', () => {
+  describe('dragging presentation', () => {
+    for (const dual of [false, true]) {
+      it(`morphs the band and markers only during dragging (dual=${dual})`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.dual = dual;
+        el.mode = 'cool';
+        el.current = 28;
+        el.lowValue = 18;
+        el.highValue = 24;
+        await el.updateComplete;
+        const sr = el.shadowRoot!;
+        const dial = sr.querySelector('.dial')!;
+        expect(dial.classList.contains('dragging')).to.be.false;
+        expect(getComputedStyle(sr.querySelector('.ring')!).strokeWidth).to.equal('10px');
+
+        (el as any)._dragValue = 20;
+        (el as any)._dragLow = 18;
+        (el as any)._dragHigh = 24;
+        if (!dual) (el as any)._wipeFrom = climateModeColor('heat');
+        (el as any)._dragging = true;
+        await el.updateComplete;
+        expect(dial.classList.contains('dragging')).to.be.true;
+        for (const band of sr.querySelectorAll('.ring, .value')) {
+          expect(getComputedStyle(band).strokeWidth).to.equal('35px');
+          expect(getComputedStyle(band).transitionProperty).to.contain('stroke-width');
+        }
+        for (const dot of sr.querySelectorAll('.o-dot')) {
+          const style = getComputedStyle(dot);
+          expect(parseFloat(style.height)).to.be.closeTo(35.2, 0.1);
+          expect(parseFloat(style.width)).to.be.closeTo(
+            dot.classList.contains('setpoint') ? 7 : 3.52,
+            0.01
+          );
+          expect(style.borderRadius).to.equal('999px');
+          expect(style.transitionProperty).to.include('width');
+          expect(style.transitionProperty).to.include('height');
+          expect(style.transitionProperty).to.include('border-radius');
+        }
+        for (const label of sr.querySelectorAll('.o-label')) {
+          expect(getComputedStyle(label).top).to.equal('68px');
+          expect(getComputedStyle(label).transitionProperty).to.include('top');
+        }
+        if (dual) {
+          expect(getComputedStyle(sr.querySelector('.setpoint.sel')!).boxShadow).to.not.equal('none');
+        } else {
+          expect(sr.querySelector('.wipe-value')).to.not.equal(null);
+        }
+
+        (el as any)._dragging = false;
+        await el.updateComplete;
+        expect(dial.classList.contains('dragging')).to.be.false;
+        expect(getComputedStyle(sr.querySelector('.ring')!).strokeWidth).to.equal('10px');
+        expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
+        expect(getComputedStyle(sr.querySelector('.o-label')!).top).to.equal('60px');
+      });
+    }
+
+    it('centres the step buttons at 41%/59% horizontally and 88% vertically', async () => {
+      const el = await mount();
+      const dial = el.shadowRoot!.querySelector('.dial')!.getBoundingClientRect();
+      const buttons = el.shadowRoot!.querySelectorAll('.step');
+      for (const [index, button] of [...buttons].entries()) {
+        const rect = button.getBoundingClientRect();
+        expect((rect.left + rect.width / 2 - dial.left) / dial.width).to.be.closeTo(
+          index === 0 ? 0.41 : 0.59,
+          0.001
+        );
+        expect((rect.top + rect.height / 2 - dial.top) / dial.height).to.be.closeTo(0.88, 0.001);
+      }
+    });
+  });
+
   describe('rendering — single mode', () => {
     it('renders the center value-text and unit, but no mode label (single mode)', async () => {
       const el = await mount();
@@ -378,6 +452,19 @@ describe('mt-circular-dial', () => {
   });
 
   describe('geometry helpers', () => {
+    it('renders a 300° ring from 210° to 150° wrapped', async () => {
+      const el = await mount();
+      const ring = el.shadowRoot!.querySelector('.ring') as SVGPathElement;
+      const start = ring.getPointAtLength(0);
+      const end = ring.getPointAtLength(ring.getTotalLength());
+      expect(start.x).to.be.closeTo(95, 0.01);
+      expect(start.y).to.be.closeTo(160 + RADIUS * Math.cos(Math.PI / 6), 0.01);
+      expect(end.x).to.be.closeTo(225, 0.01);
+      expect(end.y).to.be.closeTo(start.y, 0.01);
+      expect(ring.getTotalLength()).to.be.closeTo((RADIUS * SWEEP * Math.PI) / 180, 0.1);
+      expect((el as any)._angleOf(el.min)).to.equal(210);
+      expect((el as any)._angleOf(el.max)).to.equal(510);
+    });
     it('_angleOf maps min→ARC_START, max→ARC_START+SWEEP, mid→midpoint', async () => {
       const el = await mount();
       el.min = 10;
@@ -676,6 +763,19 @@ describe('mt-circular-dial', () => {
   });
 
   describe('ring hit-testing (_isRingHit)', () => {
+    it('excludes 180° and 205° in the bottom gap but includes 215°', async () => {
+      const el = await mount();
+      const { cx, cy, scale } = svgGeometry(el);
+      for (const angle of [180, 205, 215]) {
+        const t = ((angle - 90) * Math.PI) / 180;
+        expect(
+          (el as any)._isRingHit(
+            cx + RADIUS * scale * Math.cos(t),
+            cy + RADIUS * scale * Math.sin(t)
+          )
+        ).to.equal(angle === 215);
+      }
+    });
     it('true on the ring near the top', async () => {
       const el = await mount();
       await el.updateComplete;
@@ -744,9 +844,8 @@ describe('mt-circular-dial', () => {
       el.step = 0.5;
       await el.updateComplete;
       const { cx, cy, scale } = svgGeometry(el);
-      // ARC_START = 225° (0=top, CW). dx = sin(225)?, but use polar to top-based.
-      // angle 225 from top, CW: point at lower-left.
-      const t = ((225 - 90) * Math.PI) / 180;
+      // ARC_START = 210° from top, clockwise: point at lower-left.
+      const t = ((ARC_START - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       const v = (el as any)._valueFromPoint(x, y);
@@ -760,21 +859,21 @@ describe('mt-circular-dial', () => {
       el.step = 0.5;
       await el.updateComplete;
       const { cx, cy, scale } = svgGeometry(el);
-      const t = ((135 - 90) * Math.PI) / 180; // ARC_END_WRAP
+      const t = (((ARC_START + SWEEP) % 360 - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       const v = (el as any)._valueFromPoint(x, y);
       expect(v).to.equal(30);
     });
 
-    it('gap just past min end (angle ~181°) snaps to max (p=SWEEP branch)', async () => {
+    it('gap near max end (angle 170°) snaps to max (p=SWEEP branch)', async () => {
       const el = await mount();
       el.min = 10;
       el.max = 30;
       el.step = 0.5;
       await el.updateComplete;
       const { cx, cy, scale } = svgGeometry(el);
-      // a < 180 -> SWEEP. choose a top-based angle of 170 (between 135 and 180,
+      // a < 180 -> SWEEP. choose a top-based angle of 170 (between 150 and 180,
       // a<180 so snaps to SWEEP -> max).
       const t = ((170 - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
@@ -783,14 +882,14 @@ describe('mt-circular-dial', () => {
       expect(v).to.equal(30);
     });
 
-    it('gap just before max end (angle ~200°) snaps to min (p=0 branch)', async () => {
+    it('gap near min end (angle 200°) snaps to min (p=0 branch)', async () => {
       const el = await mount();
       el.min = 10;
       el.max = 30;
       el.step = 0.5;
       await el.updateComplete;
       const { cx, cy, scale } = svgGeometry(el);
-      // top-based angle 200 (between 180 and 225): a>=180 -> p=0 -> min
+      // top-based angle 200 (between 180 and 210): a>=180 -> p=0 -> min
       const t = ((200 - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
@@ -832,7 +931,7 @@ describe('mt-circular-dial', () => {
       expect((changing.events[changing.events.length - 1].detail as any).value).to.equal(20);
 
       // move toward ARC_START (min)
-      const t = ((225 - 90) * Math.PI) / 180;
+      const t = ((ARC_START - 90) * Math.PI) / 180;
       const minX = cx + RADIUS * scale * Math.cos(t);
       const minY = cy + RADIUS * scale * Math.sin(t);
       svg.dispatchEvent(
@@ -945,7 +1044,7 @@ describe('mt-circular-dial', () => {
       const changed = captureEvents('value-changed');
 
       // press near min (value ~10) -> closer to low handle (14) than high (26)
-      const t = ((225 - 90) * Math.PI) / 180;
+      const t = ((ARC_START - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       (el as any)._onPointerDown({ clientX: x, clientY: y, pointerId: 1, preventDefault() {} });
@@ -982,7 +1081,7 @@ describe('mt-circular-dial', () => {
 
       const { svg, cx, cy, scale } = svgGeometry(el);
       stubCapture(svg);
-      const t = ((135 - 90) * Math.PI) / 180; // near max -> value ~30, nearer high (26)
+      const t = (((ARC_START + SWEEP) % 360 - 90) * Math.PI) / 180; // near max -> nearer high
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       (el as any)._onPointerDown({ clientX: x, clientY: y, pointerId: 1, preventDefault() {} });
@@ -1002,7 +1101,7 @@ describe('mt-circular-dial', () => {
 
       const { svg, cx, cy, scale } = svgGeometry(el);
       stubCapture(svg);
-      const t = ((225 - 90) * Math.PI) / 180; // near min -> value ~10, nearer low (14)
+      const t = ((ARC_START - 90) * Math.PI) / 180; // near min -> value ~10, nearer low (14)
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       (el as any)._onPointerDown({ clientX: x, clientY: y, pointerId: 1, preventDefault() {} });
@@ -1156,7 +1255,7 @@ describe('mt-circular-dial', () => {
       stubCapture(svg);
       const changed = captureEvents('value-changed');
       // tap near min (value ~10) -> closer to the low setpoint (14)
-      const t = ((225 - 90) * Math.PI) / 180;
+      const t = ((ARC_START - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
 
@@ -1183,7 +1282,7 @@ describe('mt-circular-dial', () => {
       const { svg, cx, cy, scale } = svgGeometry(el);
       stubCapture(svg);
       const changed = captureEvents('value-changed');
-      const t = ((135 - 90) * Math.PI) / 180; // near max (value ~30) -> nearer high (26)
+      const t = (((ARC_START + SWEEP) % 360 - 90) * Math.PI) / 180; // near max -> nearer high
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
 
@@ -1280,7 +1379,7 @@ describe('mt-circular-dial', () => {
       expect((el as any)._activeHandle).to.equal('high');
 
       // drag it toward min: high follows but clamps to low + step (never crosses low)
-      const t = ((225 - 90) * Math.PI) / 180;
+      const t = ((ARC_START - 90) * Math.PI) / 180;
       const x = cx + RADIUS * scale * Math.cos(t);
       const y = cy + RADIUS * scale * Math.sin(t);
       svg.dispatchEvent(pe('pointermove', x, y, 3));
@@ -1533,12 +1632,12 @@ describe('mt-circular-dial', () => {
       el.min = 10;
       el.max = 30;
       el.step = 0.5;
-      el.lowValue = 18; // angle 333
-      el.highValue = 28; // angle 468
-      el.current = 23; // angle 400.5 — all far apart
+      el.lowValue = 18; // angle 330
+      el.highValue = 28; // angle 480
+      el.current = 23; // angle 405 — all far apart
       await el.updateComplete;
       const angles = labelAngles(el);
-      expect(angles).to.deep.equal([333, 400.5, 468]);
+      expect(angles).to.deep.equal([330, 405, 480]);
     });
 
     it('spreads only the two setpoints when current is the primary number', async () => {
