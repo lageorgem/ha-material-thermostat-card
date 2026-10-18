@@ -6,6 +6,7 @@ import { makeHass, climateState, entityState } from '../helpers';
 import { feelsLikeC } from '../../src/calc/comfort-metrics';
 import { fromCelsius, type TempUnit } from '../../src/calc/units';
 import type { MaterialThermostatCardConfig } from '../../src/types';
+import { GOOGLE_SANS_FLEX_URL } from '../../src/font';
 
 // The benign "ResizeObserver loop completed with undelivered notifications"
 // browser error is not a test failure; swallow it so Mocha doesn't fail tests
@@ -108,6 +109,81 @@ describe('material-thermostat-card', () => {
       const cfg = MaterialThermostatCard.getStubConfig(hass);
       expect(cfg.entity).to.equal('');
     });
+  });
+
+  describe('font and dial style', () => {
+    beforeEach(() => {
+      document.getElementById('mt-google-sans-flex')?.remove();
+      document.getElementById('mt-gstatic-preconnect')?.remove();
+    });
+
+    afterEach(() => {
+      document.getElementById('mt-google-sans-flex')?.remove();
+      document.getElementById('mt-gstatic-preconnect')?.remove();
+    });
+
+    for (const font of [undefined, 'rounded', 'unexpected'] as const) {
+      it(`loads and applies the rounded font for ${String(font)}`, async () => {
+        const el = track(
+          await mount(baseConfig({ font: font as MaterialThermostatCardConfig['font'] }))
+        );
+        const card = el.shadowRoot!.querySelector('ha-card')!;
+        expect(card.classList.contains('font-rounded')).to.equal(true);
+        const link = document.head.querySelector<HTMLLinkElement>('#mt-google-sans-flex');
+        expect(link!.href).to.equal(GOOGLE_SANS_FLEX_URL);
+        expect(getComputedStyle(card).fontVariationSettings).to.equal('"ROND" 100');
+        expect(dial(el).dialStyle).to.equal('halo');
+      });
+    }
+
+    it('inherits the theme font without injecting font links', async () => {
+      const el = track(await mount(baseConfig({ font: 'theme' })));
+      expect(el.shadowRoot!.querySelector('ha-card')!.classList.contains('font-rounded')).to.equal(
+        false
+      );
+      expect(document.getElementById('mt-google-sans-flex')).to.equal(null);
+      expect(document.getElementById('mt-gstatic-preconnect')).to.equal(null);
+    });
+
+    it('switches between rounded and theme without removing another card’s font', async () => {
+      const el = track(await mount(baseConfig()));
+      const link = document.getElementById('mt-google-sans-flex');
+      el.setConfig(baseConfig({ font: 'theme' }));
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('ha-card')!.classList.contains('font-rounded')).to.equal(
+        false
+      );
+      expect(document.getElementById('mt-google-sans-flex')).to.equal(link);
+      el.setConfig(baseConfig({ font: 'rounded' }));
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('ha-card')!.classList.contains('font-rounded')).to.equal(
+        true
+      );
+      expect(document.head.querySelectorAll('#mt-google-sans-flex').length).to.equal(1);
+    });
+
+    it('applies rounded typography to the missing-entity state too', async () => {
+      const el = track(await mount(baseConfig(), {}));
+      expect(el.shadowRoot!.querySelector('ha-card')!.classList.contains('font-rounded')).to.equal(
+        true
+      );
+      el.setConfig(baseConfig({ font: 'theme' }));
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('ha-card')!.classList.contains('font-rounded')).to.equal(
+        false
+      );
+    });
+
+    for (const dial_style of ['halo', 'minimal', 'google'] as const) {
+      it(`passes ${dial_style} to the dial and uses its stacked crop`, async () => {
+        const el = track(await mount(baseConfig({ dial_style })));
+        (el as any)._widthPx = 300;
+        await el.updateComplete;
+        expect(dial(el).dialStyle).to.equal(dial_style);
+        const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
+        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-11px' : '-20px');
+      });
+    }
   });
 
   describe('getCardSize', () => {

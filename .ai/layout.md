@@ -74,11 +74,17 @@ side-by-side layout.
 
 ## The dial bottom-gap crop (stacked mode)
 
-The dial is square; the empty band below the +/- (bottom edge ~93.5%) can be cropped.
-Stacked layout applies `marginBottom: -Math.round(DIAL_BOTTOM_GAP ×
-min(_widthPx, DIAL_MAX_PX))px` (`DIAL_BOTTOM_GAP = 0.065`), cropping ~6.5%
-(~20.8 of 320 units before rounding; 20px for a 300px dial). `.body.stacked` gap, `.features`
-grid gap, and `ha-card` padding-bottom remain 12px.
+The dial is square; stacked layout crops its empty bottom band with
+`marginBottom: -Math.round(gap × min(_widthPx, DIAL_MAX_PX))px`.
+The card passes `dial_style` to the dial (default `halo`) and selects the gap:
+
+- `halo` / `minimal`: `DIAL_BOTTOM_GAP = 0.065`, below the +/- controls
+  (bottom edge ~93.5%); 20px crop for a 300px dial.
+- `google`: `DIAL_BOTTOM_GAP_DISC = 0.035`, preserving the background disc
+  (bottom edge ~96.4%); 11px crop for a 300px dial.
+
+Wide layout has no crop. `.body.stacked` gap, `.features` grid gap, and `ha-card`
+padding-bottom remain 12px.
 
 ## Icon-row scrolling
 

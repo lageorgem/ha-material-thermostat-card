@@ -30,6 +30,7 @@ import type {
 import { feelsLikeC } from './calc/comfort-metrics';
 import { parseReading, sensorTempUnit, systemTempUnit, toCelsius, fromCelsius } from './calc/units';
 import { registerMtIcons } from './register-icons';
+import { ensureGoogleSansFlex } from './font';
 import './dial/circular-dial';
 import './features/feature-row';
 
@@ -59,8 +60,10 @@ console.info(
 });
 
 const SERVICE_DEBOUNCE_MS = 600;
-/** Fraction of the dial height safe to crop below the +/- (bottom edge ~93.5%). */
+/** Fraction of halo/minimal dial height safe to crop below +/- (bottom edge ~93.5%). */
 const DIAL_BOTTOM_GAP = 0.065;
+/** Fraction safe to crop below the google dial's disc (bottom edge ~96.4%). */
+const DIAL_BOTTOM_GAP_DISC = 0.035;
 
 @customElement(CARD_TYPE)
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
@@ -106,6 +109,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       throw new Error('You must specify a climate entity.');
     }
     this._config = config;
+    if (config.font !== 'theme') ensureGoogleSansFlex();
   }
 
   public getCardSize(): number {
@@ -253,10 +257,10 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       feats.length > 0 && maxPct < 100 && cardPx >= WIDE_MIN_PX && leftoverPx >= DIAL_MIN_PX;
 
     if (!wide) {
-      // Crop the empty bottom band below the +/- (bottom edge ~93.5%)
-      // with a negative margin.
+      // Crop only the empty bottom band, preserving the google style's disc.
       const dialPx = Math.min(cardPx, DIAL_MAX_PX);
-      const crop = Math.round(DIAL_BOTTOM_GAP * dialPx);
+      const gap = this._config.dial_style === 'google' ? DIAL_BOTTOM_GAP_DISC : DIAL_BOTTOM_GAP;
+      const crop = Math.round(gap * dialPx);
       return {
         wide: false,
         dialStyle: { marginBottom: `-${crop}px` },
@@ -433,9 +437,10 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
 
   protected render(): TemplateResult {
     if (!this._config || !this.hass) return html``;
+    const fontClass = this._config.font === 'theme' ? '' : 'font-rounded';
     const state = this._stateObj;
     if (!state) {
-      return html`<ha-card
+      return html`<ha-card class=${fontClass}
         ><div class="error">Entity not found: ${this._config.entity}</div></ha-card
       >`;
     }
@@ -448,7 +453,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const layout = this._layout();
 
     return html`
-      <ha-card style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
+      <ha-card class=${fontClass} style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
         <div class="header">
           <div class="name" title=${name}>${name}</div>
           <button class="more" aria-label="More information" @click=${this._showMoreInfo}>
@@ -459,6 +464,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         <div class=${`body ${layout.wide ? 'wide' : 'stacked'}`}>
           <div class="dial-wrap" style=${styleMap(layout.dialStyle)}>
             <mt-circular-dial
+              .dialStyle=${this._config.dial_style ?? 'halo'}
               .value=${this._targetTemp ?? a.min_temp ?? 20}
               .min=${a.min_temp ?? 7}
               .max=${a.max_temp ?? 35}
@@ -513,6 +519,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     css`
       :host {
         display: block;
+      }
+      .font-rounded {
+        font-family:
+          'Google Sans Flex',
+          var(--ha-font-family-body, var(--primary-font-family, Roboto, Noto, sans-serif));
+        font-variation-settings: 'ROND' 100;
       }
       ha-card {
         /* bottom padding equals the inter-control gap (see .body.stacked) */

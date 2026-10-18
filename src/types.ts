@@ -179,6 +179,13 @@ export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   entity: string;
   name?: string;
   theme?: string;
+  /** Dial appearance. Default: 'halo'. */
+  dial_style?: 'halo' | 'minimal' | 'google';
+  /**
+   * Default: 'rounded' = Google Sans Flex rounded, loaded from Google Fonts.
+   * 'theme' = inherit the Home Assistant theme font.
+   */
+  font?: 'rounded' | 'theme';
   /** Show the current room temperature as the large primary number. */
   show_current_as_primary?: boolean;
   /** "Feels-like" temperature/humidity sensors (shared by the comfort feature). */
