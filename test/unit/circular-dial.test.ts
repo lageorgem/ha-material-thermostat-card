@@ -67,19 +67,14 @@ describe('mt-circular-dial', () => {
   describe('measured Google presentation', () => {
     for (const dual of [false, true]) {
       for (const mode of ['off', 'heat']) {
-        it(`paints a flat disc below the halo (dual=${dual}, mode=${mode})`, async () => {
+        it(`renders without a background disc (dual=${dual}, mode=${mode})`, async () => {
           const el = await mount();
           el.style.setProperty('--mt-motion-dur', '0s');
-          el.style.setProperty('--mt-surface-container-high', 'rgb(47, 41, 33)');
           el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
           el.dual = dual;
           el.mode = mode;
           await el.updateComplete;
-          const disc = el.shadowRoot!.querySelector('circle.disc')!;
-          expect(disc.getAttribute('r')).to.equal('148.5');
-          expect(disc.nextElementSibling).to.equal(el.shadowRoot!.querySelector('.glow'));
-          expect(getComputedStyle(disc).fill).to.equal('rgb(47, 41, 33)');
-          expect(getComputedStyle(disc).pointerEvents).to.equal('none');
+          expect(el.shadowRoot!.querySelector('.disc')).to.equal(null);
           expect(getComputedStyle(el.shadowRoot!.querySelector('.unit')!).display).to.equal(dual ? 'block' : 'none');
           if (dual || mode === 'off') {
             expect(getComputedStyle(el.shadowRoot!.querySelector('.setpoint')!).backgroundColor).to.equal(getComputedStyle(el).getPropertyValue('--mt-on-surface').trim());
@@ -138,7 +133,7 @@ describe('mt-circular-dial', () => {
       expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontVariationSettings).to.equal('"ROND" 100');
     });
 
-    it('keeps current markers bright and lights only active halos', async () => {
+    it('keeps current markers bright and dims off/idle halos', async () => {
       const el = await mount();
       el.style.setProperty('--mt-motion-dur', '0s');
       el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
@@ -147,7 +142,7 @@ describe('mt-circular-dial', () => {
       for (const action of ['idle', 'heating', 'off']) {
         el.hvacAction = action;
         await el.updateComplete;
-        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal(action === 'heating' ? '1' : '0');
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal(action === 'heating' ? '1' : '0.5');
         const marker = getComputedStyle(el.shadowRoot!.querySelector('.o-dot.current')!);
         expect(marker.opacity).to.equal('1');
         expect(marker.backgroundColor).to.equal('rgb(237, 225, 212)');
@@ -160,7 +155,7 @@ describe('mt-circular-dial', () => {
       }
       el.mode = 'off';
       await el.updateComplete;
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0.5');
     });
   });
   describe('mode icon overrides', () => {
@@ -608,6 +603,23 @@ describe('mt-circular-dial', () => {
   });
 
   describe('halo', () => {
+    it('keeps a fuller gradient that fades to transparent at the perimeter', async () => {
+      const el = await mount();
+      const stops = [...el.shadowRoot!.querySelectorAll('#mt-glow stop')];
+      expect(stops.map(stop => [stop.getAttribute('offset'), stop.getAttribute('stop-opacity')])).to.deep.equal([
+        ['0%', '0.38'],
+        ['25%', '0.35'],
+        ['45%', '0.3'],
+        ['65%', '0.21'],
+        ['80%', '0.12'],
+        ['92%', '0.04'],
+        ['100%', '0'],
+      ]);
+      for (const stop of stops) {
+        expect(stop.getAttribute('stop-color')).to.equal('var(--dial-color)');
+      }
+    });
+
     it('renders the glow as a plain radial-gradient circle (no filter)', async () => {
       const el = await mount();
       el.mode = 'cool';
@@ -2648,7 +2660,7 @@ describe('mt-circular-dial', () => {
       const iconColor = getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color;
       expect(iconColor).to.equal('color(srgb 0.470588 0.313726 0.313726)');
       expect(getComputedStyle(el.shadowRoot!.querySelector('.value')!).stroke).to.equal('color(srgb 0.588235 0.196078 0.196078)');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0.5');
     });
 
     it('cross-fades activity changes without a wipe, off state, or segment slide', async () => {

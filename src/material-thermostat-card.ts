@@ -59,9 +59,8 @@ console.info(
 });
 
 const SERVICE_DEBOUNCE_MS = 600;
-/** Fraction of the dial height safe to crop below the background disc
- * (its bottom edge sits at ~96.4% of the dial height). */
-const DIAL_BOTTOM_GAP = 0.035;
+/** Fraction of the dial height safe to crop below the +/- (bottom edge ~93.5%). */
+const DIAL_BOTTOM_GAP = 0.065;
 
 @customElement(CARD_TYPE)
 export class MaterialThermostatCard extends LitElement implements LovelaceCard {
@@ -254,8 +253,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       feats.length > 0 && maxPct < 100 && cardPx >= WIDE_MIN_PX && leftoverPx >= DIAL_MIN_PX;
 
     if (!wide) {
-      // Crop only the empty bottom band with a negative margin, bounded by the
-      // background disc's bottom edge at ~96.4% so the full disc stays visible.
+      // Crop the empty bottom band below the +/- (bottom edge ~93.5%)
+      // with a negative margin.
       const dialPx = Math.min(cardPx, DIAL_MAX_PX);
       const crop = Math.round(DIAL_BOTTOM_GAP * dialPx);
       return {

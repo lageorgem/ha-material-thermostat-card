@@ -23,9 +23,7 @@ ARC_END_WRAP = 153°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
 - `_angleOf(value)` / `_fracOf(value)` — value → angle / 0..1 fraction along the
   arc.
 - The full ring path = `arcPath(ARC_START, ARC_START+SWEEP, RADIUS)`.
-- A `circle.disc` at `(160,160)`, radius **148.5**, filled with
-  `var(--mt-surface-container-high)` paints first, below the halo and paths, in
-  every mode (single and dual). It has `pointer-events:none`.
+- No background circle is painted beneath the halo and paths, in single or dual mode.
 
 ## Markers are HTML overlays, not SVG
 
@@ -98,8 +96,8 @@ Absent/empty action falls back to `_demandSensible`: no current → false;
 cool needs current > setpoint, heat needs current < setpoint; other colored modes
 are true when current is present. Active → full mode color. Inactive colored mode
 → `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
-neutralizing ring and big number; `.dial.idle` hides the halo (opacity 0).
-The disc stays flat. `--mode-light = color-mix(in srgb, <mode color> 20%,
+neutralizing ring and big number; `.dial.idle` dims the halo to opacity 0.5.
+`--mode-light = color-mix(in srgb, <mode color> 20%,
 var(--mt-on-surface))` tints single colored-mode setpoint markers at rest and drag.
 Off/dual setpoint markers stay `var(--mt-on-surface)`; current markers always use
 that bright color at opacity 1. The mode icon reads `--mode-tint`: inactive =
@@ -192,7 +190,7 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
   inner edge = 118. CSS `transform:scale(126.5/130)` (≈0.973077) with pre-scale
   `stroke-width:17.470356` (= 17 / scale) implements this without changing `d`.
   Base paths set `transform-box:view-box; transform-origin:160px 160px`;
-  `.hit`, `.disc` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
+  `.hit` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
   `.o-dot.setpoint` becomes a
   radial pill (`width:clamp(3px, 1.75cqi, 6px)`, `height:6.875cqi`, 5.6×22 units);
   `.o-dot.current` a thinner pill (`width:clamp(2px, 1.2cqi, 4px)`,
@@ -221,7 +219,7 @@ else `climateModeColor`. `--mode-tint` and `--mode-light` are also registered
 animatable `<color>` properties and transition on `.dial`; single mode sets both
 inline alongside `--seg-muted` (see above). The single `.value` stroke transitions
 separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
-Off/uncolored modes use `IDLE_COLOR` and `.dial.off` hides the halo (opacity 0);
+Off/uncolored modes use `IDLE_COLOR` and `.dial.off` dims the halo to opacity 0.5;
 they are distinct from `.dial.idle` and hide the single value segment.
 `modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
@@ -231,7 +229,7 @@ and `font-variation-settings:'ROND' 100`, independent of HA's display-large toke
 Color still follows the dial (neutral when idle). Single centre units are hidden;
 dual units remain visible, including collapsed dual readouts. `.dial.dual` keeps
 single-only typography rules from affecting those collapsed readouts.
-The ring retains its 10-unit rest stroke and opacity 0.18 over the new disc.
+The ring retains its 10-unit rest stroke and opacity 0.18.
 
 Activity-only changes cross-fade without a wipe or off/on segment slide.
 `updated()` gates `_runWipe()` on a `mode` change between colored modes with a
@@ -242,9 +240,11 @@ temperature-only changes. Hidden→visible does not paint an old overlay;
 visible→hidden does not run a new-band slide. These use CSS opacity/stroke
 transitions instead.
 
-The halo (`#mt-glow` radialGradient) is a **6-stop falloff from 0.38 at center to
-opacity 0 at the perimeter** — ending at 0 (not 0.02) avoids a faint hard-edged
-disc. It's a **plain gradient with no dither filter**: dark 8-bit radial
+The halo (`#mt-glow` radialGradient) has a **fuller 7-stop falloff**:
+0% → 0.38, 25% → 0.35, 45% → 0.3, 65% → 0.21, 80% → 0.12,
+92% → 0.04, 100% → 0. Color persists farther toward the ring; ending at
+opacity 0 avoids a faint hard edge. Active halo opacity is 1; off/idle dims to 0.5.
+It's a **plain gradient with no dither filter**: dark 8-bit radial
 gradients band into faint "rings" on some platforms (Chromium on Windows/Android
 don't dither; macOS does), but both attempted fixes — a masked `mix-blend-mode`
 noise overlay, then an in-filter `feTurbulence` perturbation baked into the glow

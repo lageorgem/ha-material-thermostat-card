@@ -613,12 +613,12 @@ describe('material-thermostat-card', () => {
       expect(layout.dialStyle.marginBottom).to.match(/^-\d+px$/);
     });
 
-    it('_layout (stacked): crops only 3.5% of the dial height to preserve the background disc', async () => {
+    it('_layout (stacked): crops 6.5% of the dial height below the +/- controls', async () => {
       const el = track(await mount(baseConfig()));
       await setWidth(el, 300); // below DIAL_MAX_PX(320), so dialPx === 300
       const layout = (el as any)._layout();
       expect(layout.wide).to.equal(false);
-      expect(layout.dialStyle.marginBottom).to.equal('-11px'); // -Math.round(0.035 * 300)
+      expect(layout.dialStyle.marginBottom).to.equal('-20px'); // -Math.round(0.065 * 300)
     });
 
     it('_layout (wide): gridCols === maxPct/10 with the expected flex styles', async () => {

@@ -895,18 +895,18 @@ export class MtCircularDial extends LitElement {
           @keydown=${this._onKeyDown}
         >
           <defs>
-            <!-- Soft halo: full color at the center easing smoothly out to fully
-                 transparent at the perimeter (no hard edge / residual disc). -->
+            <!-- Fuller halo: retain color farther toward the ring, then fade
+                 to fully transparent at the perimeter to avoid a hard edge. -->
             <radialGradient id="mt-glow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stop-color="var(--dial-color)" stop-opacity="0.38" />
-              <stop offset="20%" stop-color="var(--dial-color)" stop-opacity="0.3" />
-              <stop offset="40%" stop-color="var(--dial-color)" stop-opacity="0.2" />
-              <stop offset="60%" stop-color="var(--dial-color)" stop-opacity="0.11" />
-              <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.04" />
+              <stop offset="25%" stop-color="var(--dial-color)" stop-opacity="0.35" />
+              <stop offset="45%" stop-color="var(--dial-color)" stop-opacity="0.3" />
+              <stop offset="65%" stop-color="var(--dial-color)" stop-opacity="0.21" />
+              <stop offset="80%" stop-color="var(--dial-color)" stop-opacity="0.12" />
+              <stop offset="92%" stop-color="var(--dial-color)" stop-opacity="0.04" />
               <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
           </defs>
-          ${svg`<circle class="disc" cx=${CENTER} cy=${CENTER} r="148.5" fill="var(--mt-surface-container-high)" />`}
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <path class="ring" d=${ringPath} />
           ${this.dual
@@ -1137,7 +1137,6 @@ export class MtCircularDial extends LitElement {
         user-select: none;
         -webkit-touch-callout: none;
       }
-      .disc,
       .glow,
       .ring,
       .value {
@@ -1214,7 +1213,7 @@ export class MtCircularDial extends LitElement {
       }
       .dial.off .glow,
       .dial.idle .glow {
-        opacity: 0;
+        opacity: 0.5;
       }
       /* Mode-change wipe: an overlay of the OLD color value segment is laid over
          the dial — now painted in the NEW color — and slides out through the

@@ -74,12 +74,10 @@ side-by-side layout.
 
 ## The dial bottom-gap crop (stacked mode)
 
-The dial is square; its background disc has radius 148.5 around centre 160 in the
-320-unit viewBox, placing its bottom edge at 308.5/320 ≈ 96.4% of the dial height.
+The dial is square; the empty band below the +/- (bottom edge ~93.5%) can be cropped.
 Stacked layout applies `marginBottom: -Math.round(DIAL_BOTTOM_GAP ×
-min(_widthPx, DIAL_MAX_PX))px` (`DIAL_BOTTOM_GAP = 0.035`), cropping only ~3.5%
-(~11.2 of 320 units before rounding) to keep the full disc visible. The crop is
-bounded by the disc bottom, not the +/− controls. `.body.stacked` gap, `.features`
+min(_widthPx, DIAL_MAX_PX))px` (`DIAL_BOTTOM_GAP = 0.065`), cropping ~6.5%
+(~20.8 of 320 units before rounding; 20px for a 300px dial). `.body.stacked` gap, `.features`
 grid gap, and `ha-card` padding-bottom remain 12px.
 
 ## Icon-row scrolling
