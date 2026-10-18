@@ -64,17 +64,26 @@ function stubCapture(svg: SVGSVGElement): void {
 }
 
 /**
- * Check measured support and the resulting CSS radius against actual browser boxes.
+ * Check measured support and the resulting CSS radius against untransformed layout boxes.
  * @param el dial under test
  * @param label upright orbit label
  * @param edge inner band radius in viewBox units
  */
 function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void {
-  const { scale } = svgGeometry(el);
-  const box = label.getBoundingClientRect();
-  const cx = box.left + box.width / 2;
-  const cy = box.top + box.height / 2;
-  const rects = [box, ...[...label.querySelectorAll('sup, .mode-icon.inline')].map(child => child.getBoundingClientRect())];
+  const scale = el.shadowRoot!.querySelector<HTMLElement>('.dial')!.offsetWidth / VIEW;
+  const layout = label as HTMLElement;
+  const cx = layout.offsetWidth / 2;
+  const cy = layout.offsetHeight / 2;
+  const rects = [{ left: 0, top: 0, right: layout.offsetWidth, bottom: layout.offsetHeight },
+    ...[...label.querySelectorAll<HTMLElement>('sup, .mode-icon.inline')].map(child => {
+      let left = 0;
+      let top = child.classList.contains('inline') ? -child.offsetHeight / 2 : 0;
+      for (let node = child; node !== label; node = node.offsetParent as HTMLElement) {
+        left += node.offsetLeft;
+        top += node.offsetTop;
+      }
+      return { left, top, right: left + child.offsetWidth, bottom: top + child.offsetHeight };
+    })];
   const angle = Number(label.getAttribute('data-angle')) * Math.PI / 180;
   const ux = Math.sin(angle);
   const uy = -Math.cos(angle);
@@ -526,6 +535,104 @@ describe('mt-circular-dial', () => {
   });
 
   describe('dragging presentation', () => {
+    for (const mode of ['cool', 'heat']) {
+      it(`measures the icon appearing after off → ${mode}, including late icon layout`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.value = 24;
+        el.current = 28;
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.icon-label')).to.equal(null);
+        await nextFrame();
+        await nextFrame();
+        el.mode = mode;
+        await el.updateComplete;
+        await nextFrame();
+        await nextFrame();
+        const label = el.shadowRoot!.querySelector<HTMLElement>('.icon-label')!;
+        const icon = label.querySelector<HTMLElement>('ha-icon')!;
+        // Simulate ha-icon gaining its SVG after the parent's updated() ran.
+        icon.style.cssText = 'display: inline-block; width: 16px; height: 16px';
+        await nextFrame();
+        await nextFrame();
+        expectLabelGap(el, label, 125);
+        const angle = Number(label.dataset.angle) * Math.PI / 180;
+        const support = (Math.abs(Math.sin(angle)) * label.offsetWidth +
+          Math.abs(Math.cos(angle)) * label.offsetHeight) / 2;
+        const radius = 160 - parseFloat(getComputedStyle(label).top);
+        expect(radius + support).to.be.closeTo(125 - 5.5, 0.5);
+        const corners = [-label.offsetWidth / 2, label.offsetWidth / 2].flatMap(x =>
+          [-label.offsetHeight / 2, label.offsetHeight / 2].map(y =>
+            Math.hypot(radius * Math.sin(angle) + x, -radius * Math.cos(angle) + y)));
+        expect(Math.max(...corners)).to.be.closeTo(125 - 5.5, 0.5);
+      });
+    }
+
+    it('remeasures a numeric label when its content grows without a Lit update', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.current = 21.1;
+      await el.updateComplete;
+      await nextFrame();
+      await nextFrame();
+      const label = el.shadowRoot!.querySelector<HTMLElement>('.o-label')!;
+      const before = Number(label.style.getPropertyValue('--s'));
+      label.querySelector<HTMLElement>('.num')!.style.fontSize = '30px';
+      await nextFrame();
+      await nextFrame();
+      expect(Number(label.style.getPropertyValue('--s'))).to.be.greaterThan(before + 1);
+      expectLabelGap(el, label, 125);
+    });
+
+    it('observes late inline icon growth even when the label layout size is unchanged', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.mode = 'cool';
+      el.current = el.value;
+      await el.updateComplete;
+      const label = el.shadowRoot!.querySelector<HTMLElement>('.o-label')!;
+      const icon = label.querySelector<HTMLElement>('ha-icon')!;
+      icon.style.cssText = 'display: inline-block; width: 16px; height: 16px';
+      await nextFrame();
+      await nextFrame();
+      const width = label.offsetWidth;
+      const before = parseFloat(label.style.getPropertyValue('--s'));
+      const update = sinon.spy(el, 'requestUpdate');
+      icon.style.width = '40px';
+      await nextFrame();
+      await nextFrame();
+      expect(label.offsetWidth).to.equal(width);
+      expect(parseFloat(label.style.getPropertyValue('--s'))).to.be.greaterThan(before + 1);
+      expectLabelGap(el, label, 125);
+      expect(update.called).to.be.false;
+      update.restore();
+    });
+
+    it('keeps support independent of label and ancestor animation transforms', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.mode = 'cool';
+      await el.updateComplete;
+      const label = el.shadowRoot!.querySelector<HTMLElement>('.icon-label')!;
+      label.querySelector<HTMLElement>('ha-icon')!.style.cssText = 'display: inline-block; width: 16px; height: 16px';
+      await nextFrame();
+      await nextFrame();
+      const measure = el as unknown as { _measureLabels(): void };
+      measure._measureLabels();
+      const before = label.style.getPropertyValue('--s');
+      const transform = label.style.transform;
+      const animation = label.animate([
+        { transform: `${transform} scale(0.2)` },
+        { transform: `${transform} scale(1)` },
+      ], { duration: 1000, fill: 'both' });
+      animation.pause();
+      animation.currentTime = 500;
+      el.style.transform = 'scale(0.8)';
+      measure._measureLabels();
+      expect(label.style.getPropertyValue('--s')).to.equal(before);
+      animation.cancel();
+    });
+
     for (const scenario of ['fraction', 'integer', 'icon', 'merged', 'dual'] as const) {
       for (const dragging of [false, true]) {
         it(`measures the whole ${scenario} label at its rendered angle (dragging=${dragging})`, async () => {
@@ -586,18 +693,22 @@ describe('mt-circular-dial', () => {
       set.resetHistory();
       measure._measureLabels();
       expect(set.calledOnce).to.be.true;
-      const rect = sinon.stub(svgGeometry(el).svg, 'getBoundingClientRect').returns(new DOMRect());
+      const width = sinon.stub(el.shadowRoot!.querySelector<HTMLElement>('.dial')!, 'offsetWidth').get(() => 0);
       set.resetHistory();
       measure._measureLabels();
       expect(set.called).to.be.false;
       expect(update.called).to.be.false;
-      rect.restore();
+      width.restore();
       set.restore();
       update.restore();
     });
 
     it('remeasures on host resize and disconnects/reobserves on reconnect', async () => {
       const el = await mount();
+      el.mode = 'cool';
+      await el.updateComplete;
+      await nextFrame();
+      await nextFrame();
       const measure = sinon.spy(el as unknown as { _measureLabels(): void }, '_measureLabels');
       const observer = (el as unknown as { _labelResizeObserver: ResizeObserver })._labelResizeObserver;
       const disconnect = sinon.spy(observer, 'disconnect');
@@ -611,6 +722,13 @@ describe('mt-circular-dial', () => {
       parent.append(el);
       expect(observe.calledOnceWithExactly(el)).to.be.true;
       await nextFrame();
+      await nextFrame();
+      for (const element of el.shadowRoot!.querySelectorAll('.o-label, .o-label ha-icon')) {
+        expect(observe.calledWithExactly(element)).to.be.true;
+      }
+      observe.resetHistory();
+      (el as unknown as { _measureLabels(): void })._measureLabels();
+      expect(observe.called).to.be.false;
       measure.restore();
       disconnect.restore();
       observe.restore();

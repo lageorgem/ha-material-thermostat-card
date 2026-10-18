@@ -136,6 +136,7 @@ export class MtCircularDial extends LitElement {
   private _prevLow?: number;
   private _prevHigh?: number;
   private readonly _labelResizeObserver = new ResizeObserver(() => this._measureLabels());
+  private _observedLabels = new WeakSet<Element>();
 
   @query('svg') private _svg!: SVGSVGElement;
 
@@ -314,20 +315,39 @@ export class MtCircularDial extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._labelResizeObserver.disconnect();
+    this._observedLabels = new WeakSet<Element>();
     if (this._rangeTimer) clearTimeout(this._rangeTimer);
   }
 
   /** Measure upright label overhang in viewBox units without scheduling a Lit update. */
   private _measureLabels(): void {
-    const width = this._svg.getBoundingClientRect().width;
+    // Observe newly rendered labels and late-loading icons, including while hidden.
+    for (const element of this.renderRoot.querySelectorAll('.o-label, .o-label ha-icon')) {
+      if (!this._observedLabels.has(element)) {
+        this._labelResizeObserver.observe(element);
+        this._observedLabels.add(element);
+      }
+    }
+    const width = this.renderRoot.querySelector<HTMLElement>('.dial')!.offsetWidth;
     if (width <= 0) return; // Hidden dials are measured when their host becomes visible.
     const scale = VIEW / width;
     for (const label of this.renderRoot.querySelectorAll<HTMLElement>('.o-label')) {
-      const box = label.getBoundingClientRect();
-      const cx = box.left + box.width / 2;
-      const cy = box.top + box.height / 2;
-      const rects = [box, ...Array.from(label.querySelectorAll('sup, .mode-icon.inline'),
-        child => child.getBoundingClientRect())];
+      const cx = label.offsetWidth / 2;
+      const cy = label.offsetHeight / 2;
+      const rects = [{ left: 0, top: 0, right: label.offsetWidth, bottom: label.offsetHeight },
+        ...Array.from(label.querySelectorAll<HTMLElement>('sup, .mode-icon.inline'), child => {
+          let left = 0;
+          let top = 0;
+          // Superscripts and inline icons have positioned ancestors inside the label.
+          // Sum their layout offsets, never animation-dependent viewport rectangles.
+          for (let box = child; box !== label; box = box.offsetParent as HTMLElement) {
+            left += box.offsetLeft;
+            top += box.offsetTop;
+          }
+          // The inline icon's static translateY(-50%) centres it on its anchor.
+          if (child.classList.contains('inline')) top -= child.offsetHeight / 2;
+          return { left, top, right: left + child.offsetWidth, bottom: top + child.offsetHeight };
+        })];
       const left = Math.min(...rects.map(rect => rect.left));
       const right = Math.max(...rects.map(rect => rect.right));
       const top = Math.min(...rects.map(rect => rect.top));
