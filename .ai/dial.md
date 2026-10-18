@@ -69,10 +69,10 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
   `-1<sup>5</sup>`). A relative inline-block `.label-number` wrapper keeps only
   the integer in flow, so the superscript cannot grow the label's layout box or
-  shift its centring. Superscripts use `position:absolute; left:100%; top:-0.1em;
-  font-size:0.6em; line-height:1; margin-left:0.05em`.
+   shift its centring. Superscripts use `position:absolute; left:100%; top:0.085em;
+   font-size:0.56em; line-height:1; margin-left:0.05em`.
   Current, setpoint, dual low/high and merged labels share this format.
-  Orbit numbers use `clamp(8px, 4.95cqi, 16px)` (15.84px at a 320px dial),
+   Orbit numbers use `clamp(8px, 4.77cqi, 15.3px)` (15.264px at a 320px dial),
   independent of HA's title-medium token. Current numbers use `var(--mt-on-surface)`,
   matching unselected setpoint numbers.
   `_fmtCompact` is unchanged; single-mode centre formatting is described below.
@@ -259,9 +259,30 @@ they are distinct from `.dial.idle` and hide the single value segment.
 `modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
 
-Single centre numbers (excluding `.center.tight`) use `clamp(24px, 22cqi, 70px)`,
-independent of HA's display-large token. All dial text inherits `font-family` and
-`font-variation-settings` from the host; the dial declares neither property.
+Single centre numbers (excluding `.center.tight`) use `clamp(23px, 20.75cqi, 66.4px)`,
+independent of HA's display-large token. All dial text inherits `font-family`.
+The rounded card supplies `--mt-centre-weight:450`,
+`--mt-centre-axes:"ROND" 100, "opsz" 14`, and `--mt-label-weight:400`.
+Every `.value-text` (including dual) consumes the centre weight/axes with fallbacks
+`400`/`normal`; orbit numbers consume label weight with fallback `500`.
+`font-optical-sizing:auto` remains explicit on centre numbers: the rounded
+`opsz` axis overrides it, while theme mode keeps automatic optical sizing.
+Other text retains inherited axes. Dual and tight centre sizes are unchanged.
+
+### Measured Google Home typography targets
+
+Measurements compare Google Home against Google Sans Flex with `ROND` 100.
+Here 1u = 1cqi (3.2px at a 320px dial).
+
+| Element | Rounded implementation | Measured target |
+| --- | --- | --- |
+| Single centre “15” | 20.75cqi, capped at 66.4px; weight 450; opsz 14 | Digit height 49.3u; stems ~7.0u; fitted proportions within ±3.5% |
+| Ring “22” | 4.77cqi (15.264px at 320px); weight 400; automatic opsz | ~4% smaller and ~15% lighter than previous 4.95cqi / 500 |
+| Ring superscript | 0.56em; top 0.085em of the superscript itself | Sup/digit ink-height ratio 0.562; aligned ink tops |
+| Theme mode | Centre weight 400, axes normal; ring weight 500 | Previous theme weights preserved |
+
+Label radii continue to use measured label boxes; geometry constants are unchanged.
+
 Single-mode `_fmtCenter(value, precision)` retains the existing rounding rules
 (setpoint step precision; current-primary precision 1, including missing-current
 fallback), then renders the integer plus a superscript first decimal digit only

@@ -259,9 +259,14 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('.value-text sup')).to.equal(null);
     });
 
-    it('inherits font family and axes without declaring either in dial styles', async () => {
+    it('inherits font family and scopes centre weight and axes to custom properties', async () => {
       const cssText = MtCircularDial.styles.map(style => style.cssText).join('\n');
-      expect(cssText).not.to.match(/font-(?:family|variation-settings)\s*:/);
+      expect(cssText).not.to.match(/font-family\s*:/);
+      expect(cssText.match(/font-variation-settings\s*:[^;]+;/g)).to.deep.equal([
+        'font-variation-settings: var(--mt-centre-axes, normal);',
+      ]);
+      expect(cssText).to.contain('font-weight: var(--mt-centre-weight, 400);');
+      expect(cssText).to.contain('font-weight: var(--mt-label-weight, 500);');
       const el = await mount();
       el.style.fontFamily = 'monospace';
       el.style.fontVariationSettings = '"ROND" 25';
@@ -270,7 +275,7 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         const style = getComputedStyle(el.shadowRoot!.querySelector(selector)!);
         expect(style.fontFamily).to.equal('monospace');
-        expect(style.fontVariationSettings).to.equal('"ROND" 25');
+        expect(style.fontVariationSettings).to.equal(selector === '.value-text' ? 'normal' : '"ROND" 25');
       }
     });
   });
@@ -425,7 +430,8 @@ describe('mt-circular-dial', () => {
       el.current = 18;
       await el.updateComplete;
       const number = el.shadowRoot!.querySelector('.num.current')!;
-      expect(parseFloat(getComputedStyle(number).fontSize)).to.be.closeTo(15.84, 0.001);
+      expect(parseFloat(getComputedStyle(number).fontSize)).to.be.closeTo(15.264, 0.001);
+      expect(getComputedStyle(number).fontWeight).to.equal('500');
       expect(getComputedStyle(number).color).to.equal('rgb(237, 225, 212)');
       expectLabelGap(el, number.closest('.o-label')!, 125);
     });
@@ -433,8 +439,10 @@ describe('mt-circular-dial', () => {
     it('uses the measured single centre size independently of HA display tokens', async () => {
       const el = await mount();
       el.style.setProperty('--md-sys-typescale-display-large-size', '57px');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontSize).to.equal('70px');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontVariationSettings).to.equal(getComputedStyle(el).fontVariationSettings);
+      const style = getComputedStyle(el.shadowRoot!.querySelector('.value-text')!);
+      expect(parseFloat(style.fontSize)).to.be.closeTo(66.4, 0.001);
+      expect(style.fontWeight).to.equal('400');
+      expect(style.fontVariationSettings).to.equal('normal');
     });
 
     it('keeps current markers bright and dims off/idle halos', async () => {

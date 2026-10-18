@@ -145,6 +145,39 @@ describe('material-thermostat-card', () => {
       expect(document.getElementById('mt-gstatic-preconnect')).to.equal(null);
     });
 
+    for (const font of ['rounded', 'theme'] as const) {
+      it(`applies measured dial typography only to ${font} mode`, async () => {
+        const el = track(await mount(baseConfig({ font }), {
+          [ENTITY]: climateState({ temperature: 15, current_temperature: 22.5 }),
+        }));
+        const cardStyle = getComputedStyle(el.shadowRoot!.querySelector('ha-card')!);
+        const rounded = font === 'rounded';
+        expect(cardStyle.getPropertyValue('--mt-centre-weight').trim()).to.equal(rounded ? '450' : '');
+        expect(cardStyle.getPropertyValue('--mt-centre-axes').trim()).to.equal(rounded ? '"ROND" 100, "opsz" 14' : '');
+        expect(cardStyle.getPropertyValue('--mt-label-weight').trim()).to.equal(rounded ? '400' : '');
+        const dialEl = dial(el);
+        dialEl.style.width = '320px';
+        await dialEl.updateComplete;
+        const centre = getComputedStyle(dialEl.shadowRoot.querySelector('.value-text'));
+        expect(centre.fontWeight).to.equal(rounded ? '450' : '400');
+        expect(centre.fontOpticalSizing).to.equal('auto');
+        if (rounded) {
+          expect(centre.fontVariationSettings).to.contain('"ROND" 100');
+          expect(centre.fontVariationSettings).to.contain('"opsz" 14');
+        } else {
+          expect(centre.fontVariationSettings).to.equal('normal');
+        }
+        expect(parseFloat(centre.fontSize)).to.be.closeTo(66.4, 0.1);
+        const label = dialEl.shadowRoot.querySelector('.o-label .num');
+        const numberStyle = getComputedStyle(label);
+        expect(numberStyle.fontWeight).to.equal(rounded ? '400' : '500');
+        expect(parseFloat(numberStyle.fontSize)).to.be.closeTo(15.26, 0.1);
+        const sup = getComputedStyle(label.querySelector('sup'));
+        expect(parseFloat(sup.fontSize)).to.be.closeTo(parseFloat(numberStyle.fontSize) * 0.56, 0.1);
+        expect(parseFloat(sup.top)).to.be.closeTo(parseFloat(sup.fontSize) * 0.085, 0.1);
+      });
+    }
+
     it('switches between rounded and theme without removing another card’s font', async () => {
       const el = track(await mount(baseConfig()));
       const link = document.getElementById('mt-google-sans-flex');

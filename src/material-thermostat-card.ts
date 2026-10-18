@@ -521,6 +521,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         display: block;
       }
       .font-rounded {
+        --mt-centre-weight: 450;
+        --mt-centre-axes: "ROND" 100, "opsz" 14;
+        --mt-label-weight: 400;
         font-family:
           'Google Sans Flex',
           var(--ha-font-family-body, var(--primary-font-family, Roboto, Noto, sans-serif));

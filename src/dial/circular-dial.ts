@@ -1401,14 +1401,14 @@ export class MtCircularDial extends LitElement {
       .o-label sup {
         position: absolute;
         left: 100%;
-        top: -0.1em;
-        font-size: 0.6em;
+        top: 0.085em;
+        font-size: 0.56em;
         line-height: 1;
         margin-left: 0.05em;
       }
       .o-label .num {
-        font-size: clamp(8px, 4.95cqi, 16px);
-        font-weight: 500;
+        font-size: clamp(8px, 4.77cqi, 15.3px);
+        font-weight: var(--mt-label-weight, 500);
         line-height: 1;
         color: var(--mt-on-surface);
         white-space: nowrap;
@@ -1514,7 +1514,9 @@ export class MtCircularDial extends LitElement {
       }
       .value-text {
         font-size: clamp(22px, 20cqi, var(--md-sys-typescale-display-large-size, 64px));
-        font-weight: 400;
+        font-weight: var(--mt-centre-weight, 400);
+        font-variation-settings: var(--mt-centre-axes, normal);
+        font-optical-sizing: auto;
         letter-spacing: -0.02em;
         color: var(--dial-color);
       }
@@ -1537,7 +1539,7 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface-variant);
       }
       .dial:not(.dual) .center:not(.tight) .temp:not(.dual) .value-text {
-        font-size: clamp(24px, 22cqi, 70px);
+        font-size: clamp(23px, 20.75cqi, 66.4px);
       }
       .dial:not(.dual) .temp .unit {
         display: none;
