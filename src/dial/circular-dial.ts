@@ -4,11 +4,17 @@ import { classMap } from 'lit/directives/class-map.js';
 import { tokens, climateModeColor, HVAC_MODE_ICONS } from '../theme';
 import { spreadAngles } from './label-spread';
 
-// Register --dial-color as an animatable <color> so the halo/ring/number can
+// Register the dial and icon tints as animatable <color> properties so they can
 // cross-fade between mode colors (a plain custom property would jump).
 try {
   (CSS as any).registerProperty?.({
     name: '--dial-color',
+    syntax: '<color>',
+    inherits: true,
+    initialValue: 'transparent',
+  });
+  (CSS as any).registerProperty?.({
+    name: '--mode-tint',
     syntax: '<color>',
     inherits: true,
     initialValue: 'transparent',
@@ -108,8 +114,8 @@ export class MtCircularDial extends LitElement {
   private _tapArmed = false;
   /** While a mode-color change wipes across the ring: the outgoing color. */
   @state() private _wipeFrom: string | null = null;
-  /** Tracks the last applied dial color to detect mode-color changes. */
-  private _prevColor?: string;
+  /** Tracks the segment color from every render, including activity-only changes. */
+  private _prevSegColor?: string;
   /** Whether the previous mode was an off/uncolored mode. */
   private _prevOff = false;
   /** Dual mode: show the "Heat/Cool" range (just after a setpoint change). */
@@ -195,6 +201,13 @@ export class MtCircularDial extends LitElement {
     return COLORED_MODES.includes(this._effectiveMode)
       ? this._modeColor(this._effectiveMode)
       : MtCircularDial.IDLE_COLOR;
+  }
+
+  /** Single-mode segment/icon color, muted while the colored mode is inactive. */
+  private get _singleSegColor(): string {
+    return !this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive
+      ? `color-mix(in srgb, ${this._modeColor(this.mode)} 50%, ${MtCircularDial.IDLE_COLOR})`
+      : this._dialColor;
   }
 
   /** Show the "Heat/Cool" range readout (vs. the collapsed active-mode readout). */
@@ -637,24 +650,24 @@ export class MtCircularDial extends LitElement {
       this._prevHigh = this.highValue;
     }
 
-    if (!changed.has('mode')) return;
-    const color = this._dialColor;
+    const color = this._singleSegColor;
     const off = !COLORED_MODES.includes(this.mode);
     // The wipe is for single colored→colored mode changes; dual recolors via the
     // CSS stroke transition (its segments and colors are temperature-derived).
     if (
+      changed.has('mode') &&
       !this.dual &&
-      this._prevColor !== undefined &&
-      this._prevColor !== color &&
+      this._prevSegColor !== undefined &&
+      this._prevSegColor !== color &&
       !off &&
       !this._prevOff
     ) {
       // Render the old-color overlay (sets _wipeFrom), then animate it once the
       // overlay is in the DOM. _runWipe clears _wipeFrom when the wipe finishes.
-      this._wipeFrom = this._prevColor;
+      this._wipeFrom = this._prevSegColor;
       void this.updateComplete.then(() => this._runWipe());
     }
-    this._prevColor = color;
+    this._prevSegColor = color;
     this._prevOff = off;
   }
 
@@ -705,9 +718,7 @@ export class MtCircularDial extends LitElement {
     const isOff = !COLORED_MODES.includes(this.mode);
     const isIdle = !this.dual && !isOff && !this._singleActive;
     const color = this._dialColor;
-    const modeTint = isIdle
-      ? `color-mix(in srgb, ${this._modeColor(this.mode)} 50%, ${MtCircularDial.IDLE_COLOR})`
-      : color;
+    const modeTint = this._singleSegColor;
     const modeIcon = HVAC_MODE_ICONS[this.mode] ?? 'mdi:thermostat';
 
     const showCurrent =
@@ -780,7 +791,7 @@ export class MtCircularDial extends LitElement {
     const currentLabel = html`<span class="num current">${this._fmtCompact(this.current!)}°</span>`;
     const modeIconEl = html`<ha-icon class="mode-icon" icon=${modeIcon}></ha-icon>`;
     const dualSetIconEl = html`<ha-icon
-      class="mode-icon"
+      class="mode-icon dual-mode-icon"
       icon=${HVAC_MODE_ICONS[dualActive === 'cool' ? 'cool' : 'heat']}
     ></ha-icon>`;
 
@@ -812,7 +823,7 @@ export class MtCircularDial extends LitElement {
     return html`
       <div
         class=${classMap({ dial: true, off: isOff, idle: isIdle, disabled: this.disabled, dragging: this._dragging })}
-        style=${`--dial-color: ${color}; --mode-tint: ${modeTint}`}
+        style=${`--dial-color: ${color};${this.dual ? '' : ` --mode-tint: ${modeTint}`}`}
       >
         <svg
           viewBox="0 0 ${VIEW} ${VIEW}"
@@ -1043,7 +1054,9 @@ export class MtCircularDial extends LitElement {
         max-width: 320px;
         margin: 0 auto;
         aspect-ratio: 1 / 1;
-        transition: --dial-color var(--mt-motion-dur) var(--mt-motion-ease);
+        transition:
+          --dial-color var(--mt-motion-dur) var(--mt-motion-ease),
+          --mode-tint var(--mt-motion-dur) var(--mt-motion-ease);
         /* let inner text/markers scale with the dial via cqi units */
         container-type: inline-size;
         /* The orbiting marker layers are full-size squares rotated to ride the
@@ -1237,6 +1250,11 @@ export class MtCircularDial extends LitElement {
       .mode-icon {
         --mdc-icon-size: clamp(13px, 6.25cqi, 20px);
         color: var(--mode-tint, var(--dial-color));
+      }
+      .dual-mode-icon {
+        /* Registered properties have an initial value, so var() cannot fall back
+           when --mode-tint is omitted. Dual icons must follow the dial directly. */
+        color: var(--dial-color);
       }
       .mode-icon.inline {
         position: absolute;

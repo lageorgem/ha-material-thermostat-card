@@ -1764,6 +1764,49 @@ describe('mt-circular-dial', () => {
   });
 
   describe('mode-change wipe', () => {
+    it('wipes from the last muted segment after an activity-only update', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.hvacAction = 'heating';
+      el.current = 18;
+      await el.updateComplete;
+      el.hvacAction = 'idle';
+      await el.updateComplete;
+      expect((el as any)._wipeFrom).to.equal(null);
+      const mutedHeat = `color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`;
+      expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain(mutedHeat);
+
+      el.mode = 'cool';
+      await el.updateComplete;
+      expect((el as any)._wipeFrom).to.equal(mutedHeat);
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.wipe-value')!.getAttribute('style')).to.contain(mutedHeat);
+    });
+
+    it('still wipes from bright heat when changing directly to active cooling', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.hvacAction = 'heating';
+      el.current = 18;
+      await el.updateComplete;
+      el.mode = 'cool';
+      el.hvacAction = 'cooling';
+      await el.updateComplete;
+      expect((el as any)._wipeFrom).to.equal(climateModeColor('heat'));
+    });
+
+    it('does not wipe between identical muted segment colors', async () => {
+      const el = await mount();
+      el.modeColors = { heat: '#abcdef', cool: '#abcdef' };
+      el.mode = 'heat';
+      el.hvacAction = 'idle';
+      el.current = 18;
+      await el.updateComplete;
+      el.mode = 'cool';
+      await el.updateComplete;
+      expect((el as any)._wipeFrom).to.equal(null);
+    });
+
     it('wipes between two colored modes (creates the overlay then clears it)', async () => {
       const el = await mount();
       el.mode = 'cool';
@@ -1772,8 +1815,8 @@ describe('mt-circular-dial', () => {
       el.value = 20;
       el.current = 24; // ensures showSeg true
       await el.updateComplete;
-      // first render establishes _prevColor; segment visible
-      expect((el as any)._prevColor).to.equal(climateModeColor('cool'));
+      // First render establishes the previous segment color; segment visible.
+      expect((el as any)._prevSegColor).to.equal(climateModeColor('cool'));
 
       el.mode = 'heat';
       await el.updateComplete;
@@ -1831,7 +1874,7 @@ describe('mt-circular-dial', () => {
       el.min = 10;
       el.max = 30;
       await el.updateComplete;
-      // touch a non-mode property -> updated() returns early (no wipe)
+      // Touch a non-mode property: track the rendered color without a wipe.
       el.value = 21;
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(null);
@@ -2240,6 +2283,47 @@ describe('mt-circular-dial', () => {
   });
 
   describe('single-mode reported activity', () => {
+    it('registers and transitions the single-mode tint as a color with resolved variables', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.style.setProperty('--mt-on-surface-variant', '#808080');
+      el.modeColors = { heat: '#ff0000' };
+      el.mode = 'heat';
+      el.hvacAction = 'idle';
+      el.current = 18;
+      await el.updateComplete;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      const style = getComputedStyle(dial);
+      expect(style.getPropertyValue('--mode-tint').trim()).to.equal('color(srgb 0.75098 0.25098 0.25098)');
+      expect(style.transitionProperty.split(', ')).to.include('--mode-tint');
+      expect(style.transitionDuration.split(', ')).to.deep.equal(['0s', '0s']);
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(
+        style.getPropertyValue('--mode-tint').trim()
+      );
+    });
+
+    it('leaves dual icons on the animated dial color, including after single mode', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.mode = 'heat';
+      el.hvacAction = 'idle';
+      el.current = 18;
+      await el.updateComplete;
+      el.dual = true;
+      el.mode = 'cool';
+      el.current = 28;
+      el.lowValue = 18;
+      el.highValue = 24;
+      await el.updateComplete;
+      const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+      expect(dial.style.getPropertyValue('--mode-tint')).to.equal('');
+      const icon = el.shadowRoot!.querySelector('.mode-icon')!;
+      expect(icon).to.not.equal(null);
+      expect(getComputedStyle(icon).color).to.equal(
+        getComputedStyle(dial).getPropertyValue('--dial-color').trim()
+      );
+    });
+
     for (const [mode, value, current, hvacAction, active] of [
       ['heat', 15, 20.6, 'heating', true],
       ['heat', 25, 20.6, 'idle', false],
