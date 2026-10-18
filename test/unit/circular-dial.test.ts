@@ -12,8 +12,8 @@ const IDLE_COLOR = 'var(--mt-on-surface-variant)';
 /** Geometry constants mirrored from src/dial/circular-dial.ts. */
 const VIEW = 320;
 const RADIUS = 130;
-const ARC_START = 210;
-const SWEEP = 300;
+const ARC_START = 207;
+const SWEEP = 306;
 
 /**
  * Make a fixture wide enough that the SVG has a real, non-zero bounding box so
@@ -64,6 +64,91 @@ function stubCapture(svg: SVGSVGElement): void {
 }
 
 describe('mt-circular-dial', () => {
+  describe('measured Google presentation', () => {
+    for (const dual of [false, true]) {
+      for (const mode of ['off', 'heat']) {
+        it(`paints a flat disc below the halo (dual=${dual}, mode=${mode})`, async () => {
+          const el = await mount();
+          el.style.setProperty('--mt-motion-dur', '0s');
+          el.style.setProperty('--mt-surface-container-high', 'rgb(47, 41, 33)');
+          el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
+          el.dual = dual;
+          el.mode = mode;
+          await el.updateComplete;
+          const disc = el.shadowRoot!.querySelector('circle.disc')!;
+          expect(disc.getAttribute('r')).to.equal('148.5');
+          expect(disc.nextElementSibling).to.equal(el.shadowRoot!.querySelector('.glow'));
+          expect(getComputedStyle(disc).fill).to.equal('rgb(47, 41, 33)');
+          expect(getComputedStyle(disc).pointerEvents).to.equal('none');
+          expect(getComputedStyle(el.shadowRoot!.querySelector('.unit')!).display).to.equal(dual ? 'block' : 'none');
+          if (dual || mode === 'off') {
+            expect(getComputedStyle(el.shadowRoot!.querySelector('.setpoint')!).backgroundColor).to.equal(getComputedStyle(el).getPropertyValue('--mt-on-surface').trim());
+          }
+        });
+      }
+    }
+
+    for (const [value, integer, fraction] of [[22, '22', ''], [20.8, '20', '8'], [-1.5, '-1', '5']] as const) {
+      it(`formats orbit label ${value} without a degree sign`, async () => {
+        const el = await mount();
+        el.min = -10;
+        el.value = value;
+        el.showCurrentAsPrimary = true;
+        await el.updateComplete;
+        const label = el.shadowRoot!.querySelector('.o-label .num')!;
+        expect(label.textContent).to.equal(integer + fraction);
+        expect(label.querySelector('sup')?.textContent ?? '').to.equal(fraction);
+        expect([...label.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal(integer);
+      });
+    }
+
+    it('formats fractional dual and merged labels with superscripts', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.value = 20.8;
+      el.current = 20.8;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.with-icon sup')!.textContent).to.equal('8');
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18.5;
+      el.highValue = 24.5;
+      await el.updateComplete;
+      expect([...el.shadowRoot!.querySelectorAll('.o-label sup')].map(n => n.textContent)).to.deep.equal(['5', '5', '8']);
+    });
+
+    it('uses the measured single centre size independently of HA display tokens', async () => {
+      const el = await mount();
+      el.style.setProperty('--md-sys-typescale-display-large-size', '57px');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontSize).to.equal('70px');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontVariationSettings).to.equal('"ROND" 100');
+    });
+
+    it('keeps current markers bright and lights only active halos', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
+      el.mode = 'heat';
+      el.current = 18;
+      for (const action of ['idle', 'heating', 'off']) {
+        el.hvacAction = action;
+        await el.updateComplete;
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal(action === 'heating' ? '1' : '0');
+        const marker = getComputedStyle(el.shadowRoot!.querySelector('.o-dot.current')!);
+        expect(marker.opacity).to.equal('1');
+        expect(marker.backgroundColor).to.equal('rgb(237, 225, 212)');
+        const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+        const light = `color-mix(in srgb, ${climateModeColor('heat')} 20%, var(--mt-on-surface))`;
+        expect(dial.style.getPropertyValue('--mode-light')).to.equal(light);
+        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(action === 'heating' ? climateModeColor('heat') : light);
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.setpoint')!).backgroundColor).to.equal(getComputedStyle(dial).getPropertyValue('--mode-light').trim());
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(getComputedStyle(dial).getPropertyValue('--mode-tint').trim());
+      }
+      el.mode = 'off';
+      await el.updateComplete;
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0');
+    });
+  });
   describe('mode icon overrides', () => {
     for (const merged of [false, true]) {
       it(`uses the heat override for a single setpoint (merged=${merged})`, async () => {
@@ -145,14 +230,14 @@ describe('mt-circular-dial', () => {
         for (const band of sr.querySelectorAll('.ring, .value')) {
           const style = getComputedStyle(band);
           const matrix = new DOMMatrixReadOnly(style.transform);
-          expect(matrix.a).to.be.closeTo(126 / 130, 0.000001);
-          expect(matrix.d).to.be.closeTo(126 / 130, 0.000001);
+          expect(matrix.a).to.be.closeTo(126.5 / 130, 0.000001);
+          expect(matrix.d).to.be.closeTo(126.5 / 130, 0.000001);
           expect(matrix.b).to.equal(0);
           expect(matrix.c).to.equal(0);
           expect(matrix.e).to.equal(0);
           expect(matrix.f).to.equal(0);
           expect(style.transformOrigin).to.equal('160px 160px');
-          expect(parseFloat(style.strokeWidth)).to.be.closeTo(18 / (126 / 130), 0.001);
+          expect(parseFloat(style.strokeWidth)).to.be.closeTo(17 / (126.5 / 130), 0.001);
           expect(style.transitionProperty).to.contain('transform');
           expect(getComputedStyle(band).transitionProperty).to.contain('stroke-width');
         }
@@ -160,23 +245,24 @@ describe('mt-circular-dial', () => {
           expect(getComputedStyle(unchanged).transform).to.equal('none');
         }
         for (const marker of sr.querySelectorAll('.o-dot, .handle')) {
-          expect(getComputedStyle(marker).top).to.equal('34px');
+          expect(parseFloat(getComputedStyle(marker).top)).to.be.closeTo(33.5, 0.02);
           expect(getComputedStyle(marker).transitionProperty).to.contain('top');
         }
         for (const dot of sr.querySelectorAll('.o-dot')) {
           const style = getComputedStyle(dot);
-          expect(parseFloat(style.height)).to.be.closeTo(20, 0.1);
+          expect(parseFloat(style.height)).to.be.closeTo(dot.classList.contains('setpoint') ? 22 : 19, 0.1);
           expect(parseFloat(style.width)).to.be.closeTo(
-            dot.classList.contains('setpoint') ? 5 : 2.88,
+            dot.classList.contains('setpoint') ? 6 : 4,
             0.01
           );
           expect(style.borderRadius).to.equal('999px');
+          if (dot.classList.contains('current')) expect(style.opacity).to.equal('1');
           expect(style.transitionProperty).to.include('width');
           expect(style.transitionProperty).to.include('height');
           expect(style.transitionProperty).to.include('border-radius');
         }
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(getComputedStyle(label).top).to.equal('64px');
+          expect(getComputedStyle(label).top).to.equal('56px');
           expect(getComputedStyle(label).transitionProperty).to.include('top');
         }
         if (dual) {
@@ -197,21 +283,21 @@ describe('mt-circular-dial', () => {
           expect(getComputedStyle(marker).top).to.equal('30px');
         }
         expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
-        expect(getComputedStyle(sr.querySelector('.o-label')!).top).to.equal('60px');
+        expect(getComputedStyle(sr.querySelector('.o-label')!).top).to.equal('56px');
       });
     }
 
-    it('centres the step buttons at 41%/59% horizontally and 88% vertically', async () => {
+    it('centres the step buttons at 41.5%/58.5% horizontally and 87.9% vertically', async () => {
       const el = await mount();
       const dial = el.shadowRoot!.querySelector('.dial')!.getBoundingClientRect();
       const buttons = el.shadowRoot!.querySelectorAll('.step');
       for (const [index, button] of [...buttons].entries()) {
         const rect = button.getBoundingClientRect();
         expect((rect.left + rect.width / 2 - dial.left) / dial.width).to.be.closeTo(
-          index === 0 ? 0.41 : 0.59,
+          index === 0 ? 0.415 : 0.585,
           0.001
         );
-        expect((rect.top + rect.height / 2 - dial.top) / dial.height).to.be.closeTo(0.88, 0.001);
+        expect((rect.top + rect.height / 2 - dial.top) / dial.height).to.be.closeTo(0.879, 0.001);
       }
     });
   });
@@ -357,7 +443,7 @@ describe('mt-circular-dial', () => {
       const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
         n.textContent!.trim()
       );
-      expect(labels).to.include('21°');
+      expect(labels).to.include('21');
       // ...the current dot is unlabeled and no mode icon is drawn on the ring...
       expect(sr.querySelector('.num.current')).to.equal(null);
       expect(sr.querySelector('.markers ha-icon.mode-icon')).to.equal(null);
@@ -533,18 +619,18 @@ describe('mt-circular-dial', () => {
   });
 
   describe('geometry helpers', () => {
-    it('renders a 300° ring from 210° to 150° wrapped', async () => {
+    it('renders a 306° ring from 207° to 153° wrapped', async () => {
       const el = await mount();
       const ring = el.shadowRoot!.querySelector('.ring') as SVGPathElement;
       const start = ring.getPointAtLength(0);
       const end = ring.getPointAtLength(ring.getTotalLength());
-      expect(start.x).to.be.closeTo(95, 0.01);
-      expect(start.y).to.be.closeTo(160 + RADIUS * Math.cos(Math.PI / 6), 0.01);
-      expect(end.x).to.be.closeTo(225, 0.01);
+      expect(start.x).to.be.closeTo(160 - RADIUS * Math.sin(27 * Math.PI / 180), 0.01);
+      expect(start.y).to.be.closeTo(160 + RADIUS * Math.cos(27 * Math.PI / 180), 0.01);
+      expect(end.x).to.be.closeTo(160 + RADIUS * Math.sin(27 * Math.PI / 180), 0.01);
       expect(end.y).to.be.closeTo(start.y, 0.01);
       expect(ring.getTotalLength()).to.be.closeTo((RADIUS * SWEEP * Math.PI) / 180, 0.1);
-      expect((el as any)._angleOf(el.min)).to.equal(210);
-      expect((el as any)._angleOf(el.max)).to.equal(510);
+      expect((el as any)._angleOf(el.min)).to.equal(207);
+      expect((el as any)._angleOf(el.max)).to.equal(513);
     });
     it('_angleOf maps min→ARC_START, max→ARC_START+SWEEP, mid→midpoint', async () => {
       const el = await mount();
@@ -1638,7 +1724,7 @@ describe('mt-circular-dial', () => {
       expect(setDots[1].classList.contains('sel')).to.be.false; // high
       const selNum = sr.querySelector('.o-label .num.sel');
       expect(selNum).to.not.equal(null);
-      expect(selNum!.textContent!.trim()).to.equal('18°');
+      expect(selNum!.textContent!.trim()).to.equal('18');
     });
 
     it('grabbing a handle selects it for the +/- buttons', async () => {
@@ -1718,7 +1804,9 @@ describe('mt-circular-dial', () => {
       el.current = 23; // angle 405 — all far apart
       await el.updateComplete;
       const angles = labelAngles(el);
-      expect(angles).to.deep.equal([330, 405, 480]);
+      for (const [index, angle] of angles.entries()) {
+        expect(angle).to.be.closeTo([329.4, 405.9, 482.4][index], 0.000001);
+      }
     });
 
     it('spreads only the two setpoints when current is the primary number', async () => {
@@ -1853,7 +1941,8 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(null);
       const mutedHeat = `color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`;
-      expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain(mutedHeat);
+      expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
+      expect((el.shadowRoot!.querySelector('.dial') as HTMLElement).style.getPropertyValue('--seg-muted')).to.equal(mutedHeat);
 
       el.mode = 'cool';
       el.value = 17;
@@ -2311,7 +2400,7 @@ describe('mt-circular-dial', () => {
         const segment = el.shadowRoot!.querySelector('.value')!;
         expect(getComputedStyle(segment).opacity).to.equal(visible ? '1' : '0');
         const color = hvacAction === 'idle'
-          ? `color-mix(in srgb, ${climateModeColor(mode)} 50%, ${IDLE_COLOR})`
+          ? 'var(--seg-muted)'
           : climateModeColor(mode);
         expect(segment.getAttribute('style')).to.contain(`stroke:${color}`);
       });
@@ -2371,7 +2460,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
-      expect(style).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('cool')} 50%, ${IDLE_COLOR})`);
+      expect(style).to.contain('stroke:var(--seg-muted)');
       expect(style).to.contain('opacity:0;');
     });
 
@@ -2397,7 +2486,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
-      expect(style).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`);
+      expect(style).to.contain('stroke:var(--seg-muted)');
       expect(style).to.contain('opacity:0;');
     });
 
@@ -2423,7 +2512,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
-      expect(seg.getAttribute('style')).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`);
+      expect(seg.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
       expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
@@ -2439,7 +2528,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
-      expect(seg.getAttribute('style')).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('cool')} 50%, ${IDLE_COLOR})`);
+      expect(seg.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
       expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
@@ -2451,6 +2540,7 @@ describe('mt-circular-dial', () => {
       const el = await mount();
       el.style.setProperty('--mt-motion-dur', '0s');
       el.style.setProperty('--mt-on-surface-variant', '#808080');
+      el.style.setProperty('--mt-on-surface', '#808080');
       el.modeColors = { heat: '#ff0000' };
       el.mode = 'heat';
       el.hvacAction = 'idle';
@@ -2458,9 +2548,12 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
       const style = getComputedStyle(dial);
-      expect(style.getPropertyValue('--mode-tint').trim()).to.equal('color(srgb 0.75098 0.25098 0.25098)');
+      expect(style.getPropertyValue('--mode-tint').trim()).to.equal('color(srgb 0.601569 0.401569 0.401569)');
+      expect(style.getPropertyValue('--mode-light').trim()).to.equal(style.getPropertyValue('--mode-tint').trim());
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.o-dot.setpoint')!).backgroundColor).to.equal(style.getPropertyValue('--mode-light').trim());
+      expect(style.transitionProperty.split(', ')).to.include('--mode-light');
       expect(style.transitionProperty.split(', ')).to.include('--mode-tint');
-      expect(style.transitionDuration.split(', ')).to.deep.equal(['0s', '0s']);
+      expect(style.transitionDuration.split(', ')).to.deep.equal(['0s', '0s', '0s']);
       expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(
         style.getPropertyValue('--mode-tint').trim()
       );
@@ -2520,19 +2613,20 @@ describe('mt-circular-dial', () => {
       el.style.setProperty('--mt-motion-dur', '0s');
       el.style.setProperty('--state-climate-heat-color', 'rgb(200, 0, 0)');
       el.style.setProperty('--mt-on-surface-variant', 'rgb(100, 100, 100)');
+      el.style.setProperty('--mt-on-surface', 'rgb(100, 100, 100)');
       el.mode = 'heat';
       el.value = 15;
       el.current = 20.6;
       await el.updateComplete;
       await nextFrame();
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
-      const tint = `color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`;
+      const tint = `color-mix(in srgb, ${climateModeColor('heat')} 20%, var(--mt-on-surface))`;
       expect(dial.style.getPropertyValue('--mode-tint')).to.equal(tint);
       expect(getComputedStyle(dial).getPropertyValue('--dial-color').trim()).to.equal('rgb(100, 100, 100)');
       const iconColor = getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color;
-      expect(iconColor).to.equal('color(srgb 0.588235 0.196078 0.196078)');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.value')!).stroke).to.equal(iconColor);
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0.5');
+      expect(iconColor).to.equal('color(srgb 0.470588 0.313726 0.313726)');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.value')!).stroke).to.equal('color(srgb 0.588235 0.196078 0.196078)');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0');
     });
 
     it('cross-fades activity changes without a wipe, off state, or segment slide', async () => {
@@ -2749,8 +2843,8 @@ describe('mt-circular-dial', () => {
       const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
         n.textContent!.trim()
       );
-      expect(labels).to.include('18°');
-      expect(labels).to.include('24°');
+      expect(labels).to.include('18');
+      expect(labels).to.include('24');
       // current dot drawn but unlabeled (it's the big centre number)
       expect(sr.querySelector('.o-dot.current')).to.not.equal(null);
       expect(sr.querySelector('.num.current')).to.equal(null);

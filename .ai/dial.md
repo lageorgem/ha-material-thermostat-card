@@ -7,14 +7,14 @@ calls services itself.
 
 ## Geometry
 
-A fixed **320×320 viewBox**. The interactive range is a **300° near-full arc
-with a 60° gap at the bottom** (Google-Home style, so mid-range values sit at the top).
+A fixed **320×320 viewBox**. The interactive range is a **306° near-full arc
+with a 54° gap at the bottom** (Google-Home style, so mid-range values sit at the top).
 
 ```
 VIEW   = 320,  CENTER = 160,  RADIUS = 130
-ARC_START    = 210°   (clockwise from top → bottom-LEFT = min value, fraction 0)
-SWEEP        = 300°
-ARC_END_WRAP = 150°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
+ARC_START    = 207°   (clockwise from top → bottom-LEFT = min value, fraction 0)
+SWEEP        = 306°
+ARC_END_WRAP = 153°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
 ```
 
 - `polar(angleDeg, r)` — angle (0°=top, CW+) → `{x,y}`. **Note the −90 offset**:
@@ -23,6 +23,9 @@ ARC_END_WRAP = 150°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
 - `_angleOf(value)` / `_fracOf(value)` — value → angle / 0..1 fraction along the
   arc.
 - The full ring path = `arcPath(ARC_START, ARC_START+SWEEP, RADIUS)`.
+- A `circle.disc` at `(160,160)`, radius **148.5**, filled with
+  `var(--mt-surface-container-high)` paints first, below the halo and paths, in
+  every mode (single and dual). It has `pointer-events:none`.
 
 ## Markers are HTML overlays, not SVG
 
@@ -33,11 +36,16 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
 
 - `_dotOrbit(angle, cls)` — a `.orbit` div (inset:0, transform-origin 50% 50%)
   `rotate(angle)`, with a child dot pinned on the ring centerline
-  (`top: 9.375%` = (160−130)/320 at rest, `10.625%` = (160−126)/320
+  (`top: 9.375%` = (160−130)/320 at rest, `10.469%` ≈ (160−126.5)/320
   while dragging). Invisible `.handle` targets follow the same centerline.
 - `_labelOrbit(angle, content)` — same, but the label counter-rotates
-  (`rotate(-angle)`) to stay upright; `top: 18.75%` at rest (radius 100), moving
-  inward to `top: 20%` while dragging (radius 96, clear of the band's inner edge at 117).
+  (`rotate(-angle)`) to stay upright; `top: 17.5%` (radius 104) at rest AND
+  while dragging; the top transition remains harmless.
+- Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
+  in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
+  `-1<sup>5</sup>`). Superscripts use `0.6em`, `vertical-align:super`, line-height 0.
+  Current, setpoint, dual low/high and merged labels share this format.
+  `_fmtCompact` and centre formatting are unchanged.
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
@@ -70,7 +78,7 @@ with different large-arc flags makes the arc balloon/bend; avoid it entirely):
 `segS/segE` are fractions. **Single mode** renders ONE persistent `.value` path
 (so it animates on turn-on/off + during the wipe) from `min(frac(value),
 frac(current))` to `max(...)`. It keeps the same geometry when activity changes;
-its stroke is `modeTint` (also exposed as `--mode-tint`).
+its active stroke is the dial color; inactive stroke reads `--seg-muted`.
 For single heat/cool, `_singleSegVisible` hides the path with **opacity 0** when
 `_demandSensible` is false: heat current ≥ setpoint, cool current ≤ setpoint, or
 missing current. Reported activity does not override this visibility rule.
@@ -85,10 +93,16 @@ Absent/empty action falls back to `_demandSensible`: no current → false;
 cool needs current > setpoint, heat needs current < setpoint; other colored modes
 are true when current is present. Active → full mode color. Inactive colored mode
 → `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
-neutralizing halo, ring and big number; `.dial.idle` dims the halo to opacity 0.5.
-The mode icon and any visible segment retain a muted mode tint (a sensible demand
-with reported `'idle'`/`'off'` still shows the band):
-`--mode-tint = color-mix(in srgb, <mode color> 50%, var(--mt-on-surface-variant))`.
+neutralizing ring and big number; `.dial.idle` hides the halo (opacity 0).
+The disc stays flat. `--mode-light = color-mix(in srgb, <mode color> 20%,
+var(--mt-on-surface))` tints single colored-mode setpoint markers at rest and drag.
+Off/dual setpoint markers stay `var(--mt-on-surface)`; current markers always use
+that bright color at opacity 1. The mode icon reads `--mode-tint`: inactive =
+`--mode-light` mix, active = dial color. Its size is `clamp(11px, 5cqi, 16px)`.
+Only the inactive segment reads `--seg-muted = color-mix(in srgb, <mode color>
+50%, var(--mt-on-surface-variant))`; a sensible demand with reported idle/off still
+shows this band. `_singleSegColor` and wipe tracking retain this rendered band color,
+not the icon tint.
 Dual (heat_cool) does NOT use this single-mode activity rule (see below).
 
 ## Dual (heat_cool): temperature-derived sub-mode
@@ -147,7 +161,7 @@ only while **emphasized** (`_dragging || _showRangeTimer`); once it settles
 (idle, >5s) the `.settled` class shrinks it so it isn't oversized at rest.
 
 **Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
-sit at radius ~100 and can collide with the (horizontally widest) centre readout
+sit at radius 104 and can collide with the (horizontally widest) centre readout
 when a marker lands near 3 or 9 o'clock. `_centerTight` is true when any numeric
 marker is within `SIDE_GUARD_DEG` (26°) of 90°/270° (dual: low/high/current;
 single: current only — the single setpoint marker is a small icon). When true the
@@ -159,8 +173,8 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 ## Interaction
 
 - **Drag**: `_onPointerDown` gates on `_isRingHit`: viewBox-scaled distance band
-  `[RADIUS−32, RADIUS+22]` **and** angle ≥ `ARC_START` (210°) or ≤ `ARC_END_WRAP`
-  (150°), excluding the open bottom gap (150°, 210°). Mouse/pen ring presses
+  `[RADIUS−32, RADIUS+22]` **and** angle ≥ `ARC_START` (207°) or ≤ `ARC_END_WRAP`
+  (153°), excluding the open bottom gap (153°, 207°). Mouse/pen ring presses
   begin dragging immediately; touch ring presses only arm a tap so swipes scroll.
   Touch scrubbing starts on a `.handle` (`_onHandlePointerDown`, `touch-action:none`).
   `_beginDrag` sets `_dragging=true`; markers follow smoothly and emit
@@ -168,23 +182,23 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 - **Tap-to-set**: touch ring taps commit via `_commitTap` if movement stays within
   `TAP_SLOP_PX` (10px); mouse/pen use the short-drag path. Emits `value-changed`.
 - **Dragging visuals**: `_dragging` adds `.dial.dragging` in single and dual mode.
-  `.ring`, `.value` and `.wipe-value` grow **inward only** from 10 to 18 viewBox
-  units (10% thinner than the old 20-unit drag band). The outer edge stays at
-  radius 135: drag centerline = 135 − 18/2 = 126, inner edge = 117.
-  CSS `transform:scale(126/130)` with pre-scale `stroke-width:18.571`
-  (= 18 / scale, rounded to 3 decimals) implements this without changing `d`.
+  `.ring`, `.value` and `.wipe-value` grow **inward only** from 10 to 17 viewBox
+  units. The outer edge stays at radius 135: drag centerline = 135 − 17/2 = 126.5,
+  inner edge = 118. CSS `transform:scale(126.5/130)` (≈0.973077) with pre-scale
+  `stroke-width:17.470356` (= 17 / scale) implements this without changing `d`.
   Base paths set `transform-box:view-box; transform-origin:160px 160px`;
-  `.hit` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
+  `.hit`, `.disc` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
   `.o-dot.setpoint` becomes a
-  radial pill (`width:clamp(3px, 1.6cqi, 5px)`); `.o-dot.current` a thinner pill
-  (`width:clamp(2px, 0.9cqi, 3px)`). Both are `height:6.25cqi` (20/320, exactly
-  20 units long, overhanging the 18-unit band by ~1 unit on each side),
-  `border-radius:999px`. Markers and handles move to `top:10.625%` (radius 126).
-  `.o-label` moves inward as above. Path transform/stroke width, marker top/width/height/radius and
+  radial pill (`width:clamp(3px, 1.875cqi, 6px)`, `height:6.875cqi`, 6×22 units);
+  `.o-dot.current` a thinner pill (`width:clamp(2px, 1.25cqi, 4px)`,
+  `height:5.9375cqi`, 4×19 units). Both use `border-radius:999px`.
+  Markers and handles move to `top:10.469%` (radius 126.5).
+  `.o-label` stays at radius 104. Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:
-  `top:88%`, a centered 36%-wide two-column grid puts their centers at 41%/59%
-  width. `pointer-events:none` on the container with the buttons re-enabled.
+  `top:87.9%`, a centered 34%-wide two-column grid puts their centers at 41.5%/58.5%
+  width. Color `var(--mt-on-surface)`; icon size `clamp(12px, 6.25cqi, 20px)`.
+  `pointer-events:none` on the container with the buttons re-enabled.
 - **Keyboard** (single mode): arrows step by `step`; emits `value-changed`.
 - Sizes scale with the dial via **container queries**: `.dial` has
   `container-type: inline-size` and inner text/dots/buttons use `clamp(min, Ncqi,
@@ -197,13 +211,21 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 `<color>`** (syntax `<color>`), so the halo gradient, ring and big number
 **cross-fade** between mode/neutral colors instead of jumping. `_dialColor` sets
 it inline on `.dial`; CSS transitions it. `_modeColor` uses `modeColors` overrides,
-else `climateModeColor`. `--mode-tint` is set alongside it: normally the same color,
-but muted for inactive single colored modes (see above). The single `.value`
-stroke transitions separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
-Off/uncolored modes use `IDLE_COLOR` and `.dial.off` dims the halo to opacity 0.5;
+else `climateModeColor`. `--mode-tint` and `--mode-light` are also registered
+animatable `<color>` properties and transition on `.dial`; single mode sets both
+inline alongside `--seg-muted` (see above). The single `.value` stroke transitions
+separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
+Off/uncolored modes use `IDLE_COLOR` and `.dial.off` hides the halo (opacity 0);
 they are distinct from `.dial.idle` and hide the single value segment.
 `modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
+
+Single centre numbers (excluding `.center.tight`) use `clamp(24px, 22cqi, 70px)`
+and `font-variation-settings:'ROND' 100`, independent of HA's display-large token.
+Color still follows the dial (neutral when idle). Single centre units are hidden;
+dual units remain visible, including collapsed dual readouts. `.dial.dual` keeps
+single-only typography rules from affecting those collapsed readouts.
+The ring retains its 10-unit rest stroke and opacity 0.18 over the new disc.
 
 Activity-only changes cross-fade without a wipe or off/on segment slide.
 `updated()` gates `_runWipe()` on a `mode` change between colored modes with a
