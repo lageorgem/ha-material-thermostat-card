@@ -147,6 +147,13 @@ describe('mt-circular-dial', () => {
           await el.updateComplete;
           const number = el.shadowRoot!.querySelector('.center .value-text')!;
           expect(number.textContent).to.equal(integer + fraction);
+          expect(number.closest('[aria-hidden="true"]')).to.not.equal(null);
+          const accessible = el.shadowRoot!.querySelector('.center .sr-only')!;
+          expect(accessible.textContent).to.equal(
+            `${showCurrent ? 'Current' : 'Target'} temperature ${integer}${fraction ? `.${fraction}` : ''} °C`
+          );
+          expect(accessible.closest('[aria-hidden="true"]')).to.equal(null);
+          expect(el.shadowRoot!.querySelector('.center .unit')!.closest('[aria-hidden="true"]')).to.not.equal(null);
           expect([...number.childNodes].filter(n => n.nodeType === Node.TEXT_NODE)
             .map(n => n.textContent).join('')).to.equal(integer);
           const sup = number.querySelector('sup');
@@ -256,12 +263,47 @@ describe('mt-circular-dial', () => {
         el.showCurrentAsPrimary = true;
         await el.updateComplete;
         const label = el.shadowRoot!.querySelector('.o-label .num')!;
-        expect(label.textContent).to.equal(integer + fraction);
+        expect(label.querySelector('.label-number')!.textContent).to.equal(integer + fraction);
+        expect(label.querySelector('.label-number')!.getAttribute('aria-hidden')).to.equal('true');
+        expect(label.querySelector('.sr-only')!.textContent).to.equal(`Target ${value} °C`);
         expect(label.querySelector('sup')?.textContent ?? '').to.equal(fraction);
         const number = label.querySelector('.label-number')!;
         expect([...number.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal(integer);
       });
     }
+
+    it('exposes current and dual ring labels as plain temperatures with the configured unit', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.value = 28;
+      el.current = 21.1;
+      await el.updateComplete;
+      const current = el.shadowRoot!.querySelector('.num.current')!;
+      expect(current.querySelector('.sr-only')!.textContent).to.equal('Current 21.1 °C');
+      expect(current.querySelector('.label-number')!.getAttribute('aria-hidden')).to.equal('true');
+      expect(current.querySelector('.sr-only')!.closest('[aria-hidden="true"]')).to.equal(null);
+      expect(getComputedStyle(current.querySelector('.sr-only')!).position).to.equal('absolute');
+
+      el.unit = '°F';
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 19;
+      el.highValue = 24;
+      await el.updateComplete;
+      expect([...el.shadowRoot!.querySelectorAll('.o-label .sr-only')].map(node => node.textContent))
+        .to.deep.equal(['Low 19 °F', 'High 24 °F', 'Current 21.1 °F']);
+      await nextFrame();
+      expectLabelGap(el, el.shadowRoot!.querySelector('.o-label')!, 125);
+    });
+
+    it('uses the configured unit and rounded precision for accessible centre text', async () => {
+      const el = await mount();
+      el.unit = '°F';
+      el.step = 1;
+      el.value = 21.5;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent).to.equal('Target temperature 22 °F');
+    });
 
     for (const scenario of ['current', 'setpoint', 'dual', 'merged'] as const) {
       for (const dragging of [false, true]) {
@@ -804,7 +846,7 @@ describe('mt-circular-dial', () => {
       expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28');
       // the setpoint marker now carries the target number...
       const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
-        n.textContent!.trim()
+        n.querySelector('.label-number')!.textContent!.trim()
       );
       expect(labels).to.include('21');
       // ...the current dot is unlabeled and no mode icon is drawn on the ring...
@@ -2104,7 +2146,7 @@ describe('mt-circular-dial', () => {
       expect(setDots[1].classList.contains('sel')).to.be.false; // high
       const selNum = sr.querySelector('.o-label .num.sel');
       expect(selNum).to.not.equal(null);
-      expect(selNum!.textContent!.trim()).to.equal('18');
+      expect(selNum!.querySelector('.label-number')!.textContent!.trim()).to.equal('18');
     });
 
     it('grabbing a handle selects it for the +/- buttons', async () => {
@@ -3227,7 +3269,7 @@ describe('mt-circular-dial', () => {
       // no mode icon replaces a setpoint number; both setpoints show their values
       expect(sr.querySelector('.markers ha-icon.mode-icon')).to.equal(null);
       const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
-        n.textContent!.trim()
+        n.querySelector('.label-number')!.textContent!.trim()
       );
       expect(labels).to.include('18');
       expect(labels).to.include('24');

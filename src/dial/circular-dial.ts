@@ -657,12 +657,13 @@ export class MtCircularDial extends LitElement {
   /**
    * Orbit temperature: integer plus a superscript first decimal, without units.
    * @param value the temperature
+   * @param label accessible temperature context
    */
-  private _fmtLabel(value: number | undefined): TemplateResult {
+  private _fmtLabel(value: number | undefined, label: string): TemplateResult {
     const [integer, fraction] = this._fmtCompact(value).split('.');
-    return html`<span class="label-number"
-      >${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}</span
-    >`;
+    return html`<span class="label-number" aria-hidden="true"
+       >${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}</span
+    ><span class="sr-only">${label} ${this._fmtCompact(value)} ${this.unit}</span>`;
   }
 
   /**
@@ -891,7 +892,7 @@ export class MtCircularDial extends LitElement {
     // (like single mode), so the icon sits at the setpoint, not in the centre.
     const dualActive = this._dualActive;
     const collapsedDual = this.dual && !this._showRange;
-    const currentLabel = html`<span class="num current">${this._fmtLabel(this.current)}</span>`;
+    const currentLabel = html`<span class="num current">${this._fmtLabel(this.current, 'Current')}</span>`;
     const modeIconEl = html`<ha-icon class="mode-icon" icon=${modeIcon}></ha-icon>`;
     const dualSetIconEl = html`<ha-icon
       class="mode-icon dual-mode-icon"
@@ -908,13 +909,13 @@ export class MtCircularDial extends LitElement {
       collapsedDual && dualActive === 'heat' && !this.showCurrentAsPrimary
         ? dualSetIconEl
         : html`<span class="num ${selSide === 'low' ? 'sel' : ''}"
-            >${this._fmtLabel(this._displayLow)}</span
+            >${this._fmtLabel(this._displayLow, 'Low')}</span
           >`;
     const highLabel =
       collapsedDual && dualActive === 'cool' && !this.showCurrentAsPrimary
         ? dualSetIconEl
         : html`<span class="num ${selSide === 'high' ? 'sel' : ''}"
-            >${this._fmtLabel(this._displayHigh)}</span
+            >${this._fmtLabel(this._displayHigh, 'High')}</span
           >`;
     const dualLabelAngles = showCurLabel
       ? [lowAngle, highAngle, curAngle]
@@ -1020,14 +1021,14 @@ export class MtCircularDial extends LitElement {
                     // carries the target value and the current dot stays bare.
                     this._labelOrbit(
                       spAngle,
-                       html`<span class="num">${this._fmtLabel(this._displayValue)}</span>`
+                       html`<span class="num">${this._fmtLabel(this._displayValue, 'Target')}</span>`
                     )
                   : overlap
                     ? this._labelOrbit(
                         curAngle,
                         html`<span class="num current with-icon"
-                          ><ha-icon class="mode-icon inline" icon=${modeIcon}></ha-icon
-                          >${this._fmtLabel(this.current)}</span
+                          ><ha-icon class="mode-icon inline" icon=${modeIcon} aria-hidden="true"></ha-icon
+                          >${this._fmtLabel(this.current, 'Current')}</span
                         >`
                       )
                     : html`
@@ -1078,10 +1079,11 @@ export class MtCircularDial extends LitElement {
     return html`
       <div class=${classMap({ center: true, tight: this._centerTight })}>
         ${this._renderStatus()}
-        <div class="temp">
+        <div class="temp" aria-hidden="true">
           <span class="value-text">${this._fmtCenter(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
+        <span class="sr-only">${this.showCurrentAsPrimary ? 'Current' : 'Target'} temperature ${this._fmt(big, bigPrecision).replace(/\.0$/, '')} ${this.unit}</span>
       </div>
     `;
   }
@@ -1162,6 +1164,15 @@ export class MtCircularDial extends LitElement {
         width: 100%;
         /* no grey flash when a tap lands on the dial (mobile WebKit/Blink) */
         -webkit-tap-highlight-color: transparent;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       .dial {
         --edge: 125;
