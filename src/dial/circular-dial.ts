@@ -76,6 +76,8 @@ export class MtCircularDial extends LitElement {
   @property({ type: Number }) step = 0.5;
   @property({ type: Number }) current?: number;
   @property() mode = 'off';
+  /** Reported HVAC action; when absent, single-mode activity is inferred from demand. */
+  @property() hvacAction?: string;
   @property() modeLabel = '';
   /** Optional preset icon shown under the temperature (e.g. the eco leaf). */
   @property() presetIcon?: string;
@@ -159,14 +161,21 @@ export class MtCircularDial extends LitElement {
 
   /**
    * Whether a single-mode demand direction is meaningful (cooling needs the
-   * current temp above the setpoint, heating below) — otherwise the segment is
-   * drawn gray since nothing is being heated/cooled.
+   * current temp above the setpoint, heating below). Fallback activity inference
+   * for single mode when the device does not report an HVAC action.
    */
   private get _demandSensible(): boolean {
     if (this.current == null) return false;
     if (this.mode === 'cool') return this.current > this._displayValue;
     if (this.mode === 'heat') return this.current < this._displayValue;
     return true; // auto / dry / fan_only keep their own color
+  }
+
+  /** Single-mode activity: reported action wins over inferred temperature demand. */
+  private get _singleActive(): boolean {
+    if (!COLORED_MODES.includes(this.mode)) return false;
+    if (this.hvacAction) return this.hvacAction !== 'idle' && this.hvacAction !== 'off';
+    return this._demandSensible;
   }
 
   /**
@@ -180,6 +189,9 @@ export class MtCircularDial extends LitElement {
 
   /** The dial's mode color (off / idle modes use the neutral variant). */
   private get _dialColor(): string {
+    if (!this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive) {
+      return MtCircularDial.IDLE_COLOR;
+    }
     return COLORED_MODES.includes(this._effectiveMode)
       ? this._modeColor(this._effectiveMode)
       : MtCircularDial.IDLE_COLOR;
@@ -691,7 +703,11 @@ export class MtCircularDial extends LitElement {
 
   protected render(): TemplateResult {
     const isOff = !COLORED_MODES.includes(this.mode);
+    const isIdle = !this.dual && !isOff && !this._singleActive;
     const color = this._dialColor;
+    const modeTint = isIdle
+      ? `color-mix(in srgb, ${this._modeColor(this.mode)} 50%, ${MtCircularDial.IDLE_COLOR})`
+      : color;
     const modeIcon = HVAC_MODE_ICONS[this.mode] ?? 'mdi:thermostat';
 
     const showCurrent =
@@ -709,7 +725,7 @@ export class MtCircularDial extends LitElement {
 
     // Single-mode demand segment: between the setpoint and the current temp. It's
     // a persistent path (so it animates on turn on/off and during the mode wipe);
-    // grayed when the demand direction makes no sense (see _demandSensible).
+    // muted when inactive, without changing geometry or off-mode semantics.
     let segS = 0;
     let segE = 0;
     let showSeg = false;
@@ -718,7 +734,7 @@ export class MtCircularDial extends LitElement {
       segS = Math.min(this._fracOf(this._displayValue), this._fracOf(this.current!));
       segE = Math.max(this._fracOf(this._displayValue), this._fracOf(this.current!));
       showSeg = true;
-      segColor = this._demandSensible ? color : MtCircularDial.IDLE_COLOR;
+      segColor = modeTint;
     }
     const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
     const dashOffset = (-segS * 1000).toFixed(2);
@@ -795,8 +811,8 @@ export class MtCircularDial extends LitElement {
 
     return html`
       <div
-        class=${classMap({ dial: true, off: isOff, disabled: this.disabled, dragging: this._dragging })}
-        style=${`--dial-color: ${color}`}
+        class=${classMap({ dial: true, off: isOff, idle: isIdle, disabled: this.disabled, dragging: this._dragging })}
+        style=${`--dial-color: ${color}; --mode-tint: ${modeTint}`}
       >
         <svg
           viewBox="0 0 ${VIEW} ${VIEW}"
@@ -1116,7 +1132,8 @@ export class MtCircularDial extends LitElement {
       .glow {
         transition: opacity var(--mt-motion-dur) var(--mt-motion-ease);
       }
-      .dial.off .glow {
+      .dial.off .glow,
+      .dial.idle .glow {
         opacity: 0.5;
       }
       /* Mode-change wipe: an overlay of the OLD color value segment is laid over
@@ -1219,7 +1236,7 @@ export class MtCircularDial extends LitElement {
       }
       .mode-icon {
         --mdc-icon-size: clamp(13px, 6.25cqi, 20px);
-        color: var(--dial-color);
+        color: var(--mode-tint, var(--dial-color));
       }
       .mode-icon.inline {
         position: absolute;
