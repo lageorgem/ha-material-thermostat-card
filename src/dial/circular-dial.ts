@@ -88,6 +88,8 @@ export class MtCircularDial extends LitElement {
   @property({ type: Number }) step = 0.5;
   @property({ type: Number }) current?: number;
   @property() mode = 'off';
+  /** Dial backdrop: halo (default), bare minimal, or Google's solid disc. */
+  @property() dialStyle: 'halo' | 'minimal' | 'google' = 'halo';
   /** Reported HVAC action; when absent, single-mode activity is inferred from demand. */
   @property() hvacAction?: string;
   @property() modeLabel = '';
@@ -664,6 +666,16 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
+   * Centre temperature: preserve precision rounding, omit zero decimals.
+   * @param value the temperature
+   * @param precision decimals to retain before splitting the number
+   */
+  private _fmtCenter(value: number, precision: number): TemplateResult {
+    const [integer, fraction] = this._fmt(value, precision).split('.');
+    return html`${integer}${fraction && fraction !== '0' ? html`<sup>${fraction}</sup>` : nothing}`;
+  }
+
+  /**
    * A dot that orbits the center to its angle.
    * @param angle angle in degrees
    * @param cls extra dot class (setpoint|current)
@@ -798,6 +810,9 @@ export class MtCircularDial extends LitElement {
   }
 
   protected render(): TemplateResult {
+    const dialStyle = this.dialStyle === 'minimal' || this.dialStyle === 'google'
+      ? this.dialStyle
+      : 'halo';
     const isOff = !COLORED_MODES.includes(this.mode);
     const isIdle = !this.dual && !isOff && !this._singleActive;
     const color = this._dialColor;
@@ -912,6 +927,7 @@ export class MtCircularDial extends LitElement {
       <div
         class=${classMap({
           dial: true,
+          [`style-${dialStyle}`]: true,
           dual: this.dual,
           off: isOff,
           idle: isIdle,
@@ -947,6 +963,9 @@ export class MtCircularDial extends LitElement {
               <stop offset="100%" stop-color="var(--dial-color)" stop-opacity="0" />
             </radialGradient>
           </defs>
+          ${dialStyle === 'google'
+            ? svg`<circle class="disc" cx=${CENTER} cy=${CENTER} r="148.5" fill="var(--mt-surface-container-high)" />`
+            : nothing}
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <path class="ring" d=${ringPath} />
           ${this.dual
@@ -1060,7 +1079,7 @@ export class MtCircularDial extends LitElement {
       <div class=${classMap({ center: true, tight: this._centerTight })}>
         ${this._renderStatus()}
         <div class="temp">
-          <span class="value-text">${this._fmt(big, bigPrecision)}</span>
+          <span class="value-text">${this._fmtCenter(big, bigPrecision)}</span>
           <span class="unit">${this.unit}</span>
         </div>
       </div>
@@ -1178,6 +1197,7 @@ export class MtCircularDial extends LitElement {
         user-select: none;
         -webkit-touch-callout: none;
       }
+      .disc,
       .glow,
       .ring,
       .value {
@@ -1255,6 +1275,10 @@ export class MtCircularDial extends LitElement {
       .dial.off .glow,
       .dial.idle .glow {
         opacity: 0.5;
+      }
+      .dial.style-minimal .glow,
+      .dial.style-google .glow {
+        opacity: 0;
       }
       /* Mode-change wipe: an overlay of the OLD color value segment is laid over
          the dial — now painted in the NEW color — and slides out through the
@@ -1476,6 +1500,18 @@ export class MtCircularDial extends LitElement {
         letter-spacing: -0.02em;
         color: var(--dial-color);
       }
+      /* Only the integer contributes to the single-mode number's layout box. */
+      .dial:not(.dual) .value-text {
+        position: relative;
+      }
+      .value-text sup {
+        position: absolute;
+        left: 100%;
+        top: -0.1em;
+        font-size: 0.4em;
+        line-height: 1;
+        margin-left: 0.05em;
+      }
       .unit {
         font-size: clamp(11px, 7cqi, var(--md-sys-typescale-title-large-size, 22px));
         margin-top: 0.4em;
@@ -1484,7 +1520,6 @@ export class MtCircularDial extends LitElement {
       }
       .dial:not(.dual) .center:not(.tight) .temp:not(.dual) .value-text {
         font-size: clamp(24px, 22cqi, 70px);
-        font-variation-settings: 'ROND' 100;
       }
       .dial:not(.dual) .temp .unit {
         display: none;
@@ -1505,6 +1540,7 @@ export class MtCircularDial extends LitElement {
         pointer-events: none;
       }
       .step {
+        font: inherit;
         /* scale with the dial; low floor so the buttons shrink with the circle
            (not pinned large) at small sizes */
         width: clamp(22px, 11cqi, 38px);

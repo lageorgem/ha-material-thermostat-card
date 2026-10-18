@@ -3,7 +3,7 @@ import { fixture, html, expect, aTimeout, nextFrame } from '@open-wc/testing';
 import sinon from 'sinon';
 import { oncePromise, captureEvents } from '../helpers';
 import '../../src/dial/circular-dial';
-import type { MtCircularDial } from '../../src/dial/circular-dial';
+import { MtCircularDial } from '../../src/dial/circular-dial';
 import { climateModeColor, HVAC_MODE_ICONS } from '../../src/theme';
 
 /** The neutral gray used for an idle range / a demand that makes no sense. */
@@ -93,6 +93,142 @@ function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void 
 }
 
 describe('mt-circular-dial', () => {
+  describe('dial styles and centre typography', () => {
+    it('defaults to halo', async () => {
+      const el = await mount();
+      expect(el.dialStyle).to.equal('halo');
+      expect(el.shadowRoot!.querySelector('.dial.style-halo')).to.not.equal(null);
+    });
+
+    for (const style of ['halo', 'minimal', 'google', 'unknown'] as const) {
+      for (const action of ['heating', 'idle', 'off'] as const) {
+        it(`renders ${style} with action ${action}`, async () => {
+          const el = await mount();
+          el.style.setProperty('--mt-motion-dur', '0s');
+          el.dialStyle = style as MtCircularDial['dialStyle'];
+          el.mode = 'heat';
+          el.hvacAction = action;
+          await el.updateComplete;
+          const resolved = style === 'unknown' ? 'halo' : style;
+          expect(el.shadowRoot!.querySelector(`.dial.style-${resolved}`)).to.not.equal(null);
+          const glow = el.shadowRoot!.querySelector('.glow')!;
+          expect(getComputedStyle(glow).opacity).to.equal(
+            resolved === 'halo' ? (action === 'heating' ? '1' : '0.5') : '0'
+          );
+          const disc = el.shadowRoot!.querySelector('.disc');
+          if (resolved === 'google') {
+            expect(disc).to.not.equal(null);
+            expect(disc!.namespaceURI).to.equal('http://www.w3.org/2000/svg');
+            expect(disc!.getAttribute('cx')).to.equal('160');
+            expect(disc!.getAttribute('cy')).to.equal('160');
+            expect(disc!.getAttribute('r')).to.equal('148.5');
+            expect(disc!.getAttribute('fill')).to.equal('var(--mt-surface-container-high)');
+            expect(disc!.nextElementSibling).to.equal(glow);
+            expect(getComputedStyle(disc!).pointerEvents).to.equal('none');
+          } else {
+            expect(disc).to.equal(null);
+          }
+        });
+      }
+    }
+
+    for (const showCurrent of [false, true]) {
+      for (const [value, integer, fraction] of [
+        [21.1, '21', '1'], [21.5, '21', '5'], [22, '22', ''],
+        [-1.5, '-1', '5'], [-2, '-2', ''], [-0.5, '-0', '5'],
+      ] as const) {
+        it(`formats centre ${value} (current primary=${showCurrent})`, async () => {
+          const el = await mount();
+          el.min = -10;
+          el.value = value;
+          el.current = value;
+          el.step = 0.5;
+          el.showCurrentAsPrimary = showCurrent;
+          await el.updateComplete;
+          const number = el.shadowRoot!.querySelector('.center .value-text')!;
+          expect(number.textContent).to.equal(integer + fraction);
+          expect([...number.childNodes].filter(n => n.nodeType === Node.TEXT_NODE)
+            .map(n => n.textContent).join('')).to.equal(integer);
+          const sup = number.querySelector('sup');
+          if (fraction) {
+            expect(sup!.textContent).to.equal(fraction);
+            expect(getComputedStyle(number).position).to.equal('relative');
+            expect(getComputedStyle(sup!).position).to.equal('absolute');
+            expect(parseFloat(getComputedStyle(sup!).fontSize)).to.be.closeTo(
+              parseFloat(getComputedStyle(number).fontSize) * 0.4, 0.01
+            );
+          } else {
+            expect(sup).to.equal(null);
+          }
+        });
+      }
+    }
+
+    it('updates backdrops reactively while off', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      for (const style of ['google', 'minimal', 'halo'] as const) {
+        el.dialStyle = style;
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.dial.off')!.classList.contains(`style-${style}`)).to.be.true;
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity)
+          .to.equal(style === 'halo' ? '0.5' : '0');
+        expect(el.shadowRoot!.querySelector('.disc') !== null).to.equal(style === 'google');
+      }
+    });
+
+    it('uses current precision even when the setpoint step is an integer', async () => {
+      const el = await mount();
+      el.current = 21.1;
+      el.step = 1;
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('211');
+      expect(el.shadowRoot!.querySelector('.value-text sup')!.textContent).to.equal('1');
+    });
+
+    for (const current of [21, 28]) {
+      it(`keeps dual decimal readouts unchanged (current=${current})`, async () => {
+        const el = await mount();
+        el.dual = true;
+        el.mode = 'heat_cool';
+        el.lowValue = 18.5;
+        el.highValue = 24.5;
+        el.current = current;
+        await el.updateComplete;
+        const values = [...el.shadowRoot!.querySelectorAll('.value-text')];
+        expect(values.map(value => value.textContent)).to.deep.equal(
+          current === 21 ? ['18.5', '24.5'] : ['24.5']
+        );
+        expect(el.shadowRoot!.querySelector('.value-text sup')).to.equal(null);
+      });
+    }
+
+    it('preserves step rounding before formatting the centre', async () => {
+      const el = await mount();
+      el.value = 21.5;
+      el.step = 1;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('22');
+      expect(el.shadowRoot!.querySelector('.value-text sup')).to.equal(null);
+    });
+
+    it('inherits font family and axes without declaring either in dial styles', async () => {
+      const cssText = MtCircularDial.styles.map(style => style.cssText).join('\n');
+      expect(cssText).not.to.match(/font-(?:family|variation-settings)\s*:/);
+      const el = await mount();
+      el.style.fontFamily = 'monospace';
+      el.style.fontVariationSettings = '"ROND" 25';
+      for (const selector of ['.value-text', '.unit', '.step', '.num.current']) {
+        el.current = 18;
+        await el.updateComplete;
+        const style = getComputedStyle(el.shadowRoot!.querySelector(selector)!);
+        expect(style.fontFamily).to.equal('monospace');
+        expect(style.fontVariationSettings).to.equal('"ROND" 25');
+      }
+    });
+  });
+
   describe('measured Google presentation', () => {
     for (const dual of [false, true]) {
       for (const mode of ['off', 'heat']) {
@@ -217,7 +353,7 @@ describe('mt-circular-dial', () => {
       const el = await mount();
       el.style.setProperty('--md-sys-typescale-display-large-size', '57px');
       expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontSize).to.equal('70px');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontVariationSettings).to.equal('"ROND" 100');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).fontVariationSettings).to.equal(getComputedStyle(el).fontVariationSettings);
     });
 
     it('keeps current markers bright and dims off/idle halos', async () => {
@@ -542,7 +678,7 @@ describe('mt-circular-dial', () => {
       const sr = el.shadowRoot!;
       const valueText = sr.querySelector('.value-text');
       expect(valueText).to.not.equal(null);
-      expect(valueText!.textContent!.trim()).to.equal('21.0');
+      expect(valueText!.textContent!.trim()).to.equal('21');
       expect(sr.querySelector('.unit')!.textContent!.trim()).to.equal('°C');
       // The HVAC chips already show the mode (à la Google Home) — no label here.
       expect(sr.querySelector('.mode')).to.equal(null);
@@ -638,7 +774,7 @@ describe('mt-circular-dial', () => {
       el.step = 0.5;
       await el.updateComplete;
       // primary = current, precision forced to 1
-      expect(el.shadowRoot!.querySelector('.value-text')!.textContent!.trim()).to.equal('23.4');
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent!.trim()).to.equal('234');
     });
 
     it('falls back to the target when showCurrentAsPrimary but current is null', async () => {
@@ -650,7 +786,7 @@ describe('mt-circular-dial', () => {
       el.step = 1;
       await el.updateComplete;
       // big = target, but bigPrecision is forced to 1 by showCurrentAsPrimary
-      expect(el.shadowRoot!.querySelector('.value-text')!.textContent!.trim()).to.equal('21.0');
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent!.trim()).to.equal('21');
     });
 
     it('showCurrentAsPrimary: labels the setpoint with the target, leaves the current dot bare', async () => {
@@ -665,7 +801,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const sr = el.shadowRoot!;
       // current is the big centre number (not duplicated on the ring)
-      expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28.0');
+      expect(sr.querySelector('.center .value-text')!.textContent!.trim()).to.equal('28');
       // the setpoint marker now carries the target number...
       const labels = [...sr.querySelectorAll('.markers .o-label .num')].map((n) =>
         n.textContent!.trim()

@@ -23,7 +23,13 @@ ARC_END_WRAP = 153°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
 - `_angleOf(value)` / `_fracOf(value)` — value → angle / 0..1 fraction along the
   arc.
 - The full ring path = `arcPath(ARC_START, ARC_START+SWEEP, RADIUS)`.
-- No background circle is painted beneath the halo and paths, in single or dual mode.
+- `dialStyle: 'halo' | 'minimal' | 'google'` defaults to `'halo'`; unknown values
+  resolve to halo. `.dial` carries the resolved `style-<value>` class in single
+  and dual mode. Halo retains today's gradient (active opacity 1, off/idle 0.5),
+  with no background disc. Minimal has no disc and glow opacity 0 in every state.
+  Google paints `<circle class="disc" cx="160" cy="160" r="148.5"
+  fill="var(--mt-surface-container-high)">` before the glow, with
+  `pointer-events:none`; its glow also stays at opacity 0 in every state.
 
 ## Markers are HTML overlays, not SVG
 
@@ -69,7 +75,7 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   Orbit numbers use `clamp(8px, 4.95cqi, 16px)` (15.84px at a 320px dial),
   independent of HA's title-medium token. Current numbers use `var(--mt-on-surface)`,
   matching unselected setpoint numbers.
-  `_fmtCompact` and centre formatting are unchanged.
+  `_fmtCompact` is unchanged; single-mode centre formatting is described below.
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
@@ -252,8 +258,18 @@ they are distinct from `.dial.idle` and hide the single value segment.
 `modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
 
-Single centre numbers (excluding `.center.tight`) use `clamp(24px, 22cqi, 70px)`
-and `font-variation-settings:'ROND' 100`, independent of HA's display-large token.
+Single centre numbers (excluding `.center.tight`) use `clamp(24px, 22cqi, 70px)`,
+independent of HA's display-large token. All dial text inherits `font-family` and
+`font-variation-settings` from the host; the dial declares neither property.
+Single-mode `_fmtCenter(value, precision)` retains the existing rounding rules
+(setpoint step precision; current-primary precision 1, including missing-current
+fallback), then renders the integer plus a superscript first decimal digit only
+when nonzero. Examples: `21.1` → `21<sup>1</sup>`, `22` → `22`,
+`-1.5` → `-1<sup>5</sup>` (minus retained, including `-0.5`). The integer is the
+only in-flow content of relative `.value-text`; the centre-specific sup uses
+`position:absolute; left:100%; top:-0.1em; font-size:0.4em; line-height:1;
+margin-left:0.05em`, so decimals cannot shift the integer's centring.
+Dual range and collapsed dual keep their existing `_fmt` decimal readouts.
 Color still follows the dial (neutral when idle). Single centre units are hidden;
 dual units remain visible, including collapsed dual readouts. `.dial.dual` keeps
 single-only typography rules from affecting those collapsed readouts.
@@ -273,7 +289,8 @@ transitions instead.
 The halo (`#mt-glow` radialGradient) has a **fuller 7-stop falloff**:
 0% → 0.38, 25% → 0.35, 45% → 0.3, 65% → 0.21, 80% → 0.12,
 92% → 0.04, 100% → 0. Color persists farther toward the ring; ending at
-opacity 0 avoids a faint hard edge. Active halo opacity is 1; off/idle dims to 0.5.
+opacity 0 avoids a faint hard edge. In halo style, active opacity is 1 and
+off/idle dims to 0.5; minimal/google override both to 0.
 It's a **plain gradient with no dither filter**: dark 8-bit radial
 gradients band into faint "rings" on some platforms (Chromium on Windows/Android
 don't dither; macOS does), but both attempted fixes — a masked `mix-blend-mode`
