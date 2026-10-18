@@ -321,7 +321,7 @@ describe('mt-circular-dial', () => {
           await nextFrame();
           const labels = [...el.shadowRoot!.querySelectorAll<HTMLElement>('.o-label')];
           expect(labels.length).to.equal(scenario === 'dual' ? 3 : scenario === 'merged' || scenario === 'icon' ? 1 : 2);
-          const edge = dragging ? 118 : 125;
+          const edge = dragging ? 116 : 125;
           for (const label of labels) expectLabelGap(el, label, edge);
           if (scenario === 'dual') {
             expect(labels.some(label => Number(label.dataset.angle) !== ARC_START + (current - el.min) / 30 * SWEEP)).to.be.true;
@@ -411,8 +411,8 @@ describe('mt-circular-dial', () => {
           dial.classList.toggle('dragging', dragging);
           for (const label of labels) {
             const style = getComputedStyle(label);
-            expectLabelGap(el, label, dragging ? 118 : 125);
-            expect(style.getPropertyValue('--edge').trim()).to.equal(dragging ? '118' : '125');
+            expectLabelGap(el, label, dragging ? 116 : 125);
+            expect(style.getPropertyValue('--edge').trim()).to.equal(dragging ? '116' : '125');
             expect(style.transitionProperty).to.include('top');
           }
         }
@@ -472,19 +472,22 @@ describe('mt-circular-dial', () => {
         }
         for (const dot of sr.querySelectorAll('.o-dot')) {
           const style = getComputedStyle(dot);
-          expect(parseFloat(style.height)).to.be.closeTo(dot.classList.contains('setpoint') ? 22 : 19, 0.1);
+          expect(parseFloat(style.height)).to.be.closeTo(dot.classList.contains('setpoint') ? 26 : 24, 0.1);
           expect(parseFloat(style.width)).to.be.closeTo(
             dot.classList.contains('setpoint') ? 5.6 : 3.84,
             0.02
           );
           expect(style.borderRadius).to.equal('999px');
+          expect((parseFloat(style.height) - parseFloat(style.width)) / 2).to.be.at.least(8.5 + 1);
+          // Even at any orbit angle, the outer tip fits inside the clipped 320u dial.
+          expect(Math.hypot(126.5 + parseFloat(style.height) / 2, parseFloat(style.width) / 2)).to.be.lessThan(160);
           if (dot.classList.contains('current')) expect(style.opacity).to.equal('1');
           expect(style.transitionProperty).to.include('width');
           expect(style.transitionProperty).to.include('height');
           expect(style.transitionProperty).to.include('border-radius');
         }
         for (const label of sr.querySelectorAll('.o-label')) {
-          expectLabelGap(el, label, 118);
+          expectLabelGap(el, label, 116);
           expect(getComputedStyle(label).transitionProperty).to.include('top');
         }
         if (dual) {

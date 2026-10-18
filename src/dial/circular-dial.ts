@@ -1332,12 +1332,12 @@ export class MtCircularDial extends LitElement {
       }
       .dial.dragging .o-dot.setpoint {
         width: clamp(3px, 1.75cqi, 6px);
-        height: 6.875cqi;
+        height: 8.125cqi;
         border-radius: 999px;
       }
       .dial.dragging .o-dot.current {
         width: clamp(2px, 1.2cqi, 4px);
-        height: 5.9375cqi;
+        height: 7.5cqi;
         border-radius: 999px;
       }
       .o-label {
@@ -1349,7 +1349,7 @@ export class MtCircularDial extends LitElement {
           top var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .dial.dragging {
-        --edge: 118;
+        --edge: 116;
       }
       /* Only the integer participates in centring; the decimal hangs top-right. */
       .o-label .label-number {

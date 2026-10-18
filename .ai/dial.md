@@ -52,10 +52,11 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   measurement), without requesting a Lit update. Hidden zero-width dials wait
   for resize; the observer disconnects/reobserves with the host lifecycle.
   CSS sets `top:calc((160 - (var(--edge) - 5.5 - var(--s, 6))) / 320 * 100%)`.
-  Plain-number `--edge` is 125 at rest and 118 dragging: radius is
+   Plain-number `--edge` is 125 at rest and 116 dragging: radius is
   `edge − 5.5 − support`, default support 6 before measurement. All label types
   share this rule; `.icon-label` remains a semantic class, not a positioning rule.
-   Labels move 7u inward with the band; `top` retains the band's motion tokens.
+    Labels move 9u inward during drag to clear the longer line tips;
+    `top` retains the band's motion tokens.
    Geometry assertions disable motion **before** changing dial properties;
    otherwise they can observe the initial fallback radius during its transition.
 - Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
@@ -213,12 +214,16 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
   Base paths set `transform-box:view-box; transform-origin:160px 160px`;
   `.hit` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
   `.o-dot.setpoint` becomes a
-  radial pill (`width:clamp(3px, 1.75cqi, 6px)`, `height:6.875cqi`, 5.6×22 units);
+   radial pill (`width:clamp(3px, 1.75cqi, 6px)`, `height:8.125cqi`, 5.6×26 units);
   `.o-dot.current` a thinner pill (`width:clamp(2px, 1.2cqi, 4px)`,
-  `height:5.9375cqi`, 3.84×19 units). Both use `border-radius:999px`.
+   `height:7.5cqi`, 3.84×24 units). Both use `border-radius:999px`.
+   Rounded caps sit fully outside the 17u band, with straight-section margins
+   of about 1.7u (setpoint) and 1.6u (current) at a 320px dial.
+   Outer tips reach radii 139.5 and 138.5, safely inside the clipped 320u dial box.
   Markers and handles move to `top:10.469%` (radius 126.5).
   Every `.o-label` uses its measured whole-box support to keep a 5.5u radial
-  support gap from the inner edge. The radius moves 7u inward during drag,
+   support gap from `--edge` (125 at rest, 116 dragging, just inside the line tips).
+   The radius moves 9u inward during drag,
   rather than using fixed radii for numbers versus standalone icons.
   Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
