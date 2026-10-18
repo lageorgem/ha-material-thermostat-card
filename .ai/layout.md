@@ -17,9 +17,7 @@ MIN_WIDTH_PCT = 10    smallest feature width
 MAX_WIDTH_PCT = 100   full width
 GRID_COLUMNS  = 10    columns in a full-width feature row (10% each)
 TILE_DEFAULT_PCT = 50 entity-tile default width
-DIAL_MAX_PX   = 320   wide-layout dial cap
-STACKED_DIAL_SCALE = 1.0266 dial box ÷ card border-box width
-STACKED_DIAL_MAX_PX = 440 cap for wide-but-stacked cards
+DIAL_MAX_PX   = 320   dial never grows past this
 DIAL_MIN_PX   = 240   dial needs ≥ this much room to sit beside features (wide)
 WIDE_MIN_PX   = 560   card must be ≥ this wide to go side-by-side
 CARD_PADDING_X= 32    ha-card horizontal padding (host width − this = content width)
@@ -60,11 +58,7 @@ wide = features.length > 0
 
 - **Stacked** (the default, incl. any config with a full-width/100% feature):
   dial on top, the feature grid full width below (`gridCols = 10`). The dial gets
-  a negative bottom-margin crop (see below). Its square box is
-  `round(min((_widthPx + CARD_PADDING_X) * STACKED_DIAL_SCALE, STACKED_DIAL_MAX_PX))`.
-  `.dial-wrap` spans the border-box via `margin-inline: -16px` and passes the
-  size as `--mt-dial-size`. The dial host centres its non-shrinking child even
-  when that child is wider than the wrapper.
+  a negative bottom-margin crop (see below).
 - **Wide**: dial + feature area side by side.
   - feature area = `maxPct%` of the card, on the **right**
     (`.features { flex: 0 0 ${maxPct}% }`, `gridCols = maxPct/10`). Each grid
@@ -81,7 +75,7 @@ side-by-side layout.
 ## The dial bottom-gap crop (stacked mode)
 
 The dial is square; stacked layout crops its empty bottom band with
-`marginBottom: -Math.round(gap × dialPx)px`, using the stacked box size above.
+`marginBottom: -Math.round(gap × min(_widthPx, DIAL_MAX_PX))px`.
 The card passes `dial_style` to the dial (default `halo`) and selects the gap:
 
 - `halo` / `minimal`: `DIAL_BOTTOM_GAP = 0.065`, below the +/- controls
@@ -91,24 +85,6 @@ The card passes `dial_style` to the dial (default `halo`) and selects the gap:
 
 Wide layout has no crop. `.body.stacked` gap, `.features` grid gap, and `ha-card`
 padding-bottom remain 12px.
-
-## Google Home size reference & safe clipping
-
-On a 412 CSS-pixel phone, Google Home's ring outer diameter measures 343px
-(83.3% of the screen). The card border-box on that phone measures 396px in real
-HA, so the same ring needs a box of `343 * 320 / 270 ≈ 406.5px`: 1.0266 times
-the card width. Rounding produces a 407px box at 396px, capped at 440px on
-wide-but-stacked cards. (An earlier 1.0558 assumed a 385px card and made the
-ring 85.6% of the screen — measure the real card before changing this.)
-
-The wrapper uses `overflow-x: clip; overflow-y: visible`, clipping only the
-invisible horizontal box overflow. The widest paint is the 300/320 glow circle:
-381.6px at a 407px dial, within the 396px wrapper. The google disc (297/320)
-and ring (270/320) are smaller. No geometry or typography tokens change.
-
-Dropdowns render through `mt-feature-row` → selectors → `mt-dropdown` in the
-`.features` sibling, not `.dial-wrap`. Their menus render in the dropdown's
-own shadow root; clipping the dial wrapper cannot clip those popovers.
 
 ## Icon-row scrolling
 

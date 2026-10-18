@@ -14,11 +14,7 @@ export const MAX_WIDTH_PCT = 100; // full width
 export const GRID_COLUMNS = 10; // columns in a full-width feature row (10% each)
 export const TILE_DEFAULT_PCT = 50; // entity-tile default width when unset
 
-export const DIAL_MAX_PX = 320; // wide-layout dial cap (matches .dial fallback max-width)
-/** Dial box ÷ card border-box width, from Google Home's 83.3%-of-screen ring. */
-export const STACKED_DIAL_SCALE = 1.0266;
-/** Dial box cap for wide-but-stacked cards. */
-export const STACKED_DIAL_MAX_PX = 440;
+export const DIAL_MAX_PX = 320; // dial never grows past this (matches .dial max-width)
 export const DIAL_MIN_PX = 240; // dial needs at least this much room to sit beside features
 export const WIDE_MIN_PX = 560; // card must be at least this wide to go side-by-side
 

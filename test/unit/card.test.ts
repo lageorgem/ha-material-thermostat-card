@@ -157,7 +157,6 @@ describe('material-thermostat-card', () => {
         expect(cardStyle.getPropertyValue('--mt-label-weight').trim()).to.equal(rounded ? '400' : '');
         const dialEl = dial(el);
         dialEl.style.width = '320px';
-        dialEl.style.setProperty('--mt-dial-size', '320px');
         await dialEl.updateComplete;
         const centre = getComputedStyle(dialEl.shadowRoot.querySelector('.value-text'));
         expect(centre.fontWeight).to.equal(rounded ? '450' : '400');
@@ -215,7 +214,7 @@ describe('material-thermostat-card', () => {
         await el.updateComplete;
         expect(dial(el).dialStyle).to.equal(dial_style);
         const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
-        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-12px' : '-22px'); // 332px border-box → 341px dial
+        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-11px' : '-20px');
       });
     }
   });
@@ -632,53 +631,6 @@ describe('material-thermostat-card', () => {
 
     // --- stacked vs wide decision (px-based rule) ----------------------------
 
-    for (const dial_style of ['halo', 'minimal', 'google'] as const) {
-      it(`centres the oversized ${dial_style} dial and clips only invisible horizontal overflow`, async () => {
-        const el = track(await mount(baseConfig({ dial_style })));
-        el.style.width = '396px';
-        // HA supplies a block ha-card host; the unit fixture has no HA element definition.
-        el.shadowRoot!.querySelector<HTMLElement>('ha-card')!.style.display = 'block';
-        await nextFrame();
-        await setWidth(el, 364);
-        await dial(el).updateComplete;
-        const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
-        const box = dial(el).shadowRoot!.querySelector('.dial')!.getBoundingClientRect();
-        const bounds = wrap.getBoundingClientRect();
-        expect(box.width).to.be.closeTo(407, 1);
-        expect(box.height).to.be.closeTo(box.width, 0.1);
-        expect(bounds.width).to.be.closeTo(396, 1);
-        expect(bounds.left - box.left).to.be.closeTo(box.right - bounds.right, 1);
-        expect(bounds.left - box.left).to.be.greaterThan(0);
-        expect(getComputedStyle(wrap).overflowX).to.equal('clip');
-        expect(getComputedStyle(wrap).overflowY).to.equal('visible');
-        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-14px' : '-26px');
-        const glow = dial(el).shadowRoot!.querySelector('.glow')!.getBoundingClientRect();
-        expect(glow.width).to.be.closeTo(300 / 320 * box.width, 0.1);
-        expect(glow.width).to.be.at.most(396);
-        expect(glow.left).to.be.at.least(bounds.left);
-        expect(glow.right).to.be.at.most(bounds.right);
-      });
-    }
-
-    it('caps a 600px full-width-feature stacked dial at 440px and resets sizing in wide mode', async () => {
-      const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
-      el.style.width = '600px';
-      el.shadowRoot!.querySelector<HTMLElement>('ha-card')!.style.display = 'block';
-      await nextFrame();
-      await setWidth(el, 568);
-      await dial(el).updateComplete;
-      const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
-      expect(wrap.style.getPropertyValue('--mt-dial-size')).to.equal('440px');
-      expect(dial(el).shadowRoot!.querySelector('.dial')!.getBoundingClientRect().width).to.equal(440);
-      el.setConfig(baseConfig({ features: [{ type: 'climate-hvac-modes', width: 50 }] }));
-      await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.body.wide')).to.not.equal(null);
-      expect(wrap.style.getPropertyValue('--mt-dial-size')).to.equal('');
-      expect(getComputedStyle(wrap).overflowX).to.equal('visible');
-      expect(getComputedStyle(wrap).marginInlineStart).to.equal('0px');
-      expect(dial(el).shadowRoot!.querySelector('.dial')!.getBoundingClientRect().width).to.be.at.most(320);
-    });
-
     it('all-100% features on a wide card → stacked (features need full width)', async () => {
       // A selector defaults to 100% → maxPct === 100 → never wide.
       const el = track(await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] })));
@@ -772,10 +724,10 @@ describe('material-thermostat-card', () => {
 
     it('_layout (stacked): crops 6.5% of the dial height below the +/- controls', async () => {
       const el = track(await mount(baseConfig()));
-      await setWidth(el, 300); // 332px border-box → 341px dial
+      await setWidth(el, 300); // below DIAL_MAX_PX(320), so dialPx === 300
       const layout = (el as any)._layout();
       expect(layout.wide).to.equal(false);
-      expect(layout.dialStyle.marginBottom).to.equal('-22px'); // -Math.round(0.065 * 341)
+      expect(layout.dialStyle.marginBottom).to.equal('-20px'); // -Math.round(0.065 * 300)
     });
 
     it('_layout (wide): gridCols === maxPct/10 with the expected flex styles', async () => {

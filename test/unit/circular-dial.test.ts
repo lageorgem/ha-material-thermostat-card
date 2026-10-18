@@ -93,29 +93,6 @@ function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void 
 }
 
 describe('mt-circular-dial', () => {
-  it('centres an explicit oversized dial and scales ring hit-testing with its SVG', async () => {
-    const el = await mount();
-    el.parentElement!.style.width = '385px';
-    el.style.setProperty('--mt-dial-size', '406px');
-    const { svg, cx, cy, scale, rect } = svgGeometry(el);
-    const host = el.getBoundingClientRect();
-    expect(rect.width).to.equal(406);
-    expect(host.left - rect.left).to.be.closeTo(rect.right - host.right, 1);
-    expect((el as any)._isRingHit(cx, cy - RADIUS * scale)).to.equal(true);
-    expect((el as any)._isRingHit(cx, cy)).to.equal(false);
-    stubCapture(svg);
-    const changed = captureEvents('value-changed');
-    svg.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy - RADIUS * scale, pointerId: 1, pointerType: 'mouse' }));
-    svg.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy - RADIUS * scale, pointerId: 1, pointerType: 'mouse' }));
-    changed.stop();
-    expect(changed.events.length).to.equal(1);
-    expect(changed.events[0].detail.value).to.equal(21);
-    el.style.removeProperty('--mt-dial-size');
-    expect(svgGeometry(el).rect.width).to.equal(320);
-    el.parentElement!.style.width = '240px';
-    expect(svgGeometry(el).rect.width).to.equal(240);
-  });
-
   describe('dial styles and centre typography', () => {
     it('defaults to halo', async () => {
       const el = await mount();
