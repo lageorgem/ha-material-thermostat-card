@@ -259,7 +259,7 @@ they are distinct from `.dial.idle` and hide the single value segment.
 `modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
 
-Single centre numbers (excluding `.center.tight`) use `clamp(23px, 20.75cqi, 66.4px)`,
+Single centre numbers (excluding `.center.tight`) use `clamp(23px, 21.2cqi, 67.84px)`,
 independent of HA's display-large token. All dial text inherits `font-family`.
 The rounded card supplies `--mt-centre-weight:450`,
 `--mt-centre-axes:"ROND" 100, "opsz" 14`, and `--mt-label-weight:400`.
@@ -276,7 +276,7 @@ Here 1u = 1cqi (3.2px at a 320px dial).
 
 | Element | Rounded implementation | Measured target |
 | --- | --- | --- |
-| Single centre “15” | 20.75cqi, capped at 66.4px; weight 450; opsz 14 | Digit height 49.3u; stems ~7.0u; fitted proportions within ±3.5% |
+| Single centre “15” | 21.2cqi, capped at 67.84px; weight 450; opsz 14 | Digit height 49.9u; stems ~7.0u; live HA render within ±3% of Google on height, widths, gap and stroke thickness |
 | Ring “22” | 4.77cqi (15.264px at 320px); weight 400; automatic opsz | ~4% smaller and ~15% lighter than previous 4.95cqi / 500 |
 | Ring superscript | 0.56em; top 0.085em of the superscript itself | Sup/digit ink-height ratio 0.562; aligned ink tops |
 | Theme mode | Centre weight 400, axes normal; ring weight 500 | Previous theme weights preserved |

@@ -1539,7 +1539,7 @@ export class MtCircularDial extends LitElement {
         color: var(--mt-on-surface-variant);
       }
       .dial:not(.dual) .center:not(.tight) .temp:not(.dual) .value-text {
-        font-size: clamp(23px, 20.75cqi, 66.4px);
+        font-size: clamp(23px, 21.2cqi, 67.84px);
       }
       .dial:not(.dual) .temp .unit {
         display: none;

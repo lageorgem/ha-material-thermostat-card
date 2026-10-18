@@ -440,7 +440,7 @@ describe('mt-circular-dial', () => {
       const el = await mount();
       el.style.setProperty('--md-sys-typescale-display-large-size', '57px');
       const style = getComputedStyle(el.shadowRoot!.querySelector('.value-text')!);
-      expect(parseFloat(style.fontSize)).to.be.closeTo(66.4, 0.001);
+      expect(parseFloat(style.fontSize)).to.be.closeTo(67.84, 0.001);
       expect(style.fontWeight).to.equal('400');
       expect(style.fontVariationSettings).to.equal('normal');
     });

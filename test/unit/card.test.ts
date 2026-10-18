@@ -167,7 +167,7 @@ describe('material-thermostat-card', () => {
         } else {
           expect(centre.fontVariationSettings).to.equal('normal');
         }
-        expect(parseFloat(centre.fontSize)).to.be.closeTo(66.4, 0.1);
+        expect(parseFloat(centre.fontSize)).to.be.closeTo(67.84, 0.1);
         const label = dialEl.shadowRoot.querySelector('.o-label .num');
         const numberStyle = getComputedStyle(label);
         expect(numberStyle.fontWeight).to.equal(rounded ? '400' : '500');
