@@ -33,10 +33,11 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
 
 - `_dotOrbit(angle, cls)` — a `.orbit` div (inset:0, transform-origin 50% 50%)
   `rotate(angle)`, with a child dot pinned on the ring centerline
-  (`top: 9.375%` = (160−130)/320).
+  (`top: 9.375%` = (160−130)/320 at rest, `10.625%` = (160−126)/320
+  while dragging). Invisible `.handle` targets follow the same centerline.
 - `_labelOrbit(angle, content)` — same, but the label counter-rotates
   (`rotate(-angle)`) to stay upright; `top: 18.75%` at rest (radius 100), moving
-  inward to `top: 20%` while dragging (radius 96, clear of the band's inner edge at 120).
+  inward to `top: 20%` while dragging (radius 96, clear of the band's inner edge at 117).
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
@@ -70,6 +71,12 @@ with different large-arc flags makes the arc balloon/bend; avoid it entirely):
 (so it animates on turn-on/off + during the wipe) from `min(frac(value),
 frac(current))` to `max(...)`. It keeps the same geometry when activity changes;
 its stroke is `modeTint` (also exposed as `--mode-tint`).
+For single heat/cool, `_singleSegVisible` hides the path with **opacity 0** when
+`_demandSensible` is false: heat current ≥ setpoint, cool current ≤ setpoint, or
+missing current. Reported activity does not override this visibility rule.
+The node and its correct dash geometry stay in place, so visibility fades rather
+than replaying the turn-on slide. Out-of-range/missing current and off mode still
+hide the segment as before; auto/dry/fan_only and dual behavior are unchanged.
 
 **Active-only lighting is single-setpoint ONLY.** The card passes raw
 `hvac_action` as `.hvacAction`; `_singleActive` is false for uncolored modes,
@@ -79,7 +86,8 @@ cool needs current > setpoint, heat needs current < setpoint; other colored mode
 are true when current is present. Active → full mode color. Inactive colored mode
 → `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
 neutralizing halo, ring and big number; `.dial.idle` dims the halo to opacity 0.5.
-The segment and mode icon retain a muted mode tint:
+The mode icon and any visible segment retain a muted mode tint (a sensible demand
+with reported `'idle'`/`'off'` still shows the band):
 `--mode-tint = color-mix(in srgb, <mode color> 50%, var(--mt-on-surface-variant))`.
 Dual (heat_cool) does NOT use this single-mode activity rule (see below).
 
@@ -160,12 +168,19 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 - **Tap-to-set**: touch ring taps commit via `_commitTap` if movement stays within
   `TAP_SLOP_PX` (10px); mouse/pen use the short-drag path. Emits `value-changed`.
 - **Dragging visuals**: `_dragging` adds `.dial.dragging` in single and dual mode.
-  `.ring`, `.value` and `.wipe-value` thicken from stroke-width 10 to 20 (viewBox
-  units, approximately 0.15 × radius). `.o-dot.setpoint` becomes a
+  `.ring`, `.value` and `.wipe-value` grow **inward only** from 10 to 18 viewBox
+  units (10% thinner than the old 20-unit drag band). The outer edge stays at
+  radius 135: drag centerline = 135 − 18/2 = 126, inner edge = 117.
+  CSS `transform:scale(126/130)` with pre-scale `stroke-width:18.571`
+  (= 18 / scale, rounded to 3 decimals) implements this without changing `d`.
+  Base paths set `transform-box:view-box; transform-origin:160px 160px`;
+  `.hit` and `.glow` are not scaled. `pathLength=1000` keeps dash geometry stable.
+  `.o-dot.setpoint` becomes a
   radial pill (`width:clamp(3px, 1.6cqi, 5px)`); `.o-dot.current` a thinner pill
   (`width:clamp(2px, 0.9cqi, 3px)`). Both are `height:6.25cqi` (20/320, exactly
-  the band thickness), `border-radius:999px`.
-  `.o-label` moves inward as above. Stroke width, marker width/height/radius and
+  20 units long, overhanging the 18-unit band by ~1 unit on each side),
+  `border-radius:999px`. Markers and handles move to `top:10.625%` (radius 126).
+  `.o-label` moves inward as above. Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:
   `top:88%`, a centered 36%-wide two-column grid puts their centers at 41%/59%
@@ -191,7 +206,12 @@ they are distinct from `.dial.idle` and hide the single value segment.
 
 Activity-only changes cross-fade without a wipe or off/on segment slide.
 `updated()` gates `_runWipe()` on a `mode` change between colored modes with a
-changed color; `hvacAction`/temperature changes alone do not trigger it.
+changed color **and both previous/new single segments visible**;
+`hvacAction`/temperature changes alone do not trigger it. `_prevSegVisible` is
+updated alongside `_prevSegColor` every `updated()`, including activity-only and
+temperature-only changes. Hidden→visible does not paint an old overlay;
+visible→hidden does not run a new-band slide. These use CSS opacity/stroke
+transitions instead.
 
 The halo (`#mt-glow` radialGradient) is a **6-stop falloff from 0.38 at center to
 opacity 0 at the perimeter** — ending at 0 (not 0.02) avoids a faint hard-edged
@@ -218,7 +238,8 @@ The reverse: the band **slides back out to the left** and fades.
 
 ### 3. Mode change (colored → colored) — Web Animations API, `_runWipe()`
 Triggered from `updated()` when `mode` changes between two colored modes (guarded
-by `_prevColor`/`_prevOff` so off↔on keeps animations 1/2). It paints the **new**
+by `_prevSegColor`/`_prevOff` so off↔on keeps animations 1/2, and by
+`_prevSegVisible`/`_singleSegVisible` so both segments must be visible). It paints the **new**
 color on the base `.value` path and overlays an **old-color** copy
 (`.wipe-value`), then animates both:
 

@@ -78,7 +78,15 @@ describe('mt-circular-dial', () => {
         const sr = el.shadowRoot!;
         const dial = sr.querySelector('.dial')!;
         expect(dial.classList.contains('dragging')).to.be.false;
-        expect(getComputedStyle(sr.querySelector('.ring')!).strokeWidth).to.equal('10px');
+        for (const band of sr.querySelectorAll('.ring, .value')) {
+          const style = getComputedStyle(band);
+          expect(style.strokeWidth).to.equal('10px');
+          expect(style.transform).to.equal('none');
+          expect(style.transformOrigin).to.equal('160px 160px');
+        }
+        for (const marker of sr.querySelectorAll('.o-dot, .handle')) {
+          expect(getComputedStyle(marker).top).to.equal('30px');
+        }
 
         (el as any)._dragValue = 20;
         (el as any)._dragLow = 18;
@@ -88,8 +96,25 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         expect(dial.classList.contains('dragging')).to.be.true;
         for (const band of sr.querySelectorAll('.ring, .value')) {
-          expect(getComputedStyle(band).strokeWidth).to.equal('20px');
+          const style = getComputedStyle(band);
+          const matrix = new DOMMatrixReadOnly(style.transform);
+          expect(matrix.a).to.be.closeTo(126 / 130, 0.000001);
+          expect(matrix.d).to.be.closeTo(126 / 130, 0.000001);
+          expect(matrix.b).to.equal(0);
+          expect(matrix.c).to.equal(0);
+          expect(matrix.e).to.equal(0);
+          expect(matrix.f).to.equal(0);
+          expect(style.transformOrigin).to.equal('160px 160px');
+          expect(parseFloat(style.strokeWidth)).to.be.closeTo(18 / (126 / 130), 0.001);
+          expect(style.transitionProperty).to.contain('transform');
           expect(getComputedStyle(band).transitionProperty).to.contain('stroke-width');
+        }
+        for (const unchanged of sr.querySelectorAll('.hit, .glow')) {
+          expect(getComputedStyle(unchanged).transform).to.equal('none');
+        }
+        for (const marker of sr.querySelectorAll('.o-dot, .handle')) {
+          expect(getComputedStyle(marker).top).to.equal('34px');
+          expect(getComputedStyle(marker).transitionProperty).to.contain('top');
         }
         for (const dot of sr.querySelectorAll('.o-dot')) {
           const style = getComputedStyle(dot);
@@ -117,6 +142,13 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         expect(dial.classList.contains('dragging')).to.be.false;
         expect(getComputedStyle(sr.querySelector('.ring')!).strokeWidth).to.equal('10px');
+        for (const band of sr.querySelectorAll('.ring, .value')) {
+          expect(getComputedStyle(band).transform).to.equal('none');
+          expect(getComputedStyle(band).strokeWidth).to.equal('10px');
+        }
+        for (const marker of sr.querySelectorAll('.o-dot, .handle')) {
+          expect(getComputedStyle(marker).top).to.equal('30px');
+        }
         expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
         expect(getComputedStyle(sr.querySelector('.o-label')!).top).to.equal('60px');
       });
@@ -1777,6 +1809,7 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain(mutedHeat);
 
       el.mode = 'cool';
+      el.value = 17;
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(mutedHeat);
       await el.updateComplete;
@@ -1787,9 +1820,11 @@ describe('mt-circular-dial', () => {
       const el = await mount();
       el.mode = 'heat';
       el.hvacAction = 'heating';
-      el.current = 18;
+      el.value = 23;
+      el.current = 20.6;
       await el.updateComplete;
       el.mode = 'cool';
+      el.value = 18;
       el.hvacAction = 'cooling';
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(climateModeColor('heat'));
@@ -1803,6 +1838,7 @@ describe('mt-circular-dial', () => {
       el.current = 18;
       await el.updateComplete;
       el.mode = 'cool';
+      el.value = 17;
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(null);
     });
@@ -1819,6 +1855,7 @@ describe('mt-circular-dial', () => {
       expect((el as any)._prevSegColor).to.equal(climateModeColor('cool'));
 
       el.mode = 'heat';
+      el.value = 26;
       await el.updateComplete;
       // _wipeFrom set to the previous (cool) color
       expect((el as any)._wipeFrom).to.equal(climateModeColor('cool'));
@@ -1893,7 +1930,7 @@ describe('mt-circular-dial', () => {
     it('_runWipe early-returns when segment length is zero', async () => {
       const el = await mount();
       // colored mode but value === current so the segment has zero length.
-      el.mode = 'cool';
+      el.mode = 'auto';
       el.min = 10;
       el.max = 30;
       el.value = 20;
@@ -2200,7 +2237,83 @@ describe('mt-circular-dial', () => {
     });
   });
 
-  describe('single-mode muted demand (direction makes no sense)', () => {
+  describe('single-mode demand visibility', () => {
+    for (const [mode, value, current, hvacAction, visible] of [
+      ['heat', 15, 20.6, 'heating', false],
+      ['cool', 25, 20, 'cooling', false],
+      ['heat', 20, 20, 'heating', false],
+      ['cool', 20, 20, 'cooling', false],
+      ['heat', 23, undefined, 'heating', false],
+      ['cool', 23, undefined, 'cooling', false],
+      ['heat', 23, 0, 'heating', false],
+      ['cool', 23, 40, 'cooling', false],
+      ['heat', 23, 20.6, 'idle', true],
+      ['heat', 23, 20.6, 'heating', true],
+      ['auto', 25, 20, 'idle', true],
+      ['dry', 25, 20, 'idle', true],
+      ['fan_only', 25, 20, 'idle', true],
+    ] as const) {
+      it(`${mode}, target=${value}, current=${String(current)}, action=${hvacAction}: visible=${visible}`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.mode = mode;
+        el.value = value;
+        el.current = current;
+        el.hvacAction = hvacAction;
+        await el.updateComplete;
+        const segment = el.shadowRoot!.querySelector('.value')!;
+        expect(getComputedStyle(segment).opacity).to.equal(visible ? '1' : '0');
+        const color = hvacAction === 'idle'
+          ? `color-mix(in srgb, ${climateModeColor(mode)} 50%, ${IDLE_COLOR})`
+          : climateModeColor(mode);
+        expect(segment.getAttribute('style')).to.contain(`stroke:${color}`);
+      });
+    }
+
+    it('fades the persistent segment in place as demand becomes sensible', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.value = 15;
+      el.current = 20.6;
+      await el.updateComplete;
+      const segment = el.shadowRoot!.querySelector('.value')!;
+      const dash = segment.getAttribute('stroke-dasharray');
+      const offset = segment.getAttribute('stroke-dashoffset');
+      const wipe = sinon.spy(el as any, '_runWipe');
+      expect(segment.getAttribute('style')).to.contain('opacity:0;');
+      el.mode = 'cool';
+      await el.updateComplete;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value')).to.equal(segment);
+      expect(segment.getAttribute('stroke-dasharray')).to.equal(dash);
+      expect(segment.getAttribute('stroke-dashoffset')).to.equal(offset);
+      expect(segment.getAttribute('style')).to.contain('opacity:1;');
+      expect((el as any)._wipeFrom).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.wipe-value')).to.equal(null);
+      expect(segment.getAnimations()).to.have.length(0);
+      el.mode = 'heat';
+      await el.updateComplete;
+      expect((el as any)._wipeFrom).to.equal(null);
+      expect(segment.getAttribute('style')).to.contain('opacity:0;');
+      expect(wipe.called).to.be.false;
+      wipe.restore();
+    });
+
+    it('tracks visibility after a temperature-only update before a mode change', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      el.value = 23;
+      el.current = 20.6;
+      await el.updateComplete;
+      expect((el as any)._prevSegVisible).to.be.true;
+      el.value = 15;
+      await el.updateComplete;
+      expect((el as any)._prevSegVisible).to.be.false;
+      el.mode = 'cool';
+      await el.updateComplete;
+      expect((el as any)._prevSegVisible).to.be.true;
+      expect((el as any)._wipeFrom).to.equal(null);
+    });
     it('cool: not cooling uses a muted mode stroke', async () => {
       const el = await mount();
       el.mode = 'cool';
@@ -2212,6 +2325,7 @@ describe('mt-circular-dial', () => {
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
       expect(style).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('cool')} 50%, ${IDLE_COLOR})`);
+      expect(style).to.contain('opacity:0;');
     });
 
     it('cool: cooling (current above setpoint) -> the .value stroke is the cool color', async () => {
@@ -2237,6 +2351,7 @@ describe('mt-circular-dial', () => {
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
       expect(style).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`);
+      expect(style).to.contain('opacity:0;');
     });
 
     it('heat: heating (current below setpoint) -> the .value stroke is the heat color', async () => {
@@ -2262,6 +2377,7 @@ describe('mt-circular-dial', () => {
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
       expect(seg.getAttribute('style')).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`);
+      expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
     });
@@ -2277,6 +2393,7 @@ describe('mt-circular-dial', () => {
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
       expect(seg.getAttribute('style')).to.contain(`stroke:color-mix(in srgb, ${climateModeColor('cool')} 50%, ${IDLE_COLOR})`);
+      expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
     });
@@ -2374,7 +2491,7 @@ describe('mt-circular-dial', () => {
     it('cross-fades activity changes without a wipe, off state, or segment slide', async () => {
       const el = await mount();
       el.mode = 'heat';
-      el.value = 15;
+      el.value = 23;
       el.current = 20.6;
       el.hvacAction = 'heating';
       await el.updateComplete;

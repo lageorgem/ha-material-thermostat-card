@@ -116,6 +116,8 @@ export class MtCircularDial extends LitElement {
   @state() private _wipeFrom: string | null = null;
   /** Tracks the segment color from every render, including activity-only changes. */
   private _prevSegColor?: string;
+  /** Tracks whether the previous single segment could paint a mode-change wipe. */
+  private _prevSegVisible = false;
   /** Whether the previous mode was an off/uncolored mode. */
   private _prevOff = false;
   /** Dual mode: show the "Heat/Cool" range (just after a setpoint change). */
@@ -208,6 +210,18 @@ export class MtCircularDial extends LitElement {
     return !this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive
       ? `color-mix(in srgb, ${this._modeColor(this.mode)} 50%, ${MtCircularDial.IDLE_COLOR})`
       : this._dialColor;
+  }
+
+  /** Single heat/cool bands only paint when their demand direction makes sense. */
+  private get _singleSegVisible(): boolean {
+    return (
+      !this.dual &&
+      this.current != null &&
+      this.current >= this.min &&
+      this.current <= this.max &&
+      COLORED_MODES.includes(this.mode) &&
+      (!(this.mode === 'heat' || this.mode === 'cool') || this._demandSensible)
+    );
   }
 
   /** Show the "Heat/Cool" range readout (vs. the collapsed active-mode readout). */
@@ -660,7 +674,9 @@ export class MtCircularDial extends LitElement {
       this._prevSegColor !== undefined &&
       this._prevSegColor !== color &&
       !off &&
-      !this._prevOff
+      !this._prevOff &&
+      this._prevSegVisible &&
+      this._singleSegVisible
     ) {
       // Render the old-color overlay (sets _wipeFrom), then animate it once the
       // overlay is in the DOM. _runWipe clears _wipeFrom when the wipe finishes.
@@ -668,6 +684,7 @@ export class MtCircularDial extends LitElement {
       void this.updateComplete.then(() => this._runWipe());
     }
     this._prevSegColor = color;
+    this._prevSegVisible = this._singleSegVisible;
     this._prevOff = off;
   }
 
@@ -736,7 +753,8 @@ export class MtCircularDial extends LitElement {
 
     // Single-mode demand segment: between the setpoint and the current temp. It's
     // a persistent path (so it animates on turn on/off and during the mode wipe);
-    // muted when inactive, without changing geometry or off-mode semantics.
+    // muted when inactive and hidden for nonsensical heat/cool demand, without
+    // changing geometry or off-mode semantics.
     let segS = 0;
     let segE = 0;
     let showSeg = false;
@@ -744,7 +762,7 @@ export class MtCircularDial extends LitElement {
     if (!this.dual && showCurrent && !isOff) {
       segS = Math.min(this._fracOf(this._displayValue), this._fracOf(this.current!));
       segE = Math.max(this._fracOf(this._displayValue), this._fracOf(this.current!));
-      showSeg = true;
+      showSeg = this._singleSegVisible;
       segColor = modeTint;
     }
     const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
@@ -1119,6 +1137,7 @@ export class MtCircularDial extends LitElement {
         pointer-events: auto;
         touch-action: none;
         cursor: grab;
+        transition: top var(--mt-motion-dur) var(--mt-motion-ease);
         -webkit-tap-highlight-color: transparent;
       }
       .handle:active {
@@ -1128,13 +1147,20 @@ export class MtCircularDial extends LitElement {
         pointer-events: none;
         cursor: default;
       }
+      .ring,
+      .value {
+        transform-box: view-box;
+        transform-origin: 160px 160px;
+      }
       .ring {
         fill: none;
         stroke: var(--dial-color);
         stroke-width: 10;
         stroke-linecap: round;
         opacity: 0.18;
-        transition: stroke-width var(--mt-motion-dur) var(--mt-motion-ease);
+        transition:
+          stroke-width var(--mt-motion-dur) var(--mt-motion-ease),
+          transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .value {
         fill: none;
@@ -1143,6 +1169,7 @@ export class MtCircularDial extends LitElement {
         stroke-linecap: round;
         transition:
           stroke-width var(--mt-motion-dur) var(--mt-motion-ease),
+          transform var(--mt-motion-dur) var(--mt-motion-ease),
           stroke-dasharray var(--mt-motion-dur) var(--mt-motion-ease),
           stroke-dashoffset var(--mt-motion-dur) var(--mt-motion-ease),
           stroke var(--mt-motion-dur) var(--mt-motion-ease),
@@ -1161,12 +1188,19 @@ export class MtCircularDial extends LitElement {
          while the new color slides in from the left behind it. */
       .wipe-value {
         pointer-events: none;
-        transition: stroke-width var(--mt-motion-dur) var(--mt-motion-ease);
+        transition:
+          stroke-width var(--mt-motion-dur) var(--mt-motion-ease),
+          transform var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .dial.dragging .ring,
       .dial.dragging .value,
       .dial.dragging .wipe-value {
-        stroke-width: 20;
+        /* REST_OUTER = RADIUS + 10/2 = 135; DRAG_WIDTH = 18;
+           DRAG_CENTER = REST_OUTER - DRAG_WIDTH/2 = 126;
+           DRAG_SCALE = DRAG_CENTER/RADIUS = 126/130. Scale the stroke too,
+           keeping the outer edge fixed without ever changing the path's d. */
+        transform: scale(calc(126 / 130));
+        stroke-width: 18.571;
       }
 
       /* Markers orbit the center so they ride the arc and stay on the ring. */
@@ -1193,6 +1227,7 @@ export class MtCircularDial extends LitElement {
         width: clamp(9px, 4.4cqi, 14px);
         height: clamp(9px, 4.4cqi, 14px);
         transition:
+          top var(--mt-motion-dur) var(--mt-motion-ease),
           width var(--mt-motion-dur) var(--mt-motion-ease),
           height var(--mt-motion-dur) var(--mt-motion-ease),
           border-radius var(--mt-motion-dur) var(--mt-motion-ease),
@@ -1209,9 +1244,14 @@ export class MtCircularDial extends LitElement {
         height: clamp(7px, 3.1cqi, 10px);
         opacity: 0.55;
         transition:
+          top var(--mt-motion-dur) var(--mt-motion-ease),
           width var(--mt-motion-dur) var(--mt-motion-ease),
           height var(--mt-motion-dur) var(--mt-motion-ease),
           border-radius var(--mt-motion-dur) var(--mt-motion-ease);
+      }
+      .dial.dragging .o-dot,
+      .dial.dragging .handle {
+        top: 10.625%; /* (160-126)/320 — follow the drag band centerline */
       }
       .dial.dragging .o-dot.setpoint {
         width: clamp(3px, 1.6cqi, 5px);
