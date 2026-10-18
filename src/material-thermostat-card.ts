@@ -14,7 +14,8 @@ import {
   MIN_WIDTH_PCT,
   MAX_WIDTH_PCT,
   TILE_DEFAULT_PCT,
-  DIAL_MAX_PX,
+  STACKED_DIAL_SCALE,
+  STACKED_DIAL_MAX_PX,
   DIAL_MIN_PX,
   WIDE_MIN_PX,
   CARD_PADDING_X,
@@ -258,12 +259,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
 
     if (!wide) {
       // Crop only the empty bottom band, preserving the google style's disc.
-      const dialPx = Math.min(cardPx, DIAL_MAX_PX);
+      const borderPx = cardPx + CARD_PADDING_X;
+      const dialPx = Math.round(Math.min(borderPx * STACKED_DIAL_SCALE, STACKED_DIAL_MAX_PX));
       const gap = this._config.dial_style === 'google' ? DIAL_BOTTOM_GAP_DISC : DIAL_BOTTOM_GAP;
       const crop = Math.round(gap * dialPx);
       return {
         wide: false,
-        dialStyle: { marginBottom: `-${crop}px` },
+        dialStyle: { marginBottom: `-${crop}px`, '--mt-dial-size': `${dialPx}px` },
         featureStyle: {},
         gridCols: GRID_COLUMNS,
       };
@@ -581,6 +583,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       .body.stacked {
         flex-direction: column;
         gap: 12px;
+      }
+      .body.stacked .dial-wrap {
+        margin-inline: -${CARD_PADDING_X / 2}px;
+        /* Only the dial's empty square corners overflow. Feature dropdowns are siblings. */
+        overflow-x: clip;
+        overflow-y: visible;
       }
       /* Side-by-side (wide): the feature area takes the widest feature's % on the
          right; the dial-wrap fills the rest and centers the fixed-size dial. */

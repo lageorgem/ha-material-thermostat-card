@@ -1164,7 +1164,8 @@ export class MtCircularDial extends LitElement {
     tokens,
     css`
       :host {
-        display: block;
+        display: flex;
+        justify-content: center;
         /* Fill the wrapper so the dial has a DEFINITE width. A container
            (container-type below) reports zero intrinsic width, so without this
            the shrink-to-fit host would collapse to ~0 and the dial vanishes. */
@@ -1184,8 +1185,9 @@ export class MtCircularDial extends LitElement {
       .dial {
         --edge: 125;
         position: relative;
-        width: 100%;
-        max-width: 320px;
+        width: var(--mt-dial-size, 100%);
+        max-width: var(--mt-dial-size, 320px);
+        flex-shrink: 0;
         margin: 0 auto;
         aspect-ratio: 1 / 1;
         transition:
