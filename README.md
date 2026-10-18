@@ -116,14 +116,24 @@ visually, or write the YAML directly.
 | `entity` | string | — | A `climate.*` entity **(required)** |
 | `name` | string | entity name | Card title |
 | `theme` | string | — | A Home Assistant theme to apply to this card |
+| `dial_style` | `halo` \| `minimal` \| `google` | `halo` | `halo`: mode‑coloured glow, dimmed when idle/off; `minimal`: no glow; `google`: flat Google Home look with a background disc and no glow |
+| `font` | `rounded` \| `theme` | `rounded` | `rounded`: Google Sans Flex with its rounded axis; `theme`: use the Home Assistant theme's font without requesting a font from Google |
 | `show_current_as_primary` | boolean | `false` | Show the **current** temperature as the large centre number. The target then labels the setpoint marker on the ring and the current dot is left unlabelled (no duplicate reading) |
 | `feels_like` | object | — | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature) |
 | `features` | list | `[]` | Controls rendered below / beside the dial — see [Features](#features) |
 
+> **Font privacy & offline use.** With `font: rounded`, each browser fetches Google Sans Flex from
+> Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). If Google Fonts is unreachable, the
+> theme font is used. Choose `font: theme` to avoid this external request.
+
 ## The dial
 
-The dial mirrors the stock thermostat card's controls with a Nest‑style 300° arc (the gap sits at
-the bottom, where the `+/−` live).
+The dial mirrors the stock thermostat card's controls with a Google‑Home‑matched 306° arc (the gap
+sits at the bottom, where the `+/−` live). While dragging, the band thickens **inward**, keeping its
+outer edge fixed, and the dots become line markers. Ring labels show decimals as a small
+superscript (**21⁵** for 21.5); the large centre number does the same in single‑setpoint modes,
+without a degree sign or unit. Per‑mode **icon overrides** from the `climate-hvac-modes` feature
+also appear on the dial.
 
 <p align="center">
   <picture>
@@ -145,16 +155,21 @@ the bottom, where the `+/−` live).
 | **`heat_cool`** | Two draggable handles for the low/high setpoints |
 | **⋮** (top‑right) | Open the entity's more‑info dialog |
 
-The dial, halo, and big number are **colored by the active HVAC action** (falling back to the mode),
-and the colored segment between the **current** temperature and the **target** visualizes the gap.
-The fill only takes the mode color when it's actually doing something — e.g. in **cool** mode it's
-gray (not blue) when the room is already below the setpoint.
+In **heat/cool** modes, the dial and big number only light up in the mode colour while actively
+heating/cooling: the card uses `hvac_action` when available, otherwise infers activity from the
+setpoint versus the current temperature. The **halo** style adds a glow, dimmed when idle/off;
+**minimal** removes it, and **google** adds a flat background disc without a glow.
+The band between the **current** temperature and the **target** visualizes the gap, muted when idle.
+It is hidden when heating with the setpoint below room temperature, or cooling with the setpoint
+above room temperature.
 
-For **`heat_cool`**, the active sub‑mode is derived from the current temperature: it fills **blue**
+For **`heat_cool`**, the active sub‑mode uses the reported heating/cooling action, falling back to
+the current temperature versus the range: it fills **blue**
 from the high setpoint up to the current temp when **cooling** (current above the range), **orange**
-from the low setpoint down when **heating**, and shows a gray band between the two setpoints. The
-center shows the **Heat/Cool range** for 5 seconds after a setpoint change, then collapses to the
-active mode (e.g. "Cooling") and the single setpoint it's targeting.
+from the low setpoint down when **heating**. The band between the two setpoints uses the heat/cool
+colour while idle and muted gray while active. The centre shows the **Heat/Cool range** while
+dragging, for 5 seconds after a setpoint change, and while idle within the range; otherwise it
+collapses to the single setpoint it's targeting, with the active mode icon on the ring.
 
 Changes are **optimistic** (the UI updates immediately) and the `climate.set_temperature` call is
 debounced so dragging doesn't spam the backend. Color changes **cross‑fade**, and the temperature
@@ -281,7 +296,7 @@ features:
 
 > **Tile display.** `display: tile` renders the selector as a Google‑Home‑style card — an icon, the
 > `label` as a title, and the current value below it — that opens the option menu when tapped. A tile
-> shows an **"on" treatment** (a soft accent tint + extra‑rounded corners) whenever the current value
+> shows an **"on" treatment** (a soft accent tint + full pill shape) whenever the current value
 > isn't a turned‑off state (`off`, `none`, empty, `false`, `null`, `0`, `unavailable`, `unknown`,
 > case-insensitive and trimmed); otherwise it stays a neutral, less‑rounded
 > rectangle. **HVAC tiles tint with the active mode's color** (heat→orange, cool→blue…); other
@@ -755,9 +770,14 @@ so it looks native under `material-you-theme` and remains usable under any theme
 
 ## Visual editor
 
-Most options above are editable from the card's **visual editor** (`tap_action` is YAML-only): a base form (entity, name, theme,
-"show current as primary", plus the [feels‑like](#feels-like-temperature) sensors) and a **drag‑sortable list of
-features**. Each feature row expands to its own editor — per‑option **label / icon / color / hide** for selectors,
+Most options above are editable from the card's **visual editor** (`tap_action` is YAML-only): a base
+form (entity, name, theme), two collapsible sections, and a **drag‑sortable list of features**:
+
+- **Style** — dial style, "show current temperature as primary", and font.
+- **Feels-like temperature** — labelled, clearable temperature and humidity sensor pickers, plus
+  the option to show the computed [feels‑like](#feels-like-temperature) value as the current temperature.
+
+Each feature row expands to its own editor — per‑option **label / icon / color / hide** for selectors,
 entity pickers for lists, a `width` slider, and an icons / dropdown / tile display toggle. **Options and list items are
 drag‑to‑reorder** too (the order is saved to the config), so you control the order icons appear in. The **"Add
 feature"** menu only offers the climate selectors the entity actually exposes, and each climate selector can be added
