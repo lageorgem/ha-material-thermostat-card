@@ -215,7 +215,7 @@ describe('material-thermostat-card', () => {
         await el.updateComplete;
         expect(dial(el).dialStyle).to.equal(dial_style);
         const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
-        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-12px' : '-23px');
+        expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-12px' : '-22px'); // 332px border-box → 341px dial
       });
     }
   });
@@ -635,18 +635,18 @@ describe('material-thermostat-card', () => {
     for (const dial_style of ['halo', 'minimal', 'google'] as const) {
       it(`centres the oversized ${dial_style} dial and clips only invisible horizontal overflow`, async () => {
         const el = track(await mount(baseConfig({ dial_style })));
-        el.style.width = '385px';
+        el.style.width = '396px';
         // HA supplies a block ha-card host; the unit fixture has no HA element definition.
         el.shadowRoot!.querySelector<HTMLElement>('ha-card')!.style.display = 'block';
         await nextFrame();
-        await setWidth(el, 353);
+        await setWidth(el, 364);
         await dial(el).updateComplete;
         const wrap = el.shadowRoot!.querySelector<HTMLElement>('.dial-wrap')!;
         const box = dial(el).shadowRoot!.querySelector('.dial')!.getBoundingClientRect();
         const bounds = wrap.getBoundingClientRect();
-        expect(box.width).to.be.closeTo(406, 1);
+        expect(box.width).to.be.closeTo(407, 1);
         expect(box.height).to.be.closeTo(box.width, 0.1);
-        expect(bounds.width).to.be.closeTo(385, 1);
+        expect(bounds.width).to.be.closeTo(396, 1);
         expect(bounds.left - box.left).to.be.closeTo(box.right - bounds.right, 1);
         expect(bounds.left - box.left).to.be.greaterThan(0);
         expect(getComputedStyle(wrap).overflowX).to.equal('clip');
@@ -654,7 +654,7 @@ describe('material-thermostat-card', () => {
         expect(wrap.style.marginBottom).to.equal(dial_style === 'google' ? '-14px' : '-26px');
         const glow = dial(el).shadowRoot!.querySelector('.glow')!.getBoundingClientRect();
         expect(glow.width).to.be.closeTo(300 / 320 * box.width, 0.1);
-        expect(glow.width).to.be.at.most(385);
+        expect(glow.width).to.be.at.most(396);
         expect(glow.left).to.be.at.least(bounds.left);
         expect(glow.right).to.be.at.most(bounds.right);
       });
@@ -772,10 +772,10 @@ describe('material-thermostat-card', () => {
 
     it('_layout (stacked): crops 6.5% of the dial height below the +/- controls', async () => {
       const el = track(await mount(baseConfig()));
-      await setWidth(el, 300); // 332px border-box → 351px dial
+      await setWidth(el, 300); // 332px border-box → 341px dial
       const layout = (el as any)._layout();
       expect(layout.wide).to.equal(false);
-      expect(layout.dialStyle.marginBottom).to.equal('-23px'); // -Math.round(0.065 * 351)
+      expect(layout.dialStyle.marginBottom).to.equal('-22px'); // -Math.round(0.065 * 341)
     });
 
     it('_layout (wide): gridCols === maxPct/10 with the expected flex styles', async () => {

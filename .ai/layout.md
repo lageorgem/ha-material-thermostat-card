@@ -18,7 +18,7 @@ MAX_WIDTH_PCT = 100   full width
 GRID_COLUMNS  = 10    columns in a full-width feature row (10% each)
 TILE_DEFAULT_PCT = 50 entity-tile default width
 DIAL_MAX_PX   = 320   wide-layout dial cap
-STACKED_DIAL_SCALE = 1.0558 dial box ÷ card border-box width
+STACKED_DIAL_SCALE = 1.0266 dial box ÷ card border-box width
 STACKED_DIAL_MAX_PX = 440 cap for wide-but-stacked cards
 DIAL_MIN_PX   = 240   dial needs ≥ this much room to sit beside features (wide)
 WIDE_MIN_PX   = 560   card must be ≥ this wide to go side-by-side
@@ -95,14 +95,15 @@ padding-bottom remain 12px.
 ## Google Home size reference & safe clipping
 
 On a 412 CSS-pixel phone, Google Home's ring outer diameter measures 343px
-(83.3% of the screen). With our approximately 385px card border-box, the same
-ring needs a box of `343 * 320 / 270 ≈ 406.5px`: approximately 1.0558 times
-the card width. Rounding produces a 406px box at 385px, capped at 440px on
-wide-but-stacked cards. The ring diameter is 342.56px (88.98% of the card).
+(83.3% of the screen). The card border-box on that phone measures 396px in real
+HA, so the same ring needs a box of `343 * 320 / 270 ≈ 406.5px`: 1.0266 times
+the card width. Rounding produces a 407px box at 396px, capped at 440px on
+wide-but-stacked cards. (An earlier 1.0558 assumed a 385px card and made the
+ring 85.6% of the screen — measure the real card before changing this.)
 
 The wrapper uses `overflow-x: clip; overflow-y: visible`, clipping only the
 invisible horizontal box overflow. The widest paint is the 300/320 glow circle:
-380.625px at a 406px dial, within the 385px wrapper. The google disc (297/320)
+381.6px at a 407px dial, within the 396px wrapper. The google disc (297/320)
 and ring (270/320) are smaller. No geometry or typography tokens change.
 
 Dropdowns render through `mt-feature-row` → selectors → `mt-dropdown` in the

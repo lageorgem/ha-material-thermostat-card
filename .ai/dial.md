@@ -8,10 +8,10 @@ calls services itself.
 ## Responsive box sizing
 
 Stacked cards supply `--mt-dial-size` on `.dial-wrap`:
-`round(min(cardBorderBoxWidth * 1.0558, 440))px` (constants in `grid.ts`).
+`round(min(cardBorderBoxWidth * 1.0266, 440))px` (constants in `grid.ts`).
 The ratio comes from Google Home's 343px ring on a 412px phone (83.3% of the
-screen): `343 * 320 / 270 ≈ 406.5px` box for our approximately 385px card.
-At 385px the rounded box is 406px; its 342.56px ring is 88.98% of the card.
+screen): `343 * 320 / 270 ≈ 406.5px` box for the 396px card measured in real HA
+on that phone. At 396px the rounded box is 407px; its ring is 343.4px.
 
 `.dial` consumes the variable for width/max-width; absent it, width remains
 100% capped at 320px, preserving the wide side-by-side layout. The 100%-width
@@ -21,7 +21,7 @@ the rendered size; the 320-unit geometry and cqi typography stay unchanged.
 
 The stacked wrapper spans the card via -16px inline margins and clips only
 horizontal overflow (`overflow-x: clip; overflow-y: visible`). Maximum painted
-diameter is the glow's 300/320 of the box (380.625px at 406px), inside the 385px
+diameter is the glow's 300/320 of the box (381.6px at 407px), inside the 396px
 card; the google disc and ring are smaller. Empty square edges may be clipped,
 not paint. Dropdown menus render in `mt-dropdown` shadow roots under the
 `.features` sibling, never inside `.dial-wrap`, so popovers remain unclipped.
