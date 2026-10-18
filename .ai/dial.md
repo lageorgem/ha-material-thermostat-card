@@ -37,10 +37,12 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   (`top: 9.375%` = (160−130)/320 at rest, `10.469%` ≈ (160−126.5)/320
   while dragging). Invisible `.handle` targets follow the same centerline.
 - `_labelOrbit(angle, content, iconLabel)` — same, but the label counter-rotates
-  (`rotate(-angle)`) to stay upright; `top: 17.5%` (radius 104) at rest AND
-  while dragging for numbers and merged inline icons. Standalone single-mode and
-  collapsed dual setpoint icons use `.icon-label` at `top:17%` (radius 105.6).
-  The top transition remains harmless.
+  (`rotate(-angle)`) to stay upright. Numbers and merged inline icons use
+  `top:15.3125%` (radius 111) at rest and `top:17.5%` (radius 104) while dragging.
+  Standalone single-mode and collapsed dual setpoint icons use `.icon-label` at
+  `top:14.8125%` (radius 112.6) at rest and `top:17%` (radius 105.6) while dragging.
+  Labels move 7u inward with the band's inner edge (radius 125 → 118), keeping
+  the band-to-label gap constant; `top` transitions with the band's motion tokens.
 - Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
   in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
   `-1<sup>5</sup>`). Superscripts use `0.6em`, `vertical-align:super`, line-height 0.
@@ -164,7 +166,7 @@ only while **emphasized** (`_dragging || _showRangeTimer`); once it settles
 (idle, >5s) the `.settled` class shrinks it so it isn't oversized at rest.
 
 **Crowding guard (`_centerTight`)** — the orbiting setpoint/current number labels
-sit at radius 104 and can collide with the (horizontally widest) centre readout
+sit at radius 111 at rest / 104 while dragging and can collide with the (horizontally widest) centre readout
 when a marker lands near 3 or 9 o'clock. `_centerTight` is true when any numeric
 marker is within `SIDE_GUARD_DEG` (26°) of 90°/270° (dual: low/high/current;
 single: current only — the single setpoint marker is a small icon). When true the
@@ -196,7 +198,9 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
   `.o-dot.current` a thinner pill (`width:clamp(2px, 1.2cqi, 4px)`,
   `height:5.9375cqi`, 3.84×19 units). Both use `border-radius:999px`.
   Markers and handles move to `top:10.469%` (radius 126.5).
-  Number/merged `.o-label` stays at radius 104; standalone `.icon-label` at 105.6.
+  Number/merged `.o-label` moves from radius 111 to 104; standalone `.icon-label`
+  from 112.6 to 105.6. This matches the inner edge's 7u inward growth and keeps
+  the band-to-label gap constant, with labels closer to the band at rest.
   Path transform/stroke width, marker top/width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:

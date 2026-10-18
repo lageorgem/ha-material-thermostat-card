@@ -123,7 +123,7 @@ describe('mt-circular-dial', () => {
       const number = el.shadowRoot!.querySelector('.num.current')!;
       expect(parseFloat(getComputedStyle(number).fontSize)).to.be.closeTo(15.84, 0.001);
       expect(getComputedStyle(number).color).to.equal('rgb(237, 225, 212)');
-      expect(getComputedStyle(number.closest('.o-label')!).top).to.equal('56px');
+      expect(getComputedStyle(number.closest('.o-label')!).top).to.equal('49px');
     });
 
     it('uses the measured single centre size independently of HA display tokens', async () => {
@@ -172,7 +172,7 @@ describe('mt-circular-dial', () => {
         expect(icon.classList.contains('inline')).to.equal(merged);
         const label = icon.closest('.o-label')!;
         expect(label.classList.contains('icon-label')).to.equal(!merged);
-        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(merged ? 56 : 54.4, 0.02);
+        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(merged ? 49 : 47.4, 0.02);
       });
     }
 
@@ -206,12 +206,41 @@ describe('mt-circular-dial', () => {
         );
         const label = el.shadowRoot!.querySelector('.mode-icon')!.closest('.o-label')!;
         expect(label.classList.contains('icon-label')).to.be.true;
-        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(54.4, 0.02);
+        expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(47.4, 0.02);
       });
     }
   });
 
   describe('dragging presentation', () => {
+    for (const dual of [false, true]) {
+      it(`keeps label gaps constant as the band grows inward (dual=${dual})`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.dual = dual;
+        el.mode = 'cool';
+        el.current = 28;
+        el.lowValue = 18;
+        el.highValue = 24;
+        await el.updateComplete;
+        const dial = el.shadowRoot!.querySelector('.dial')!;
+        const labels = [...dial.querySelectorAll('.o-label')];
+        expect(labels.some(label => label.classList.contains('icon-label'))).to.be.true;
+        expect(labels.some(label => !label.classList.contains('icon-label'))).to.be.true;
+        // Keep the collapsed dual icon mounted to verify its dragging CSS too;
+        // a real dual drag replaces it with a number for the range readout.
+        for (const dragging of [false, true, false]) {
+          dial.classList.toggle('dragging', dragging);
+          for (const label of labels) {
+            const icon = label.classList.contains('icon-label');
+            const top = dragging ? (icon ? 17 : 17.5) : (icon ? 14.8125 : 15.3125);
+            const style = getComputedStyle(label);
+            expect(parseFloat(style.top) / 320 * 100).to.be.closeTo(top, 0.005);
+            expect(style.transitionProperty).to.include('top');
+          }
+        }
+      });
+    }
+
     for (const dual of [false, true]) {
       it(`morphs the band and markers only during dragging (dual=${dual})`, async () => {
         const el = await mount();
@@ -299,7 +328,7 @@ describe('mt-circular-dial', () => {
         }
         expect(getComputedStyle(sr.querySelector('.o-dot.setpoint')!).height).to.equal('14px');
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 54.4 : 56, 0.02);
+          expect(parseFloat(getComputedStyle(label).top)).to.be.closeTo(label.classList.contains('icon-label') ? 47.4 : 49, 0.02);
         }
       });
     }

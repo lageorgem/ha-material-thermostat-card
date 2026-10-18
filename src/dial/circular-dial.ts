@@ -1302,13 +1302,19 @@ export class MtCircularDial extends LitElement {
       .o-label {
         position: absolute;
         left: 50%;
-        top: 17.5%; /* (160-104)/320 — fixed label radius at rest and drag */
+        top: 15.3125%; /* (160-111)/320 — follow the band's inner edge */
         transition:
           transform var(--mt-motion-dur) var(--mt-motion-ease),
           top var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .o-label.icon-label {
-        top: 17%; /* (160-105.6)/320 — standalone setpoint mode icons only */
+        top: 14.8125%; /* (160-112.6)/320 — standalone setpoint mode icons only */
+      }
+      .dial.dragging .o-label {
+        top: 17.5%; /* (160-104)/320 — 7u inward, like the band's inner edge */
+      }
+      .dial.dragging .o-label.icon-label {
+        top: 17%; /* (160-105.6)/320 */
       }
       .o-label sup {
         font-size: 0.6em;
