@@ -19,8 +19,9 @@ test('renders the dial and all feature rows', async ({ page }) => {
   await expect(page.locator('mt-climate-selector')).toHaveCount(2);
   await expect(page.locator('mt-switch-group')).toBeVisible();
   await expect(page.locator('mt-entity-tile')).toBeVisible();
-  // the big center temperature shows the target (21)
-  await expect(page.locator('mt-circular-dial .value-text')).toHaveText('21.0');
+  // the big center temperature shows the target (21): whole numbers have no decimal
+  await expect(page.locator('mt-circular-dial .value-text')).toHaveText('21');
+  await expect(page.locator('mt-circular-dial .value-text sup')).toHaveCount(0);
   // the entity tile shows its sensor value + unit
   await expect(page.locator('mt-entity-tile .value')).toHaveText('52 %');
 });
@@ -45,8 +46,9 @@ test('the fan dropdown opens and selecting an option calls set_fan_mode', async 
 
 test('the + step button commits a debounced set_temperature', async ({ page }) => {
   await page.locator('mt-circular-dial .step[aria-label="Increase temperature"]').click();
-  // optimistic UI updates immediately
-  await expect(page.locator('mt-circular-dial .value-text')).toHaveText('21.5');
+  // optimistic UI updates immediately: 21.5 renders as "21" + superscript "5"
+  await expect(page.locator('mt-circular-dial .value-text sup')).toHaveText('5');
+  await expect(page.locator('mt-circular-dial .value-text')).toHaveText('215');
   // and the service call lands after the 600ms debounce
   await expect
     .poll(async () => (await calls(page)).find((c) => c.service === 'set_temperature'), {
