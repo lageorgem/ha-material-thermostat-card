@@ -1,5 +1,6 @@
 /**
  * Render shared showcase examples in the real HA frontend, without writing to HA.
+ * State/history/drag overrides are client-side only. Dark PNGs go to assets/.
  * Build the local bundle first, then run:
  *   HA_URL=https://your.ui.nabu.casa HA_TOKEN=<token> node dev/ha-shots.mjs
  */
@@ -107,7 +108,7 @@ async function inject(page, shot) {
         top: '0',
         left: '0',
         zIndex: '999999',
-        width: '420px',
+        width: `${shot.width ?? 420}px`,
         padding: '16px',
         boxSizing: 'content-box',
         background: 'var(--primary-background-color)',
@@ -122,6 +123,21 @@ async function inject(page, shot) {
       await card.updateComplete;
       await document.fonts.ready;
       if (!card.shadowRoot?.querySelector('ha-card')) throw new Error('Card did not render');
+      if (shot.drag) {
+        const dial = card.shadowRoot.querySelector('mt-circular-dial');
+        if (!dial) throw new Error('Dragging shot has no dial');
+        await dial.updateComplete;
+        if ('value' in shot.drag) {
+          dial._dragValue = shot.drag.value;
+        } else {
+          dial._dragLow = shot.drag.low;
+          dial._dragHigh = shot.drag.high;
+          dial._activeHandle = shot.drag.active;
+          dial._selected = shot.drag.active;
+        }
+        dial._dragging = true;
+        await dial.updateComplete;
+      }
     },
     { shot, history }
   );
@@ -129,95 +145,86 @@ async function inject(page, shot) {
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 let failures = 0;
-const backgrounds = {};
 try {
-  for (const mode of ['light', 'dark']) {
-    // HA can restore a profile theme without its `dark` flag; keep the browser
-    // preference aligned too, without changing the user's server-side settings.
-    const ctx = await browser.newContext({
-      viewport: { width: 1400, height: 1600 },
-      deviceScaleFactor: 2,
-      colorScheme: mode,
+  const mode = 'dark';
+  // Align the browser preference with HA without changing server-side settings.
+  const ctx = await browser.newContext({
+    viewport: { width: 1400, height: 1600 },
+    deviceScaleFactor: 2,
+    colorScheme: mode,
+  });
+  try {
+    await ctx.addInitScript(
+      ({ url, token }) => {
+        localStorage.setItem('selectedTheme', JSON.stringify({ theme: 'Material You', dark: true }));
+        localStorage.setItem(
+          'hassTokens',
+          JSON.stringify({
+            hassUrl: url,
+            clientId: url + '/',
+            access_token: token,
+            token_type: 'Bearer',
+            expires_in: 315360000,
+            expires: Date.now() + 315360000000,
+            refresh_token: 'x',
+          })
+        );
+      },
+      { url: HA_URL, token: HA_TOKEN }
+    );
+    const page = await ctx.newPage();
+    let served = 0;
+    await page.route('**/material-thermostat-card*.js*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle });
+      served++;
+      console.log(`${mode}: served local dist bundle via card resource intercept`);
     });
-    try {
-      await ctx.addInitScript(
-        ({ url, token, dark }) => {
-          localStorage.setItem('selectedTheme', JSON.stringify({ theme: 'Material You', dark }));
-          localStorage.setItem(
-            'hassTokens',
-            JSON.stringify({
-              hassUrl: url,
-              clientId: url + '/',
-              access_token: token,
-              token_type: 'Bearer',
-              expires_in: 315360000,
-              expires: Date.now() + 315360000000,
-              refresh_token: 'x',
-            })
-          );
-        },
-        { url: HA_URL, token: HA_TOKEN, dark: mode === 'dark' }
-      );
-      const page = await ctx.newPage();
-      let served = 0;
-      await page.route(
-        '**/hacsfiles/ha-material-thermostat-card/material-thermostat-card.js*',
-        async (route) => {
-          await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle });
-          served++;
-          console.log(`${mode}: served local dist bundle via HACS route intercept`);
-        }
-      );
-      await page.goto(new URL('/material-thermostat/showcase', HA_URL).href, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000,
-      });
-      await page.waitForFunction(
-        (dark) => {
-          const ha = document.querySelector('home-assistant');
-          return (
-            ha?.hass?.states &&
-            Object.keys(ha.hass.states).length > 0 &&
-            ha.hass.themes?.darkMode === dark &&
-            customElements.get('material-thermostat-card')
-          );
-        },
-        mode === 'dark',
-        { timeout: 60000 }
-      );
-      if (!served) throw new Error('Local bundle route was not used');
-      // Material You applies its generated palette asynchronously after HA loads.
-      await page.waitForTimeout(2000);
-      backgrounds[mode] = await page.evaluate(() =>
-        getComputedStyle(document.querySelector('home-assistant'))
-          .getPropertyValue('--primary-background-color')
-          .trim()
-      );
-      console.log(`${mode} background: ${backgrounds[mode]}`);
-      if (!backgrounds[mode] || (mode === 'dark' && backgrounds.dark === backgrounds.light)) {
-        throw new Error('Theme mode did not change the background');
+    await page.goto(new URL('/mt-showcase/0', HA_URL).href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+    await page.waitForFunction(
+      () => {
+        const ha = document.querySelector('home-assistant');
+        return (
+          ha?.hass?.states &&
+          Object.keys(ha.hass.states).length > 0 &&
+          ha.hass.themes?.darkMode === true &&
+          customElements.get('material-thermostat-card')
+        );
+      },
+      null,
+      { timeout: 60000 }
+    );
+    if (!served) throw new Error('Local bundle route was not used');
+    // Material You applies its generated palette asynchronously after HA loads.
+    await page.waitForTimeout(2000);
+    const background = await page.evaluate(() =>
+      getComputedStyle(document.querySelector('home-assistant'))
+        .getPropertyValue('--primary-background-color')
+        .trim()
+    );
+    console.log(`${mode} background: ${background}`);
+    if (!background) throw new Error('Dark theme background is missing');
+    for (const shot of SHOTS) {
+      try {
+        await inject(page, shot);
+        await page.waitForFunction(iconsReady, null, { timeout: 20000 });
+        await page.waitForTimeout(shot.drag ? 900 : 700);
+        await page.locator('#__shot').screenshot({
+          path: resolve(OUT, `${shot.name}.png`),
+        });
+        console.log(`${shot.name} ${mode} ok`);
+      } catch (error) {
+        failures++;
+        console.error(`${shot.name} ${mode} FAILED: ${error.message}`);
       }
-      for (const shot of SHOTS) {
-        try {
-          await inject(page, shot);
-          await page.waitForFunction(iconsReady, null, { timeout: 20000 });
-          await page.waitForTimeout(700);
-          await page.locator('#__shot').screenshot({
-            path: resolve(OUT, `${shot.name}-${mode}.png`),
-          });
-          console.log(`${shot.name} ${mode} ok`);
-        } catch (error) {
-          failures++;
-          console.error(`${shot.name} ${mode} FAILED: ${error.message}`);
-        }
-      }
-    } finally {
-      await ctx.close();
     }
+  } finally {
+    await ctx.close();
   }
-  console.log(`backgrounds: light=${backgrounds.light}; dark=${backgrounds.dark}`);
   console.log(
-    `done: ${SHOTS.length * 2 - failures}/${SHOTS.length * 2} screenshots; ${failures} failures`
+    `done: ${SHOTS.length - failures}/${SHOTS.length} screenshots; ${failures} failures`
   );
 } catch (error) {
   failures++;

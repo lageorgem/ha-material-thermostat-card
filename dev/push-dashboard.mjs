@@ -1,4 +1,8 @@
-/** Publish only the dedicated showcase dashboard. --dry-run needs no credentials. */
+/**
+ * HA_URL=… HA_TOKEN=… node dev/push-dashboard.mjs publishes only /mt-showcase/0.
+ * --dry-run needs no credentials. Overrides are client-side only: this saves
+ * the shared card configs, not screenshot state/history/drag overrides.
+ */
 import { isDeepStrictEqual } from 'node:util';
 import { SHOTS } from './showcase.mjs';
 
@@ -8,12 +12,12 @@ const config = {
   views: [
     {
       title: 'Showcase',
-      path: 'showcase',
+      path: '0',
       type: 'sections',
       max_columns: 4,
       sections: SHOTS.map((shot) => ({
         type: 'grid',
-        cards: [{ type: 'heading', heading: shot.title }, shot.config],
+        cards: [{ type: 'heading', heading: `${shot.name}: ${shot.title}` }, shot.config],
       })),
     },
   ],
@@ -141,32 +145,32 @@ async function main() {
   try {
     const dashboards = await connection.request({ type: 'lovelace/dashboards/list' });
     if (!Array.isArray(dashboards)) throw new Error('Invalid dashboard list response');
-    const existing = dashboards.find((dashboard) => dashboard.url_path === 'material-thermostat');
+    const existing = dashboards.find((dashboard) => dashboard.url_path === 'mt-showcase');
     if (existing && existing.mode !== 'storage') {
       throw new Error('Refusing to overwrite a non-storage showcase dashboard');
     }
     if (!existing) {
       await connection.request({
         type: 'lovelace/dashboards/create',
-        url_path: 'material-thermostat',
+        url_path: 'mt-showcase',
         title: 'Material Thermostat',
         icon: 'mdi:thermostat',
-        show_in_sidebar: true,
-        require_admin: false,
+        show_in_sidebar: false,
+        require_admin: true,
         mode: 'storage',
       });
     }
     await connection.request({
       type: 'lovelace/config/save',
-      url_path: 'material-thermostat',
+      url_path: 'mt-showcase',
       config,
     });
     const saved = await connection.request({
       type: 'lovelace/config',
-      url_path: 'material-thermostat',
+      url_path: 'mt-showcase',
     });
     if (!isDeepStrictEqual(saved, config)) throw new Error('Dashboard read-back did not match');
-    console.log(`saved ${SHOTS.length} cards to /material-thermostat/showcase`);
+    console.log(`saved ${SHOTS.length} cards to /mt-showcase/0 (live entities; screenshot overrides not applied)`);
   } finally {
     connection.close();
   }
