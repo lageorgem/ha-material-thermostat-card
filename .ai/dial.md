@@ -109,7 +109,8 @@ with different large-arc flags makes the arc balloon/bend; avoid it entirely):
 `segS/segE` are fractions. **Single mode** renders ONE persistent `.value` path
 (so it animates on turn-on/off + during the wipe) from `min(frac(value),
 frac(current))` to `max(...)`. It keeps the same geometry when activity changes;
-its active stroke is the dial color; inactive stroke reads `--seg-muted`.
+its stroke uses the full mode color whenever `_demandColored` is true, otherwise
+the dial color (neutral when inactive).
 For single heat/cool, `_singleSegVisible` hides the path with **opacity 0** when
 `_demandSensible` is false: heat current ≥ setpoint, cool current ≤ setpoint, or
 missing current. Reported activity does not override this visibility rule.
@@ -128,12 +129,12 @@ neutralizing ring and big number; `.dial.idle` dims the halo to opacity 0.5.
 `--mode-light = color-mix(in srgb, <mode color> 20%,
 var(--mt-on-surface))` tints single colored-mode setpoint markers at rest and drag.
 Off/dual setpoint markers stay `var(--mt-on-surface)`; current markers always use
-that bright color at opacity 1. The mode icon reads `--mode-tint`: inactive =
-`--mode-light` mix, active = dial color. Its size is `clamp(11px, 5cqi, 16px)`.
-Only the inactive segment reads `--seg-muted = color-mix(in srgb, <mode color>
-50%, var(--mt-on-surface-variant))`; a sensible demand with reported idle/off still
-shows this band. `_singleSegColor` and wipe tracking retain this rendered band color,
-not the icon tint.
+that bright color at opacity 1. `_demandColored` is true for colored modes when
+either `_singleActive` or `_demandSensible` is true. The band and mode icon
+(`--mode-tint`) then use the full mode color, even with reported idle/off;
+otherwise the icon uses the `--mode-light` mix. Its size is `clamp(11px, 5cqi, 16px)`.
+Setpoint markers retain `--mode-light`, independent of demand coloring.
+`_singleSegColor` and wipe tracking retain the actually rendered band color.
 Dual (heat_cool) does NOT use this single-mode activity rule (see below).
 
 ## Dual (heat_cool): temperature-derived sub-mode
@@ -251,7 +252,7 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 it inline on `.dial`; CSS transitions it. `_modeColor` uses `modeColors` overrides,
 else `climateModeColor`. `--mode-tint` and `--mode-light` are also registered
 animatable `<color>` properties and transition on `.dial`; single mode sets both
-inline alongside `--seg-muted` (see above). The single `.value` stroke transitions
+inline (see above). The single `.value` stroke transitions
 separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
 Off/uncolored modes use `IDLE_COLOR` and `.dial.off` dims the halo to opacity 0.5;
 they are distinct from `.dial.idle` and hide the single value segment.

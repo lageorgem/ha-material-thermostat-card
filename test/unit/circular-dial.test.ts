@@ -453,7 +453,7 @@ describe('mt-circular-dial', () => {
         const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
         const light = `color-mix(in srgb, ${climateModeColor('heat')} 20%, var(--mt-on-surface))`;
         expect(dial.style.getPropertyValue('--mode-light')).to.equal(light);
-        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(action === 'heating' ? climateModeColor('heat') : light);
+        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(climateModeColor('heat'));
         expect(getComputedStyle(el.shadowRoot!.querySelector('.setpoint')!).backgroundColor).to.equal(getComputedStyle(dial).getPropertyValue('--mode-light').trim());
         expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(getComputedStyle(dial).getPropertyValue('--mode-tint').trim());
       }
@@ -2392,7 +2392,7 @@ describe('mt-circular-dial', () => {
   });
 
   describe('mode-change wipe', () => {
-    it('wipes from the last muted segment after an activity-only update', async () => {
+    it('wipes from the full demand color after an activity-only update', async () => {
       const el = await mount();
       el.mode = 'heat';
       el.hvacAction = 'heating';
@@ -2401,16 +2401,15 @@ describe('mt-circular-dial', () => {
       el.hvacAction = 'idle';
       await el.updateComplete;
       expect((el as any)._wipeFrom).to.equal(null);
-      const mutedHeat = `color-mix(in srgb, ${climateModeColor('heat')} 50%, ${IDLE_COLOR})`;
-      expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
-      expect((el.shadowRoot!.querySelector('.dial') as HTMLElement).style.getPropertyValue('--seg-muted')).to.equal(mutedHeat);
+      const heat = climateModeColor('heat');
+      expect(el.shadowRoot!.querySelector('path.value')!.getAttribute('style')).to.contain(`stroke:${heat}`);
 
       el.mode = 'cool';
       el.value = 17;
       await el.updateComplete;
-      expect((el as any)._wipeFrom).to.equal(mutedHeat);
+      expect((el as any)._wipeFrom).to.equal(heat);
       await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.wipe-value')!.getAttribute('style')).to.contain(mutedHeat);
+      expect(el.shadowRoot!.querySelector('.wipe-value')!.getAttribute('style')).to.contain(heat);
     });
 
     it('still wipes from bright heat when changing directly to active cooling', async () => {
@@ -2427,7 +2426,7 @@ describe('mt-circular-dial', () => {
       expect((el as any)._wipeFrom).to.equal(climateModeColor('heat'));
     });
 
-    it('does not wipe between identical muted segment colors', async () => {
+    it('does not wipe between identical demand segment colors', async () => {
       const el = await mount();
       el.modeColors = { heat: '#abcdef', cool: '#abcdef' };
       el.mode = 'heat';
@@ -2860,9 +2859,7 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         const segment = el.shadowRoot!.querySelector('.value')!;
         expect(getComputedStyle(segment).opacity).to.equal(visible ? '1' : '0');
-        const color = hvacAction === 'idle'
-          ? 'var(--seg-muted)'
-          : climateModeColor(mode);
+        const color = climateModeColor(mode);
         expect(segment.getAttribute('style')).to.contain(`stroke:${color}`);
       });
     }
@@ -2917,7 +2914,7 @@ describe('mt-circular-dial', () => {
       expect((el as any)._prevSegVisible).to.be.true;
       expect((el as any)._wipeFrom).to.equal(null);
     });
-    it('cool: not cooling uses a muted mode stroke', async () => {
+    it('cool: not cooling hides the neutral stroke', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.min = 10;
@@ -2927,7 +2924,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
-      expect(style).to.contain('stroke:var(--seg-muted)');
+      expect(style).to.contain(`stroke:${IDLE_COLOR}`);
       expect(style).to.contain('opacity:0;');
     });
 
@@ -2943,7 +2940,7 @@ describe('mt-circular-dial', () => {
       expect(value.getAttribute('style')).to.contain(`stroke:${climateModeColor('cool')}`);
     });
 
-    it('heat: not heating uses a muted mode stroke', async () => {
+    it('heat: not heating hides the neutral stroke', async () => {
       const el = await mount();
       el.mode = 'heat';
       el.min = 10;
@@ -2953,7 +2950,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const value = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const style = value.getAttribute('style')!;
-      expect(style).to.contain('stroke:var(--seg-muted)');
+      expect(style).to.contain(`stroke:${IDLE_COLOR}`);
       expect(style).to.contain('opacity:0;');
     });
 
@@ -2969,7 +2966,7 @@ describe('mt-circular-dial', () => {
       expect(value.getAttribute('style')).to.contain(`stroke:${climateModeColor('heat')}`);
     });
 
-    it('not-heating neutralizes the halo and tints the segment', async () => {
+    it('not-heating neutralizes the halo and hides the segment', async () => {
       const el = await mount();
       el.mode = 'heat';
       el.min = 10;
@@ -2979,13 +2976,13 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
-      expect(seg.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
+      expect(seg.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
       expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
     });
 
-    it('not-cooling neutralizes the halo and tints the segment', async () => {
+    it('not-cooling neutralizes the halo and hides the segment', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.min = 10;
@@ -2995,7 +2992,7 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const seg = el.shadowRoot!.querySelector('path.value') as SVGPathElement;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
-      expect(seg.getAttribute('style')).to.contain('stroke:var(--seg-muted)');
+      expect(seg.getAttribute('style')).to.contain(`stroke:${IDLE_COLOR}`);
       expect(seg.getAttribute('style')).to.contain('opacity:0;');
       expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
       expect(dial.classList.contains('idle')).to.be.true;
@@ -3003,6 +3000,35 @@ describe('mt-circular-dial', () => {
   });
 
   describe('single-mode reported activity', () => {
+    for (const [mode, value, current, action, colored, active] of [
+      ['heat', 23, 21.2, 'idle', true, false],
+      ['heat', 23, 21.2, 'heating', true, true],
+      ['heat', 15, 22, undefined, false, false],
+      ['cool', 20, 24, 'idle', true, false],
+    ] as const) {
+      it(`${mode}, target=${value}, current=${current}, action=${String(action)}: demand color=${colored}`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.mode = mode;
+        el.value = value;
+        el.current = current;
+        el.hvacAction = action;
+        await el.updateComplete;
+        const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
+        const segment = el.shadowRoot!.querySelector('.value')!;
+        const light = `color-mix(in srgb, ${climateModeColor(mode)} 20%, var(--mt-on-surface))`;
+        expect(segment.getAttribute('style')).to.contain(`stroke:${colored ? climateModeColor(mode) : IDLE_COLOR}`);
+        expect(getComputedStyle(segment).opacity).to.equal(colored ? '1' : '0');
+        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(colored ? climateModeColor(mode) : light);
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(
+          getComputedStyle(dial).getPropertyValue('--mode-tint').trim()
+        );
+        expect(dial.style.getPropertyValue('--mode-light')).to.equal(light);
+        expect(dial.classList.contains('idle')).to.equal(!active);
+        expect(dial.style.getPropertyValue('--dial-color')).to.equal(active ? climateModeColor(mode) : IDLE_COLOR);
+      });
+    }
+
     it('registers and transitions the single-mode tint as a color with resolved variables', async () => {
       const el = await mount();
       el.style.setProperty('--mt-motion-dur', '0s');
@@ -3015,8 +3041,8 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
       const style = getComputedStyle(dial);
-      expect(style.getPropertyValue('--mode-tint').trim()).to.equal('color(srgb 0.601569 0.401569 0.401569)');
-      expect(style.getPropertyValue('--mode-light').trim()).to.equal(style.getPropertyValue('--mode-tint').trim());
+      expect(style.getPropertyValue('--mode-tint').trim()).to.equal('rgb(255, 0, 0)');
+      expect(style.getPropertyValue('--mode-light').trim()).to.equal('color(srgb 0.601569 0.401569 0.401569)');
       expect(getComputedStyle(el.shadowRoot!.querySelector('.o-dot.setpoint')!).backgroundColor).to.equal(style.getPropertyValue('--mode-light').trim());
       expect(style.transitionProperty.split(', ')).to.include('--mode-light');
       expect(style.transitionProperty.split(', ')).to.include('--mode-tint');
@@ -3092,7 +3118,7 @@ describe('mt-circular-dial', () => {
       expect(getComputedStyle(dial).getPropertyValue('--dial-color').trim()).to.equal('rgb(100, 100, 100)');
       const iconColor = getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color;
       expect(iconColor).to.equal('color(srgb 0.470588 0.313726 0.313726)');
-      expect(getComputedStyle(el.shadowRoot!.querySelector('.value')!).stroke).to.equal('color(srgb 0.588235 0.196078 0.196078)');
+      expect(getComputedStyle(el.shadowRoot!.querySelector('.value')!).stroke).to.equal('rgb(100, 100, 100)');
       expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('0.5');
     });
 

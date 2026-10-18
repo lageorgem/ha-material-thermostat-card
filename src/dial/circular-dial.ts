@@ -197,6 +197,11 @@ export class MtCircularDial extends LitElement {
     return this._demandSensible;
   }
 
+  /** Demand markers stay fully colored while demand is inferred or reported. */
+  private get _demandColored(): boolean {
+    return COLORED_MODES.includes(this.mode) && (this._singleActive || this._demandSensible);
+  }
+
   /**
    * The color for a mode: an explicit per-mode override (from the HVAC feature),
    * else the built-in semantic mode color.
@@ -224,10 +229,10 @@ export class MtCircularDial extends LitElement {
       : MtCircularDial.IDLE_COLOR;
   }
 
-  /** Single-mode segment color, muted while the colored mode is inactive. */
+  /** Single-mode segment color, independent of reported-only halo activity. */
   private get _singleSegColor(): string {
-    return !this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive
-      ? `color-mix(in srgb, ${this._modeColor(this.mode)} 50%, ${MtCircularDial.IDLE_COLOR})`
+    return !this.dual && this._demandColored
+      ? this._modeColor(this.mode)
       : this._dialColor;
   }
 
@@ -820,8 +825,7 @@ export class MtCircularDial extends LitElement {
     const modeLight = isOff
       ? 'var(--mt-on-surface)'
       : `color-mix(in srgb, ${this._modeColor(this.mode)} 20%, var(--mt-on-surface))`;
-    const modeTint = isIdle ? modeLight : color;
-    const segMuted = this._singleSegColor;
+    const modeTint = this._demandColored ? this._modeColor(this.mode) : modeLight;
     const modeIcon = this._modeIcon(this.mode);
 
     const showCurrent =
@@ -839,7 +843,7 @@ export class MtCircularDial extends LitElement {
 
     // Single-mode demand segment: between the setpoint and the current temp. It's
     // a persistent path (so it animates on turn on/off and during the mode wipe);
-    // muted when inactive and hidden for nonsensical heat/cool demand, without
+    // fully colored for inferred/reported demand and hidden for nonsensical heat/cool demand, without
     // changing geometry or off-mode semantics.
     let segS = 0;
     let segE = 0;
@@ -849,7 +853,7 @@ export class MtCircularDial extends LitElement {
       segS = Math.min(this._fracOf(this._displayValue), this._fracOf(this.current!));
       segE = Math.max(this._fracOf(this._displayValue), this._fracOf(this.current!));
       showSeg = this._singleSegVisible;
-      segColor = isIdle ? 'var(--seg-muted)' : color;
+      segColor = this._singleSegColor;
     }
     const dashArray = `${((segE - segS) * 1000).toFixed(2)} 1000`;
     const dashOffset = (-segS * 1000).toFixed(2);
@@ -935,7 +939,7 @@ export class MtCircularDial extends LitElement {
           disabled: this.disabled,
           dragging: this._dragging,
         })}
-        style=${`--dial-color: ${color};${this.dual ? '' : ` --mode-tint: ${modeTint}; --mode-light: ${modeLight}; --seg-muted: ${segMuted}`}`}
+        style=${`--dial-color: ${color};${this.dual ? '' : ` --mode-tint: ${modeTint}; --mode-light: ${modeLight};`}`}
       >
         <svg
           viewBox="0 0 ${VIEW} ${VIEW}"
