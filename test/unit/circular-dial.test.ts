@@ -93,8 +93,66 @@ describe('mt-circular-dial', () => {
         const label = el.shadowRoot!.querySelector('.o-label .num')!;
         expect(label.textContent).to.equal(integer + fraction);
         expect(label.querySelector('sup')?.textContent ?? '').to.equal(fraction);
-        expect([...label.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal(integer);
+        const number = label.querySelector('.label-number')!;
+        expect([...number.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal(integer);
       });
+    }
+
+    for (const scenario of ['current', 'setpoint', 'dual', 'merged'] as const) {
+      for (const dragging of [false, true]) {
+        it(`centres ${scenario} labels on integer digits only (dragging=${dragging})`, async () => {
+          const el = await mount();
+          el.style.setProperty('--mt-motion-dur', '0s');
+          el.mode = scenario === 'dual' ? 'heat_cool' : 'heat';
+          el.dual = scenario === 'dual';
+          el.showCurrentAsPrimary = scenario === 'setpoint';
+          el.value = scenario === 'current' ? 28 : 21;
+          el.current = 21;
+          el.lowValue = 21;
+          el.highValue = 25;
+          Object.assign(el, {
+            _dragging: dragging,
+            _dragValue: el.value,
+            _dragLow: el.lowValue,
+            _dragHigh: el.highValue,
+          });
+          await el.updateComplete;
+          await nextFrame();
+          const integerBoxes = [...el.shadowRoot!.querySelectorAll('.o-label .num')]
+            .map(number => number.closest('.o-label')!.getBoundingClientRect());
+          expect(integerBoxes.length).to.equal(scenario === 'dual' ? 3 : 1);
+
+          el.value += 0.1;
+          el.current += 0.1;
+          el.lowValue += 0.1;
+          el.highValue += 0.1;
+          Object.assign(el, {
+            _dragValue: el.value,
+            _dragLow: el.lowValue,
+            _dragHigh: el.highValue,
+          });
+          await el.updateComplete;
+          await nextFrame();
+          const numbers = [...el.shadowRoot!.querySelectorAll('.o-label .num')];
+          numbers.forEach((number, index) => {
+            const box = number.closest('.o-label')!.getBoundingClientRect();
+            expect(box.width).to.be.closeTo(integerBoxes[index].width, 0.5);
+            expect(box.height).to.be.closeTo(integerBoxes[index].height, 0.5);
+            expect(getComputedStyle(number.querySelector('sup')!).position).to.equal('absolute');
+            const wrapper = number.querySelector('.label-number')!;
+            expect(getComputedStyle(wrapper).position).to.equal('relative');
+            expect(getComputedStyle(wrapper).display).to.equal('inline-block');
+          });
+          if (scenario === 'merged') {
+            const number = numbers[0];
+            const icon = number.querySelector('.mode-icon.inline')!;
+            expect(getComputedStyle(icon).position).to.equal('absolute');
+            expect(icon.getBoundingClientRect().right).to.be.at.most(
+              number.querySelector('.label-number')!.getBoundingClientRect().left
+            );
+          }
+        });
+      }
     }
 
     it('formats fractional dual and merged labels with superscripts', async () => {

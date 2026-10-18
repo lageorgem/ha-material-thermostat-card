@@ -621,7 +621,9 @@ export class MtCircularDial extends LitElement {
    */
   private _fmtLabel(value: number | undefined): TemplateResult {
     const [integer, fraction] = this._fmtCompact(value).split('.');
-    return html`${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}`;
+    return html`<span class="label-number"
+      >${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}</span
+    >`;
   }
 
   /**
@@ -1316,10 +1318,18 @@ export class MtCircularDial extends LitElement {
       .dial.dragging .o-label.icon-label {
         top: 17%; /* (160-105.6)/320 */
       }
+      /* Only the integer participates in centring; the decimal hangs top-right. */
+      .o-label .label-number {
+        position: relative;
+        display: inline-block;
+      }
       .o-label sup {
+        position: absolute;
+        left: 100%;
+        top: -0.1em;
         font-size: 0.6em;
-        vertical-align: super;
-        line-height: 0;
+        line-height: 1;
+        margin-left: 0.05em;
       }
       .o-label .num {
         font-size: clamp(8px, 4.95cqi, 16px);

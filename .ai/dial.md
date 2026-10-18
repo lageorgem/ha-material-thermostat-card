@@ -45,7 +45,10 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   the band-to-label gap constant; `top` transitions with the band's motion tokens.
 - Every orbit number uses `_fmtLabel`: integer part with the first decimal digit
   in `<sup>` only when fractional, and no degree sign (`22`, `20<sup>8</sup>`,
-  `-1<sup>5</sup>`). Superscripts use `0.6em`, `vertical-align:super`, line-height 0.
+  `-1<sup>5</sup>`). A relative inline-block `.label-number` wrapper keeps only
+  the integer in flow, so the superscript cannot grow the label's layout box or
+  shift its centring. Superscripts use `position:absolute; left:100%; top:-0.1em;
+  font-size:0.6em; line-height:1; margin-left:0.05em`.
   Current, setpoint, dual low/high and merged labels share this format.
   Orbit numbers use `clamp(8px, 4.95cqi, 16px)` (15.84px at a 320px dial),
   independent of HA's title-medium token. Current numbers use `var(--mt-on-surface)`,
@@ -55,7 +58,8 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
   they merge into one marker (icon sits `position:absolute; right:100%` of the
-  temp) — **single mode only**.
+  temp) — **single mode only**. The icon stays left of the integer-only box,
+  independent of the out-of-flow superscript.
 - **Dual label de-overlap (`label-spread.ts`)** — low/high/current can cluster
   (worst in heat_cool). `spreadAngles(angles, LABEL_SEP_DEG=24, ARC_START,
   ARC_START+SWEEP)` nudges each LABEL along the arc (keeping it on the ring; the
