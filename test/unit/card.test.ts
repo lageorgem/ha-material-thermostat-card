@@ -399,6 +399,49 @@ describe('material-thermostat-card', () => {
       expect(dial(none).presetIconColor).to.equal(undefined);
     });
 
+    it('modeIcons is empty without an HVAC feature or options', async () => {
+      const noFeat = track(await mount(baseConfig()));
+      expect(dial(noFeat).modeIcons).to.deep.equal({});
+      const noOptions = track(
+        await mount(baseConfig({ features: [{ type: 'climate-hvac-modes' }] }))
+      );
+      expect(dial(noOptions).modeIcons).to.deep.equal({});
+    });
+
+    for (const icon of ['mdi:heat-wave', undefined, '']) {
+      it(`passes only non-empty HVAC icon overrides to the dial (${String(icon)})`, async () => {
+        const el = track(
+          await mount(
+            baseConfig({
+              features: [{ type: 'climate-hvac-modes', options: [{ value: 'heat', icon }] }],
+            })
+          )
+        );
+        expect(dial(el).modeIcons).to.deep.equal(icon ? { heat: icon } : {});
+      });
+    }
+
+    it('uses the last option for duplicate HVAC mode values, like the selector', async () => {
+      const el = track(
+        await mount(
+          baseConfig({
+            features: [
+              {
+                type: 'climate-hvac-modes',
+                options: [
+                  { value: 'heat', icon: 'mdi:fire' },
+                  { value: 'heat', icon: 'mdi:heat-wave' },
+                  { value: 'cool', icon: 'mdi:snowflake' },
+                  { value: 'cool' },
+                ],
+              },
+            ],
+          })
+        )
+      );
+      expect(dial(el).modeIcons).to.deep.equal({ heat: 'mdi:heat-wave' });
+    });
+
     it('modeColors is empty without an HVAC feature or without color overrides', async () => {
       const noFeat = track(await mount(baseConfig()));
       expect(dial(noFeat).modeColors).to.deep.equal({});

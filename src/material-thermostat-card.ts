@@ -384,6 +384,23 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
+   * Per-mode icon overrides from the HVAC modes feature for the dial markers.
+   * The last option for a value wins, matching the selector; missing or empty
+   * icons leave the dial's built-in default in place.
+   */
+  private _hvacIcons(): Record<string, string> {
+    const feat = this._config.features?.find((f) => f.type === 'climate-hvac-modes') as
+      | ClimateModesFeatureConfig
+      | undefined;
+    const map: Record<string, string> = {};
+    for (const o of feat?.options ?? []) {
+      if (o.icon) map[o.value] = o.icon;
+      else delete map[o.value];
+    }
+    return map;
+  }
+
+  /**
    * The color for the active preset icon under the dial number: the per-option
    * override, else the preset special-case color (eco→green, sleep→blue). Mirrors
    * {@link _presetIcon} — undefined when no preset icon is shown or no color applies.
@@ -455,6 +472,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .presetIcon=${this._presetIcon()}
               .presetIconColor=${this._presetColor()}
               .modeColors=${this._hvacColors()}
+              .modeIcons=${this._hvacIcons()}
               .unit=${unit}
               .dual=${this._isDual}
               .lowValue=${this._targetLow}

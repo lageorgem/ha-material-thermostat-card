@@ -92,6 +92,8 @@ export class MtCircularDial extends LitElement {
   /** Per-mode color overrides (from the HVAC modes feature). Falls back to the
    * built-in mode color for any mode not listed. Feeds the halo/ring/number. */
   @property({ attribute: false }) modeColors: Record<string, string> = {};
+  /** Per-mode icon overrides from the HVAC modes feature; unlisted modes use built-in icons. */
+  @property({ attribute: false }) modeIcons: Record<string, string> = {};
   @property() unit = '°C';
   @property({ type: Boolean }) showCurrentAsPrimary = false;
   @property({ type: Boolean }) disabled = false;
@@ -193,6 +195,14 @@ export class MtCircularDial extends LitElement {
    */
   private _modeColor(mode: string): string {
     return this.modeColors[mode] ?? climateModeColor(mode);
+  }
+
+  /**
+   * Resolve a mode icon from the configured override, built-in icon or generic fallback.
+   * @param mode the climate mode
+   */
+  private _modeIcon(mode: string): string {
+    return this.modeIcons[mode] ?? HVAC_MODE_ICONS[mode] ?? 'mdi:thermostat';
   }
 
   /** The dial's mode color (off / idle modes use the neutral variant). */
@@ -736,7 +746,7 @@ export class MtCircularDial extends LitElement {
     const isIdle = !this.dual && !isOff && !this._singleActive;
     const color = this._dialColor;
     const modeTint = this._singleSegColor;
-    const modeIcon = HVAC_MODE_ICONS[this.mode] ?? 'mdi:thermostat';
+    const modeIcon = this._modeIcon(this.mode);
 
     const showCurrent =
       this.current != null && this.current >= this.min && this.current <= this.max;
@@ -810,7 +820,7 @@ export class MtCircularDial extends LitElement {
     const modeIconEl = html`<ha-icon class="mode-icon" icon=${modeIcon}></ha-icon>`;
     const dualSetIconEl = html`<ha-icon
       class="mode-icon dual-mode-icon"
-      icon=${HVAC_MODE_ICONS[dualActive === 'cool' ? 'cool' : 'heat']}
+      icon=${this._modeIcon(dualActive === 'cool' ? 'cool' : 'heat')}
     ></ha-icon>`;
 
     // Dual labels: low, high and (optionally) the current temp can cluster — most

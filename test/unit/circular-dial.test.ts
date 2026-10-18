@@ -64,6 +64,53 @@ function stubCapture(svg: SVGSVGElement): void {
 }
 
 describe('mt-circular-dial', () => {
+  describe('mode icon overrides', () => {
+    for (const merged of [false, true]) {
+      it(`uses the heat override for a single setpoint (merged=${merged})`, async () => {
+        const el = await mount();
+        el.mode = 'heat';
+        el.value = 22;
+        el.current = merged ? 22 : 14;
+        el.modeIcons = { heat: 'mdi:heat-wave' };
+        await el.updateComplete;
+        const icon = el.shadowRoot!.querySelector('.mode-icon')!;
+        expect(icon.getAttribute('icon')).to.equal('mdi:heat-wave');
+        expect(icon.classList.contains('inline')).to.equal(merged);
+      });
+    }
+
+    it('falls back to the built-in heat icon without an override', async () => {
+      const el = await mount();
+      el.mode = 'heat';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode-icon')!.getAttribute('icon')).to.equal(
+        HVAC_MODE_ICONS['heat']
+      );
+    });
+
+    it('falls back to the generic icon for an unknown mode', async () => {
+      const el = await mount();
+      const resolver = el as unknown as { _modeIcon(mode: string): string };
+      expect(resolver._modeIcon('custom')).to.equal('mdi:thermostat');
+    });
+
+    for (const mode of ['heat', 'cool']) {
+      it(`uses the ${mode} override for the active dual setpoint`, async () => {
+        const el = await mount();
+        el.dual = true;
+        el.mode = 'heat_cool';
+        el.lowValue = 18;
+        el.highValue = 24;
+        el.current = mode === 'heat' ? 14 : 28;
+        el.modeIcons = { [mode]: 'mdi:heat-wave', heat_cool: 'mdi:thermostat' };
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.mode-icon')!.getAttribute('icon')).to.equal(
+          'mdi:heat-wave'
+        );
+      });
+    }
+  });
+
   describe('dragging presentation', () => {
     for (const dual of [false, true]) {
       it(`morphs the band and markers only during dragging (dual=${dual})`, async () => {

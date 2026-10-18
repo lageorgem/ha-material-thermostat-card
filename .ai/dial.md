@@ -202,6 +202,7 @@ but muted for inactive single colored modes (see above). The single `.value`
 stroke transitions separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
 Off/uncolored modes use `IDLE_COLOR` and `.dial.off` dims the halo to opacity 0.5;
 they are distinct from `.dial.idle` and hide the single value segment.
+`modeIcons`, alongside `modeColors`, overrides single/merged and dual sub-mode marker icons; missing/empty HVAC option icons keep the built-in default.
 `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
 
 Activity-only changes cross-fade without a wipe or off/on segment slide.
