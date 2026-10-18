@@ -344,7 +344,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
    * @param e menu key event
    */
   private _addMenuKeydown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || !this._addOpen) return;
     e.preventDefault();
     e.stopPropagation();
     this._addOpen = false;
@@ -392,6 +392,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
                 return this._labeledField(label, html`<mt-entity-picker
                   .hass=${this.hass}
                   .label=${label}
+                  clearable
                   .includeDomains=${['sensor']}
                   .value=${this._feelsLikeData[key] ?? ''}
                   @value-changed=${(e: CustomEvent<{ value: string }>) => this._feelsLikeSensorChanged(key, e)}
@@ -419,7 +420,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           </div>
         </ha-sortable>
 
-        <div class="add">
+        <div class="add" @keydown=${this._addMenuKeydown}>
           <button
             class="add-btn"
             aria-expanded=${this._addOpen ? 'true' : 'false'}
@@ -429,7 +430,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
             <span>Add feature</span>
           </button>
           ${this._addOpen
-            ? html`<div class="add-menu" @keydown=${this._addMenuKeydown}>
+            ? html`<div class="add-menu">
                 ${this._addableFeatures().map(
                   (f) => html`<button class="add-opt" @click=${() => this._pickFeature(f.type)}>
                     <ha-icon icon=${f.icon}></ha-icon>${f.label}

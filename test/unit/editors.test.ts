@@ -1,4 +1,5 @@
 import { fixture, html, expect, aTimeout } from '@open-wc/testing';
+import { sendKeys } from '@web/test-runner-commands';
 import { makeHass, climateState, entityState, captureEvents } from '../helpers';
 import type { TestHass } from '../helpers';
 
@@ -266,9 +267,16 @@ describe('material-thermostat-card-editor', () => {
     emitValueChanged(pickers[1], 'sensor.h');
     emitValueChanged(panel.querySelector('ha-form')!, { show_as_current: true });
     expect((cap.events[2].detail as any).config.feels_like).to.deep.equal({ temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true });
-    emitValueChanged(pickers[0], '');
-    emitValueChanged(pickers[1], '');
     emitValueChanged(panel.querySelector('ha-form')!, { show_as_current: false });
+    await el.updateComplete;
+    await Promise.all(Array.from(pickers, (picker) => picker.updateComplete));
+    expect(pickers[0].shadowRoot!.querySelector('.trigger')!.getAttribute('aria-label')).to.equal('Temperature sensor');
+    expect(pickers[1].shadowRoot!.querySelector('.trigger')!.getAttribute('aria-label')).to.equal('Humidity sensor');
+    pickers[0].shadowRoot!.querySelector<HTMLButtonElement>('.clear')!.click();
+    expect((cap.events[4].detail as any).config.feels_like).to.deep.equal({ temperature: undefined, humidity: 'sensor.h', show_as_current: undefined });
+    await el.updateComplete;
+    await pickers[1].updateComplete;
+    pickers[1].shadowRoot!.querySelector<HTMLButtonElement>('.clear')!.click();
     cap.stop();
     expect((cap.events[5].detail as any).config.feels_like).to.equal(undefined);
   });
@@ -289,6 +297,43 @@ describe('material-thermostat-card-editor', () => {
     await el.updateComplete;
     expect(el.shadowRoot!.querySelector('.add-menu')).to.equal(null);
     expect(el.shadowRoot!.activeElement).to.equal(add);
+  });
+
+  it('can clear sensors loaded from existing feels-like configuration', async () => {
+    const el = await mount({ feels_like: { temperature: 'sensor.t', humidity: 'sensor.h' } });
+    const pickers = el.shadowRoot!.querySelectorAll('mt-entity-picker');
+    await Promise.all(Array.from(pickers, (picker) => picker.updateComplete));
+    const cap = captureEvents('config-changed');
+    pickers[1].shadowRoot!.querySelector<HTMLButtonElement>('.clear')!.click();
+    expect((cap.events[0].detail as any).config.feels_like).to.deep.equal({
+      temperature: 'sensor.t', humidity: undefined, show_as_current: undefined,
+    });
+    await el.updateComplete;
+    await pickers[0].updateComplete;
+    pickers[0].shadowRoot!.querySelector<HTMLButtonElement>('.clear')!.click();
+    cap.stop();
+    expect((cap.events[1].detail as any).config.feels_like).to.equal(undefined);
+  });
+
+  it('opens with Enter and handles Escape immediately on the add button only while open', async () => {
+    const el = await mount();
+    const add = el.shadowRoot!.querySelector<HTMLButtonElement>('.add-btn')!;
+    let escaped = 0;
+    el.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') escaped++;
+    });
+    add.focus();
+    await sendKeys({ press: 'Enter' });
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('.add-menu')).to.not.equal(null);
+    expect(el.shadowRoot!.activeElement).to.equal(add);
+    await sendKeys({ press: 'ESC' });
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('.add-menu')).to.equal(null);
+    expect(el.shadowRoot!.activeElement).to.equal(add);
+    expect(escaped).to.equal(0);
+    await sendKeys({ press: 'ESC' });
+    expect(escaped).to.equal(1);
   });
 
   it('supports keyboard reorder in both directions, ignores edges/other keys, and restores focus', async () => {

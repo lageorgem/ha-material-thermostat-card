@@ -38,6 +38,8 @@ export class MtEntityPicker extends LitElement {
   @property({ attribute: false }) includeDomains?: string[];
   /** Allow committing a typed value that isn't a known entity. */
   @property({ type: Boolean }) allowCustom = false;
+  /** Offer a separate action to remove the current selection. */
+  @property({ type: Boolean }) clearable = false;
 
   @state() private _open = false;
 
@@ -112,12 +114,23 @@ export class MtEntityPicker extends LitElement {
     );
   }
 
+  /**
+   * Clear the selection without toggling the dropdown.
+   * @param e the clear button's click event
+   */
+  private _clear(e: Event): void {
+    e.stopPropagation();
+    this._onPick(new CustomEvent('pick', { detail: { value: '' } }));
+  }
+
   protected render(): TemplateResult {
     const sel = this._selected();
     return html`
+      <div class=${classMap({ 'trigger-row': true, open: this._open })} @click=${this._toggle}>
       <button
         type="button"
-        class=${classMap({ trigger: true, open: this._open })}
+        class="trigger"
+        aria-label=${this.label || nothing}
         aria-haspopup="listbox"
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}
@@ -126,8 +139,14 @@ export class MtEntityPicker extends LitElement {
           ? html`<ha-icon class="lead" icon=${sel.icon}></ha-icon>
               <span class="text">${sel.name}</span>`
           : html`<span class="text muted">${this.label}</span>`}
-        <ha-icon class="chev" icon="mdi:chevron-down"></ha-icon>
       </button>
+      ${this.clearable && this.value
+        ? html`<button type="button" class="clear" aria-label=${`Clear ${this.label}`} @click=${this._clear}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>`
+        : nothing}
+      <ha-icon class="chev" icon="mdi:chevron-down" aria-hidden="true"></ha-icon>
+      </div>
       ${this._open
         ? html`<div class="panel">
             <mt-search-panel
@@ -148,7 +167,7 @@ export class MtEntityPicker extends LitElement {
       display: block;
       position: relative;
     }
-    .trigger {
+    .trigger-row {
       width: 100%;
       box-sizing: border-box;
       height: 40px;
@@ -165,6 +184,35 @@ export class MtEntityPicker extends LitElement {
       font-size: 14px;
       -webkit-tap-highlight-color: transparent;
     }
+    .trigger {
+      display: flex;
+      align-items: center;
+      gap: inherit;
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      border-radius: inherit;
+    }
+    .clear {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 32px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--md-sys-shape-corner-full, 9999px);
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
+      cursor: pointer;
+      --mdc-icon-size: 20px;
+    }
     .trigger .lead {
       --mdc-icon-size: 20px;
       flex: 0 0 auto;
@@ -180,13 +228,13 @@ export class MtEntityPicker extends LitElement {
     .trigger .text.muted {
       color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
     }
-    .trigger .chev {
+    .trigger-row .chev {
       flex: 0 0 auto;
       --mdc-icon-size: 20px;
       color: var(--md-sys-color-on-surface-variant, var(--secondary-text-color));
       transition: transform 150ms cubic-bezier(0.2, 0, 0, 1);
     }
-    .trigger.open .chev {
+    .trigger-row.open .chev {
       transform: rotate(180deg);
     }
     .panel {

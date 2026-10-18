@@ -15,15 +15,17 @@ const STATES = {
 
 /**
  * Mount the entity picker.
- * @param opts value / includeDomains / allowCustom overrides
+ * @param opts picker property overrides
  */
 async function mount(
-  opts: { value?: string; includeDomains?: string[]; allowCustom?: boolean } = {}
+  opts: { value?: string; label?: string; clearable?: boolean; includeDomains?: string[]; allowCustom?: boolean } = {}
 ): Promise<MtEntityPicker> {
   const el = await fixture<MtEntityPicker>(
     html`<mt-entity-picker
       .hass=${makeHass(STATES)}
       .value=${opts.value ?? ''}
+      .label=${opts.label ?? 'Entity'}
+      .clearable=${opts.clearable ?? false}
       .includeDomains=${opts.includeDomains}
       .allowCustom=${opts.allowCustom ?? false}
     ></mt-entity-picker>`
@@ -67,6 +69,44 @@ function onChange(el: MtEntityPicker): Promise<string> {
 }
 
 describe('mt-entity-picker', () => {
+  it('keeps a persistent trigger label with and without a selection', async () => {
+    const el = await mount({ label: 'Temperature sensor' });
+    expect(trigger(el).getAttribute('aria-label')).to.equal('Temperature sensor');
+    el.value = 'sensor.temp';
+    await el.updateComplete;
+    expect(trigger(el).getAttribute('aria-label')).to.equal('Temperature sensor');
+    el.label = '';
+    await el.updateComplete;
+    expect(trigger(el).hasAttribute('aria-label')).to.be.false;
+  });
+
+  it('only offers clearing for a clearable, nonempty value', async () => {
+    const el = await mount({ value: 'sensor.temp' });
+    expect(el.shadowRoot!.querySelector('.clear')).to.equal(null);
+    el.clearable = true;
+    el.value = '';
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('.clear')).to.equal(null);
+  });
+
+  it('clears through a separate labelled button without opening, and closes an open panel', async () => {
+    const el = await mount({ value: 'sensor.temp', label: 'Temperature sensor', clearable: true });
+    const clear = el.shadowRoot!.querySelector<HTMLButtonElement>('.clear')!;
+    expect(clear.getAttribute('aria-label')).to.equal('Clear Temperature sensor');
+    expect(clear.closest('.trigger')).to.equal(null);
+    let changed = onChange(el);
+    clear.click();
+    expect(await changed).to.equal('');
+    await el.updateComplete;
+    expect(panel(el)).to.equal(null);
+    await open(el);
+    changed = onChange(el);
+    clear.click();
+    expect(await changed).to.equal('');
+    await el.updateComplete;
+    expect(panel(el)).to.equal(null);
+  });
+
   it('renders a closed trigger showing the placeholder label when no value', async () => {
     const el = await mount({ value: '' });
     expect(trigger(el)).to.not.equal(null);
@@ -179,6 +219,13 @@ describe('mt-entity-picker', () => {
     trigger(el).click();
     await el.updateComplete;
     expect(panel(el)).to.equal(null);
+  });
+
+  it('keeps the chevron clickable as part of the trigger row', async () => {
+    const el = await mount();
+    (el.shadowRoot!.querySelector('.chev') as HTMLElement).click();
+    await el.updateComplete;
+    expect(panel(el)).to.not.equal(null);
   });
 
   describe('empty + custom values', () => {
