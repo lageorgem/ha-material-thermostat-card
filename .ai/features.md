@@ -78,7 +78,7 @@ shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
 - Shares its look with the selector dropdown's tile variant via
   `features/tile-styles.ts` (`tileStyles`, `.tile` min-height **64px** + capped
   title/value line-heights so every tile variant lines up). The tile takes the
-  accent "on" treatment (soft tint + extra-rounded corners) when its value is
+  accent "on" treatment (soft tint + fully rounded pill corners) when its value is
   **not falsy** (`isOffValue` in `theme.ts`: off/none/false/null/0/unavailable/
   unknown, else on), and is forced to the off treatment via `forceOff` (threaded
   from `feature-row`) when the card's **climate entity is off**.
@@ -149,7 +149,7 @@ Everything selector-like funnels through `mt-selector-row`, which takes
 The **tile** variant of `mt-dropdown` is a Google-Home-style card: an icon chip,
 the `label` as a title line, and the active item's label as the value, opening the
 same shared option menu when tapped. It reads as **"on"** (accent tint +
-extra-rounded `--mt-shape-card` corners) when the active value is **not** a
+fully rounded `--mt-shape-full` pill corners) when the active value is **not** a
 hardcoded off state (`off`/`none`, case-insensitive via `_tileOn`); otherwise it's
 a neutral, less-rounded (`--mt-shape-chip-square`) rectangle. The tint color is
 `--mt-tile-accent` (default `--mt-primary`); the **HVAC** selector sets it to the

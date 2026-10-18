@@ -6,7 +6,7 @@ import { css } from 'lit';
  * ({@link ../features/entity-tile.MtEntityTile}), so the two look identical.
  *
  * A tile is a full-width button with a leading icon chip and a title over its
- * value. The `on` class drives the "active" treatment — extra-rounded corners
+ * value. The `on` class drives the "active" treatment — fully rounded pill corners
  * plus a soft tint of `--mt-tile-accent` (the HVAC mode color for climate
  * selectors, else the primary) — while an "off" tile stays a squarer, neutral
  * surface. The title is intentionally smaller/dimmer than the value, matching
@@ -27,7 +27,7 @@ export const tileStyles = css`
     box-sizing: border-box;
     border: none;
     /* "off" tiles are squarer rounded rectangles; "on" tiles morph to the
-       extra-rounded card shape (see the .tile.on rule below). */
+       fully rounded pill shape (see the .tile.on rule below). */
     border-radius: var(--mt-shape-chip-square);
     background: var(--mt-surface-container);
     color: var(--mt-on-surface);
@@ -47,9 +47,9 @@ export const tileStyles = css`
     background: color-mix(in srgb, var(--mt-on-surface) 12%, var(--mt-surface-container));
   }
   .tile.on {
-    /* extra-rounded corners + a soft tint of the accent (the HVAC mode color
+    /* Fully rounded pill corners + a soft tint of the accent (the HVAC mode color
        for the climate selector, else the primary). */
-    border-radius: var(--mt-shape-card);
+    border-radius: var(--mt-shape-full);
     background: color-mix(in srgb, var(--mt-tile-accent, var(--mt-primary)) 16%, var(--mt-surface-container));
     color: var(--mt-tile-accent, var(--mt-primary));
   }

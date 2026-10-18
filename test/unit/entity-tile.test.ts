@@ -290,6 +290,20 @@ describe('mt-entity-tile', () => {
     /** The rendered `.tile` button. */
     const tileOf = (el: MtEntityTile) => el.shadowRoot!.querySelector('.tile')!;
 
+    it('uses the full pill radius when on and square-chip radius when off', async () => {
+      const on = await mount(makeHass({ 'switch.x': entityState('switch.x', 'on') }), {
+        type: 'entity-tile',
+        entity: 'switch.x',
+      });
+      const off = await mount(makeHass({ 'switch.x': entityState('switch.x', 'off') }), {
+        type: 'entity-tile',
+        entity: 'switch.x',
+      });
+
+      expect(getComputedStyle(tileOf(on)).borderTopLeftRadius).to.equal('9999px');
+      expect(getComputedStyle(tileOf(off)).borderTopLeftRadius).to.equal('16px');
+    });
+
     it('icon tile gets `on` class when the value is not falsy', async () => {
       const hass = makeHass({ 'switch.x': entityState('switch.x', 'on') });
       const el = await mount(hass, { type: 'entity-tile', entity: 'switch.x', display: 'icon' });
