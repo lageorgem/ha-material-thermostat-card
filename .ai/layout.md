@@ -74,9 +74,9 @@ side-by-side layout.
 
 ## The dial bottom-gap crop (stacked mode)
 
-The dial is square, but the 270° ring leaves a ~14.7% empty band at the bottom
-(where the +/− live). Stacked layout applies `marginBottom: -(DIAL_BOTTOM_GAP ×
-min(_widthPx, DIAL_MAX_PX))px` (`DIAL_BOTTOM_GAP = 0.147`) so the gap below the
+The dial is square; below the +/− (which sit in the 300° ring's bottom gap, centres at
+88%) it leaves a ~6.5% empty band. Stacked layout applies `marginBottom: -(DIAL_BOTTOM_GAP ×
+min(_widthPx, DIAL_MAX_PX))px` (`DIAL_BOTTOM_GAP = 0.065`) so the gap below the
 dial matches the inter-row gap. With `.body.stacked` gap 12px, `.features` grid
 gap 12px, and `ha-card` padding-bottom 12px, the rhythm is an even 12px.
 

@@ -122,7 +122,7 @@ visually, or write the YAML directly.
 
 ## The dial
 
-The dial mirrors the stock thermostat card's controls with a Nest‑style 270° arc (the gap sits at
+The dial mirrors the stock thermostat card's controls with a Nest‑style 300° arc (the gap sits at
 the bottom, where the `+/−` live).
 
 <p align="center">
