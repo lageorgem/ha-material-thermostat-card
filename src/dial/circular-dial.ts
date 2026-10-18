@@ -1166,7 +1166,7 @@ export class MtCircularDial extends LitElement {
       .dial.dragging .ring,
       .dial.dragging .value,
       .dial.dragging .wipe-value {
-        stroke-width: 35;
+        stroke-width: 20;
       }
 
       /* Markers orbit the center so they ride the arc and stay on the ring. */
@@ -1214,13 +1214,13 @@ export class MtCircularDial extends LitElement {
           border-radius var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .dial.dragging .o-dot.setpoint {
-        width: clamp(4px, 2.2cqi, 7px);
-        height: 11cqi;
+        width: clamp(3px, 1.6cqi, 5px);
+        height: 6.25cqi;
         border-radius: 999px;
       }
       .dial.dragging .o-dot.current {
-        width: clamp(2px, 1.1cqi, 4px);
-        height: 11cqi;
+        width: clamp(2px, 0.9cqi, 3px);
+        height: 6.25cqi;
         border-radius: 999px;
       }
       .o-label {
@@ -1232,7 +1232,7 @@ export class MtCircularDial extends LitElement {
           top var(--mt-motion-dur) var(--mt-motion-ease);
       }
       .dial.dragging .o-label {
-        top: 21.25%; /* (160-92)/320 — clear of the thick band */
+        top: 20%; /* (160-96)/320 — clear of the thick band */
       }
       .o-label .num {
         font-size: clamp(8px, 4.6cqi, var(--md-sys-typescale-title-medium-size, 16px));

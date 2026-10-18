@@ -36,7 +36,7 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   (`top: 9.375%` = (160−130)/320).
 - `_labelOrbit(angle, content)` — same, but the label counter-rotates
   (`rotate(-angle)`) to stay upright; `top: 18.75%` at rest (radius 100), moving
-  inward to `top: 21.25%` while dragging (radius 92, clear of the thick band).
+  inward to `top: 20%` while dragging (radius 96, clear of the band's inner edge at 120).
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
@@ -160,10 +160,11 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 - **Tap-to-set**: touch ring taps commit via `_commitTap` if movement stays within
   `TAP_SLOP_PX` (10px); mouse/pen use the short-drag path. Emits `value-changed`.
 - **Dragging visuals**: `_dragging` adds `.dial.dragging` in single and dual mode.
-  `.ring`, `.value` and `.wipe-value` thicken from stroke-width 10 to 35 (viewBox
-  units, approximately the buttons' 11cqi height). `.o-dot.setpoint` becomes a
-  radial pill (`width:clamp(4px, 2.2cqi, 7px)`); `.o-dot.current` a thinner pill
-  (`width:clamp(2px, 1.1cqi, 4px)`). Both are `height:11cqi`, `border-radius:999px`.
+  `.ring`, `.value` and `.wipe-value` thicken from stroke-width 10 to 20 (viewBox
+  units, approximately 0.15 × radius). `.o-dot.setpoint` becomes a
+  radial pill (`width:clamp(3px, 1.6cqi, 5px)`); `.o-dot.current` a thinner pill
+  (`width:clamp(2px, 0.9cqi, 3px)`). Both are `height:6.25cqi` (20/320, exactly
+  the band thickness), `border-radius:999px`.
   `.o-label` moves inward as above. Stroke width, marker width/height/radius and
   label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
 - **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:

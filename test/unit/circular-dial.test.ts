@@ -88,14 +88,14 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         expect(dial.classList.contains('dragging')).to.be.true;
         for (const band of sr.querySelectorAll('.ring, .value')) {
-          expect(getComputedStyle(band).strokeWidth).to.equal('35px');
+          expect(getComputedStyle(band).strokeWidth).to.equal('20px');
           expect(getComputedStyle(band).transitionProperty).to.contain('stroke-width');
         }
         for (const dot of sr.querySelectorAll('.o-dot')) {
           const style = getComputedStyle(dot);
-          expect(parseFloat(style.height)).to.be.closeTo(35.2, 0.1);
+          expect(parseFloat(style.height)).to.be.closeTo(20, 0.1);
           expect(parseFloat(style.width)).to.be.closeTo(
-            dot.classList.contains('setpoint') ? 7 : 3.52,
+            dot.classList.contains('setpoint') ? 5 : 2.88,
             0.01
           );
           expect(style.borderRadius).to.equal('999px');
@@ -104,7 +104,7 @@ describe('mt-circular-dial', () => {
           expect(style.transitionProperty).to.include('border-radius');
         }
         for (const label of sr.querySelectorAll('.o-label')) {
-          expect(getComputedStyle(label).top).to.equal('68px');
+          expect(getComputedStyle(label).top).to.equal('64px');
           expect(getComputedStyle(label).transitionProperty).to.include('top');
         }
         if (dual) {
