@@ -7,14 +7,14 @@ calls services itself.
 
 ## Geometry
 
-A fixed **320×320 viewBox**. The interactive range is a **270° arc with a gap at
-the bottom** (Nest/Google-Home style, so mid-range values sit at the top).
+A fixed **320×320 viewBox**. The interactive range is a **300° near-full arc
+with a 60° gap at the bottom** (Google-Home style, so mid-range values sit at the top).
 
 ```
 VIEW   = 320,  CENTER = 160,  RADIUS = 130
-ARC_START = 225°   (clockwise from top → bottom-LEFT = min value, fraction 0)
-SWEEP     = 270°
-ARC_END   = 135°   (bottom-RIGHT = max value, fraction 1)
+ARC_START    = 210°   (clockwise from top → bottom-LEFT = min value, fraction 0)
+SWEEP        = 300°
+ARC_END_WRAP = 150°   ((ARC_START+SWEEP)%360; bottom-RIGHT = max, fraction 1)
 ```
 
 - `polar(angleDeg, r)` — angle (0°=top, CW+) → `{x,y}`. **Note the −90 offset**:
@@ -35,7 +35,8 @@ Safari/WKWebView, and `rotate` of an HTML overlay rides the arc smoothly.
   `rotate(angle)`, with a child dot pinned on the ring centerline
   (`top: 9.375%` = (160−130)/320).
 - `_labelOrbit(angle, content)` — same, but the label counter-rotates
-  (`rotate(-angle)`) to stay upright; pinned at `top: 18.75%` (just inside ring).
+  (`rotate(-angle)`) to stay upright; `top: 18.75%` at rest (radius 100), moving
+  inward to `top: 21.25%` while dragging (radius 92, clear of the thick band).
 - **`<svg>` must be `display:block`** so its coordinate box aligns with the
   absolutely-positioned overlays (an inline SVG's baseline gap offsets them).
 - When the setpoint icon and current-temp label are within `OVERLAP_DEG` (18°)
@@ -67,23 +68,27 @@ with different large-arc flags makes the arc balloon/bend; avoid it entirely):
 
 `segS/segE` are fractions. **Single mode** renders ONE persistent `.value` path
 (so it animates on turn-on/off + during the wipe) from `min(frac(value),
-frac(current))` to `max(...)`, colored by `_demandSensible` — the demand color
-when the direction is meaningful (cool needs current > setpoint, heat needs
-current < setpoint), else `IDLE_COLOR` gray (e.g. cool mode but already below the
-setpoint → gray, "not cooling anything").
+frac(current))` to `max(...)`. It keeps the same geometry when activity changes;
+its stroke is `modeTint` (also exposed as `--mode-tint`).
 
-**Gray-when-no-sense is single-setpoint ONLY, and only the segment grays.** The
-halo, ring, mode icon, and big number all read from `--dial-color`, which is
-`_dialColor`/`_effectiveMode` (mode-derived) and is **never** affected by
-`_demandSensible` — so an inactive heater/cooler still glows its mode color, only
-the arc segment goes gray. Dual (heat_cool) does NOT use this rule at all (see
-below).
+**Active-only lighting is single-setpoint ONLY.** The card passes raw
+`hvac_action` as `.hvacAction`; `_singleActive` is false for uncolored modes,
+otherwise a nonempty `hvacAction` wins: anything except `'idle'`/`'off'` is active.
+Absent/empty action falls back to `_demandSensible`: no current → false;
+cool needs current > setpoint, heat needs current < setpoint; other colored modes
+are true when current is present. Active → full mode color. Inactive colored mode
+→ `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
+neutralizing halo, ring and big number; `.dial.idle` dims the halo to opacity 0.5.
+The segment and mode icon retain a muted mode tint:
+`--mode-tint = color-mix(in srgb, <mode color> 50%, var(--mt-on-surface-variant))`.
+Dual (heat_cool) does NOT use this single-mode activity rule (see below).
 
 ## Dual (heat_cool): temperature-derived sub-mode
 
 In dual mode the dial does NOT just fill between the two setpoints. It derives
-the **active sub-mode from the current temperature** (`_dualActive`):
-`current > displayHigh` → `'cool'`, `current < displayLow` → `'heat'`, else
+the **active sub-mode** (`_dualActive`): `mode === 'cool'`/`'heat'` wins (the card
+maps reported cooling/heating to `mode`); otherwise temperature decides:
+`current > _displayHigh` → `'cool'`, `current < _displayLow` → `'heat'`, else
 `null` (idle, in range). It renders **two persistent bands** (both `.value`
 paths, classes `range` + `demand`) — ALWAYS both, so they **cross-fade** as the
 sub-mode changes instead of popping (see below):
@@ -145,14 +150,25 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 
 ## Interaction
 
-- **Drag**: `_onPointerDown` gates on `_isRingHit` (distance band
-  `[RADIUS−32, RADIUS+22]` **and** not in the bottom gap) so taps in the
-  center/gap/outside don't jump the setpoint. A press sets `_dragging=true` and
-  markers animate toward the pointer (smooth follow). Dual mode picks the nearer
-  handle. Emits `value-changing` live.
-- **Tap-to-set** is just a short drag — same path, animated.
-- **+/− step buttons** (`.adjust`, single mode only) sit in the bottom gap
-  (`top:80%`), `pointer-events:none` on the container with the buttons re-enabled.
+- **Drag**: `_onPointerDown` gates on `_isRingHit`: viewBox-scaled distance band
+  `[RADIUS−32, RADIUS+22]` **and** angle ≥ `ARC_START` (210°) or ≤ `ARC_END_WRAP`
+  (150°), excluding the open bottom gap (150°, 210°). Mouse/pen ring presses
+  begin dragging immediately; touch ring presses only arm a tap so swipes scroll.
+  Touch scrubbing starts on a `.handle` (`_onHandlePointerDown`, `touch-action:none`).
+  `_beginDrag` sets `_dragging=true`; markers follow smoothly and emit
+  `value-changing` live. Dual ring scrubs pick the nearer handle.
+- **Tap-to-set**: touch ring taps commit via `_commitTap` if movement stays within
+  `TAP_SLOP_PX` (10px); mouse/pen use the short-drag path. Emits `value-changed`.
+- **Dragging visuals**: `_dragging` adds `.dial.dragging` in single and dual mode.
+  `.ring`, `.value` and `.wipe-value` thicken from stroke-width 10 to 35 (viewBox
+  units, approximately the buttons' 11cqi height). `.o-dot.setpoint` becomes a
+  radial pill (`width:clamp(4px, 2.2cqi, 7px)`); `.o-dot.current` a thinner pill
+  (`width:clamp(2px, 1.1cqi, 4px)`). Both are `height:11cqi`, `border-radius:999px`.
+  `.o-label` moves inward as above. Stroke width, marker width/height/radius and
+  label top all transition via `--mt-motion-dur`/`--mt-motion-ease`, including release.
+- **+/− step buttons** (`.adjust`, single and dual) sit in the bottom gap:
+  `top:88%`, a centered 36%-wide two-column grid puts their centers at 41%/59%
+  width. `pointer-events:none` on the container with the buttons re-enabled.
 - **Keyboard** (single mode): arrows step by `step`; emits `value-changed`.
 - Sizes scale with the dial via **container queries**: `.dial` has
   `container-type: inline-size` and inner text/dots/buttons use `clamp(min, Ncqi,
@@ -162,10 +178,19 @@ is also smaller than single (two numbers + dash). ⚠️ Don't widen the centre 
 ## Color & the `--dial-color` custom property
 
 `--dial-color` is registered via `CSS.registerProperty` as an **animatable
-`<color>`** (syntax `<color>`), so the halo gradient, ring, value, and big number
-**cross-fade** between mode colors instead of jumping. It's set inline on `.dial`
-and transitioned in CSS. Off/uncolored modes use `--mt-on-surface-variant` and a
-dimmed halo. `COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
+`<color>`** (syntax `<color>`), so the halo gradient, ring and big number
+**cross-fade** between mode/neutral colors instead of jumping. `_dialColor` sets
+it inline on `.dial`; CSS transitions it. `_modeColor` uses `modeColors` overrides,
+else `climateModeColor`. `--mode-tint` is set alongside it: normally the same color,
+but muted for inactive single colored modes (see above). The single `.value`
+stroke transitions separately; `.mode-icon` reads `var(--mode-tint, var(--dial-color))`.
+Off/uncolored modes use `IDLE_COLOR` and `.dial.off` dims the halo to opacity 0.5;
+they are distinct from `.dial.idle` and hide the single value segment.
+`COLORED_MODES = ['cool','heat','heat_cool','auto','dry','fan_only']`.
+
+Activity-only changes cross-fade without a wipe or off/on segment slide.
+`updated()` gates `_runWipe()` on a `mode` change between colored modes with a
+changed color; `hvacAction`/temperature changes alone do not trigger it.
 
 The halo (`#mt-glow` radialGradient) is a **6-stop falloff from 0.38 at center to
 opacity 0 at the perimeter** — ending at 0 (not 0.02) avoids a faint hard-edged
