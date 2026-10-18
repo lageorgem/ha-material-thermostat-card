@@ -822,7 +822,13 @@ export class MtCircularDial extends LitElement {
 
     return html`
       <div
-        class=${classMap({ dial: true, off: isOff, idle: isIdle, disabled: this.disabled, dragging: this._dragging })}
+        class=${classMap({
+          dial: true,
+          off: isOff,
+          idle: isIdle,
+          disabled: this.disabled,
+          dragging: this._dragging,
+        })}
         style=${`--dial-color: ${color};${this.dual ? '' : ` --mode-tint: ${modeTint}`}`}
       >
         <svg
