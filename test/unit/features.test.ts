@@ -1,5 +1,5 @@
 import { fixture, html, expect } from '@open-wc/testing';
-import { makeHass, climateState, entityState, oncePromise } from '../helpers';
+import { makeHass, climateState, entityState, oncePromise, waterHeaterState } from '../helpers';
 import type { TestHass } from '../helpers';
 
 import '../../src/features/climate-selector';
@@ -7,6 +7,8 @@ import '../../src/features/input-select';
 import '../../src/features/switch-group';
 import '../../src/features/switch-list';
 import '../../src/features/button-list';
+import '../../src/features/feature-row';
+import '../../src/features/water-heater-away';
 
 import type { MtClimateSelector } from '../../src/features/climate-selector';
 import type { MtInputSelect } from '../../src/features/input-select';
@@ -15,6 +17,176 @@ import type { MtSwitchList } from '../../src/features/switch-list';
 import type { MtButtonList } from '../../src/features/button-list';
 import type { MtSelectorRow } from '../../src/features/selector-row';
 import type { SelectorItem } from '../../src/types';
+import type { MtWaterHeaterAway } from '../../src/features/water-heater-away';
+import type { MtDropdown } from '../../src/features/dropdown';
+import type { MtFeatureRow } from '../../src/features/feature-row';
+import type { FeatureConfig } from '../../src/types';
+import type { ClimateSelectorKind } from '../../src/features/climate-selector';
+import { sortOperationModes, swingHorizontalIcon, waterHeaterModeColor } from '../../src/theme';
+
+
+describe('stock selector parity', () => {
+  for (const kind of ['operation', 'swing_horizontal']) {
+    it(`hides ${kind} without a mode list`, async () => {
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': climateState({ operation_list: undefined, swing_horizontal_modes: undefined }) })} entityId="climate.test" kind=${kind}></mt-climate-selector>`);
+      expect(selectorRow(el)).to.equal(null);
+    });
+  }
+
+  it('forces off for water-heater modes', async () => {
+    const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'water_heater.test': waterHeaterState({}, 'off') })} entityId="water_heater.test" kind="operation" display="tile"></mt-climate-selector>`);
+    expect(selectorRow(el)!.forceOff).to.be.true;
+  });
+
+  it('guards away selection against stale capabilities and unavailability', async () => {
+    const hass = makeHass({ 'water_heater.test': waterHeaterState() });
+    const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test"></mt-water-heater-away>`);
+    for (const s of [waterHeaterState({}, 'unavailable'), waterHeaterState({ supported_features: 0 }), waterHeaterState({ away_mode: 'invalid' })]) {
+      hass.states['water_heater.test'] = s;
+      selectValue(el, 'away');
+    }
+    expect(hass.__calls).to.have.length(0);
+    el.requestUpdate();
+    await el.updateComplete;
+    expect(selectorRow(el)).to.equal(null);
+  });
+
+  it('marks unavailable away disabled and localizes its label', async () => {
+    const hass = Object.assign(makeHass({ 'water_heater.test': waterHeaterState({}, 'unavailable') }), {
+      formatEntityAttributeName: () => 'Vacation',
+    });
+    const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test"></mt-water-heater-away>`);
+    expect(rowItems(el)[0].disabled).to.be.true;
+    expect(rowItems(el)[0].label).to.equal('Vacation');
+  });
+  for (const kind of ['swing_horizontal', 'operation'] as const) {
+    it(`renders and selects ${kind}`, async () => {
+      const operation = kind === 'operation';
+      const id = operation ? 'water_heater.test' : 'climate.test';
+      const values = operation ? ['off', 'eco', 'heat_pump'] : ['off', 'left', 'right'];
+      const s = operation
+        ? waterHeaterState({ operation_list: values }, 'eco')
+        : climateState({ swing_horizontal_modes: values, swing_horizontal_mode: 'left' });
+      const hass = makeHass({ [id]: s });
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${hass} entityId=${id} kind=${kind} display="tile"></mt-climate-selector>`);
+      expect(rowItems(el).map(i => i.value)).to.deep.equal(operation ? sortOperationModes(values) : values);
+      expect(rowItems(el).find(i => i.active)!.value).to.equal(operation ? 'eco' : 'left');
+      if (operation) {
+        expect(selectorRow(el)!.getAttribute('style')).to.contain(waterHeaterModeColor('eco'));
+      } else {
+        expect(rowItems(el)[1].icon).to.equal(swingHorizontalIcon('left'));
+        expect(rowItems(el)[1].color).to.equal(undefined);
+      }
+      selectValue(el, values[2]);
+      expect(hass.__calls[0]).to.deep.include({ domain: operation ? 'water_heater' : 'climate', service: operation ? 'set_operation_mode' : 'set_swing_horizontal_mode' });
+      expect(hass.__calls[0].data).to.deep.equal({ entity_id: id, [operation ? 'operation_mode' : 'swing_horizontal_mode']: values[2] });
+    });
+  }
+
+  for (const kind of ['hvac', 'fan', 'preset', 'swing', 'swing_horizontal', 'operation'] as ClimateSelectorKind[]) {
+    it(`localizes ${kind} labels and tile title`, async () => {
+      const hass = Object.assign(makeHass({ 'climate.test': climateState({ preset_modes: ['eco'], swing_horizontal_modes: ['off'], operation_list: ['off'] }) }), {
+        formatEntityState: (_s: unknown, v?: string) => `state:${v}`,
+        formatEntityAttributeValue: (_s: unknown, a: string, v: unknown) => `${a}:${v}`,
+        formatEntityAttributeName: (_s: unknown, a: string) => `title:${a}`,
+        localize: () => 'Localized mode',
+      });
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${hass} entityId="climate.test" kind=${kind} display="tile"></mt-climate-selector>`);
+      const attribute = `${kind}_mode`;
+      expect(rowItems(el)[0].label).to.equal(`${kind === 'hvac' || kind === 'operation' ? 'state' : attribute}:${rowItems(el)[0].value}`);
+      expect(selectorRow(el)!.label).to.equal(kind === 'hvac' ? 'Localized mode' : `title:${attribute}`);
+    });
+  }
+
+  it('filters and orders the allow-list', async () => {
+    const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': climateState() })} entityId="climate.test" .include=${['heat', 'off']} .order=${['heat']}></mt-climate-selector>`);
+    expect(rowItems(el).map(i => i.value)).to.deep.equal(['heat', 'off']);
+  });
+
+  for (const display of ['icons', 'dropdown', 'tile']) {
+    it(`disables unavailable ${display} controls`, async () => {
+      const hass = makeHass({ 'climate.test': climateState({}, 'unavailable') });
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${hass} entityId="climate.test" display=${display}></mt-climate-selector>`);
+      expect(rowItems(el).every(i => i.disabled)).to.be.true;
+      const row = selectorRow(el)!;
+      await row.updateComplete;
+      if (display === 'icons') {
+        expect(chips(el).every(b => b.disabled)).to.be.true;
+        chips(el)[0].click();
+      } else {
+        const dropdown = row.shadowRoot!.querySelector<MtDropdown>('mt-dropdown')!;
+        await dropdown.updateComplete;
+        const button = dropdown.shadowRoot!.querySelector('button')!;
+        expect(button.disabled).to.be.true;
+        button.click();
+        await dropdown.updateComplete;
+        expect(dropdown.shadowRoot!.querySelector('.menu')).to.equal(null);
+      }
+      selectValue(el, 'heat');
+      expect(hass.__calls).to.have.length(0);
+    });
+  }
+
+  for (const away of ['on', 'off']) {
+    it(`toggles away ${away}`, async () => {
+      const hass = makeHass({ 'water_heater.test': waterHeaterState({ supported_features: 4, away_mode: away }) });
+      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" label="Holiday" display="tile"></mt-water-heater-away>`);
+      expect(rowItems(el)[0].active).to.equal(away === 'on');
+      expect(selectorRow(el)!.label).to.equal('Holiday');
+      selectValue(el, 'away');
+      expect(hass.__calls[0]).to.deep.include({ domain: 'water_heater', service: 'set_away_mode' });
+      expect(hass.__calls[0].data).to.deep.equal({ entity_id: 'water_heater.test', away_mode: away !== 'on' });
+    });
+  }
+
+  for (const attrs of [{ supported_features: 0, away_mode: 'on' }, { supported_features: 4, away_mode: undefined }, { supported_features: 4, away_mode: 'invalid' }]) {
+    it(`hides unsupported away ${JSON.stringify(attrs)}`, async () => {
+      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${makeHass({ 'water_heater.test': waterHeaterState(attrs) })} entityId="water_heater.test"></mt-water-heater-away>`);
+      expect(selectorRow(el)).to.equal(null);
+    });
+  }
+
+  for (const [type, kind] of [['climate-swing-horizontal-modes', 'swing_horizontal'], ['water-heater-operation-modes', 'operation'], ['water-heater-away-mode', 'away']]) {
+    it(`routes ${type}`, async () => {
+      const el = await fixture(html`<mt-feature-row .hass=${makeHass({})} entityId="water_heater.test" .feature=${{ type, include: ['off'] }}></mt-feature-row>`);
+      const child = el.shadowRoot!.querySelector(kind === 'away' ? 'mt-water-heater-away' : 'mt-climate-selector')!;
+      expect(child).not.to.equal(null);
+      if (kind !== 'away') {
+        expect((child as MtClimateSelector).kind).to.equal(kind);
+        expect((child as MtClimateSelector).include).to.deep.equal(['off']);
+      }
+    });
+  }
+});
+
+describe('feature-row routing coverage', () => {
+  const configs: FeatureConfig[] = [
+    { type: 'climate-hvac-modes' }, { type: 'climate-fan-modes', display: 'tile' },
+    { type: 'climate-preset-modes' }, { type: 'climate-swing-modes' },
+    { type: 'input-select', entity: 'input_select.test' },
+    { type: 'input-select', entity: 'input_select.test', display: 'dropdown' },
+    { type: 'switch-group', entities: [] }, { type: 'switch-group', entities: [], display: 'dropdown' },
+    { type: 'switch-list', entities: [] }, { type: 'button-list', items: [] },
+    { type: 'sensor-list', items: [] }, { type: 'entity-tile', entity: 'sensor.test' },
+    { type: 'comfort' },
+    { type: 'water-heater-away-mode', display: 'tile' },
+    { type: 'unknown' } as unknown as FeatureConfig,
+  ];
+  for (const feature of configs) {
+    it(`renders ${feature.type} ${'display' in feature ? feature.display : ''}`, async () => {
+      const el = await fixture<MtFeatureRow>(html`<mt-feature-row .hass=${makeHass({ 'climate.test': climateState({}, 'off') })} entityId="climate.test" .feature=${feature}></mt-feature-row>`);
+      expect(el.style.gridColumn).to.equal('span 10');
+      if (feature.type === 'comfort') {
+        expect(el.hidden).to.be.true;
+        el.shadowRoot!.querySelector('mt-comfort')!.dispatchEvent(new CustomEvent('feature-visibility', { detail: { visible: true } }));
+        await el.updateComplete;
+        expect(el.hidden).to.be.false;
+      }
+      el.requestUpdate();
+      await el.updateComplete;
+    });
+  }
+});
 
 /** Grab the nested `mt-selector-row` rendered by a feature component. */
 function selectorRow(el: HTMLElement): MtSelectorRow | null {
@@ -469,7 +641,7 @@ describe('mt-climate-selector', () => {
 
   describe('tile display', () => {
     it('falls back to the per-kind title ("Mode") and gives each mode its mode color', async () => {
-      const hass = makeHass({ 'climate.test': climateState({}, 'heat') });
+      const hass = makeHass({ 'climate.test': climateState({}, 'heat') }, { localize: () => '' });
       const el = await fixture<MtClimateSelector>(
         html`<mt-climate-selector
           .hass=${hass}

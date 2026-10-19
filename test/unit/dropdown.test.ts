@@ -19,6 +19,31 @@ function trigger(el: MtDropdown): HTMLButtonElement {
 }
 
 describe('mt-dropdown', () => {
+  it('never selects disabled menu items, including synthetic clicks', async () => {
+    const el = await fixture<MtDropdown>(html`<mt-dropdown .items=${[{ value: 'a', label: 'A' }, { value: 'b', label: 'B', disabled: true }]}></mt-dropdown>`);
+    let emitted = 0;
+    el.addEventListener('item-selected', () => emitted++);
+    trigger(el).click();
+    await el.updateComplete;
+    const option = el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.opt')[1];
+    expect(option.disabled).to.be.true;
+    expect(option.getAttribute('aria-disabled')).to.equal('true');
+    option.focus();
+    expect(el.shadowRoot!.activeElement).not.to.equal(option);
+    option.dispatchEvent(new MouseEvent('click'));
+    expect(emitted).to.equal(0);
+  });
+
+  for (const variant of ['pill', 'tile']) {
+    it(`does not open a disabled ${variant}`, async () => {
+      const el = await fixture<MtDropdown>(html`<mt-dropdown variant=${variant} .items=${[{ value: 'a', label: 'A', disabled: true }]}></mt-dropdown>`);
+      const button = el.shadowRoot!.querySelector('button')!;
+      expect(button.disabled).to.be.true;
+      button.dispatchEvent(new MouseEvent('click'));
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
+    });
+  }
   describe('trigger / _active', () => {
     it('shows the active item icon + label', async () => {
       const el = await fixture<MtDropdown>(

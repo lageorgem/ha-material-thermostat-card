@@ -7,14 +7,19 @@ import {
   fanIcon,
   swingIcon,
   presetIcon,
-  prettyLabel,
+  swingHorizontalIcon,
+  sortOperationModes,
+  waterHeaterModeIcon,
+  waterHeaterModeColor,
   orderValues,
   climateModeColor,
   presetColor,
 } from '../theme';
 import './selector-row';
+import { isUnavailable } from '../entity/adapter';
+import { formatEntityState, formatAttributeValue, formatAttributeName, localizeKey } from '../localize';
 
-export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset';
+export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset' | 'swing_horizontal' | 'operation';
 
 /** Default tile title per selector kind (used in `tile` display when unlabeled). */
 const TILE_TITLE: Record<ClimateSelectorKind, string> = {
@@ -22,6 +27,8 @@ const TILE_TITLE: Record<ClimateSelectorKind, string> = {
   fan: 'Fan',
   swing: 'Swing',
   preset: 'Preset',
+  swing_horizontal: 'Horizontal swing',
+  operation: 'Mode',
 };
 
 /**
@@ -33,6 +40,7 @@ const TILE_TITLE: Record<ClimateSelectorKind, string> = {
 export class MtClimateSelector extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property() entityId!: string;
+  /** Mode family to render. @param kind selector kind */
   @property() kind: ClimateSelectorKind = 'hvac';
   @property() display: FeatureDisplay = 'icons';
   /** Optional title rendered above the selector. */
@@ -40,6 +48,8 @@ export class MtClimateSelector extends LitElement {
   @property({ attribute: false }) options?: OptionOverride[];
   /** Explicit display order of option values (unlisted values follow naturally). */
   @property({ attribute: false }) order?: string[];
+  /** Optional allow-list. @param include values allowed in the selector */
+  @property({ attribute: false }) include?: string[];
 
   /** The backing climate state object, if present. */
   private get _stateObj() {
@@ -57,6 +67,7 @@ export class MtClimateSelector extends LitElement {
 
   /**
    * Build the selector items from entity attributes + config overrides.
+   * @param this selector instance providing state and overrides
    */
   private _build(): SelectorItem[] {
     const state = this._stateObj;
@@ -86,6 +97,16 @@ export class MtClimateSelector extends LitElement {
       active = state.attributes.preset_mode;
       defaultIcon = (v) => presetIcon(v);
       defaultColor = (v) => presetColor(v);
+    } else if (this.kind === 'operation') {
+      values = sortOperationModes(state.attributes.operation_list ?? []);
+      active = state.state;
+      defaultIcon = waterHeaterModeIcon;
+      defaultColor = waterHeaterModeColor;
+    } else if (this.kind === 'swing_horizontal') {
+      values = state.attributes.swing_horizontal_modes ?? [];
+      active = state.attributes.swing_horizontal_mode;
+      defaultIcon = swingHorizontalIcon;
+      defaultColor = () => undefined;
     } else {
       values = state.attributes.swing_modes ?? [];
       active = state.attributes.swing_mode;
@@ -93,24 +114,27 @@ export class MtClimateSelector extends LitElement {
       defaultColor = () => undefined;
     }
 
-    return orderValues(values, this.order)
+    return orderValues(values, this.order, this.include)
       .filter((v) => !overrides.get(v)?.hide)
       .map((v) => ({
         value: v,
-        label: overrides.get(v)?.label ?? prettyLabel(v),
+        label: overrides.get(v)?.label ?? (this.kind === 'hvac' || this.kind === 'operation'
+          ? formatEntityState(this.hass, state, v)
+          : formatAttributeValue(this.hass, state, `${this.kind}_mode`, v)),
         icon: overrides.get(v)?.icon ?? defaultIcon(v),
         active: v === active,
         color: overrides.get(v)?.color ?? defaultColor(v),
+        disabled: isUnavailable(state),
       }));
   }
 
   /**
-   * Call the appropriate climate service for the selected option.
+   * Call the appropriate entity service for the selected option.
    * @param e selector-row's `item-selected` event
    */
   private _onSelect(e: CustomEvent): void {
     const value = e.detail.value;
-    if (!this._stateObj) return;
+    if (isUnavailable(this._stateObj)) return;
     const entity_id = this.entityId;
     if (this.kind === 'hvac') {
       this.hass.callService('climate', 'set_hvac_mode', { entity_id, hvac_mode: value });
@@ -118,11 +142,16 @@ export class MtClimateSelector extends LitElement {
       this.hass.callService('climate', 'set_fan_mode', { entity_id, fan_mode: value });
     } else if (this.kind === 'preset') {
       this.hass.callService('climate', 'set_preset_mode', { entity_id, preset_mode: value });
+    } else if (this.kind === 'operation') {
+      this.hass.callService('water_heater', 'set_operation_mode', { entity_id, operation_mode: value });
+    } else if (this.kind === 'swing_horizontal') {
+      this.hass.callService('climate', 'set_swing_horizontal_mode', { entity_id, swing_horizontal_mode: value });
     } else {
       this.hass.callService('climate', 'set_swing_mode', { entity_id, swing_mode: value });
     }
   }
 
+  /** Render the localized selector. @param this selector instance */
   protected render(): TemplateResult | typeof nothing {
     const items = this._build();
     if (!items.length) return nothing;
@@ -132,14 +161,18 @@ export class MtClimateSelector extends LitElement {
     // generic accent. With material-you-theme present, the M3 primary wins.
     // (The tile tint comes from each item's `color`, applied by mt-dropdown.)
     const styleOverride =
-      this.kind === 'hvac'
-        ? `--mt-selected-bg: var(--md-sys-color-primary, ${climateModeColor(
-            this._stateObj?.state
+      this.kind === 'hvac' || this.kind === 'operation'
+        ? `--mt-selected-bg: var(--md-sys-color-primary, ${(this.kind === 'operation' ? waterHeaterModeColor : climateModeColor)(
+            this._stateObj!.state
           )}); --mt-selected-fg: var(--md-sys-color-on-primary, #fff);`
         : nothing;
     // In tile display, fall back to a sensible per-kind title ("Mode", "Fan", …)
     // so the tile reads like Google Home even without a configured label.
-    const label = this.label ?? (this.display === 'tile' ? TILE_TITLE[this.kind] : undefined);
+    const label = this.label ?? (this.display === 'tile'
+      ? this.kind === 'hvac'
+        ? localizeKey(this.hass, 'ui.card.climate.mode', 'Mode')
+        : formatAttributeName(this.hass, this._stateObj!, `${this.kind}_mode`, TILE_TITLE[this.kind])
+      : undefined);
     // When the climate is off, every climate tile (fan/preset/swing too) reads as
     // off — otherwise an active fan/preset would still look "on" while the unit
     // is powered down. (items are non-empty only when the state exists.)

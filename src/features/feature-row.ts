@@ -10,6 +10,7 @@ import './button-list';
 import './entity-tile';
 import './sensor-list';
 import './comfort';
+import './water-heater-away';
 
 /**
  * Dispatches a single feature config to its renderer.
@@ -57,12 +58,15 @@ export class MtFeatureRow extends LitElement {
     this._comfortVisible = !!e.detail.visible;
   };
 
+  /** Route feature configuration to its renderer. @param this feature row */
   protected render(): TemplateResult | typeof nothing {
     const feature = this.feature;
     switch (feature.type) {
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
       case 'climate-swing-modes':
+      case 'climate-swing-horizontal-modes':
+      case 'water-heater-operation-modes':
       case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
@@ -71,7 +75,11 @@ export class MtFeatureRow extends LitElement {
               ? 'fan'
               : feature.type === 'climate-preset-modes'
                 ? 'preset'
-                : 'swing';
+                 : feature.type === 'climate-swing-horizontal-modes'
+                   ? 'swing_horizontal'
+                   : feature.type === 'water-heater-operation-modes'
+                     ? 'operation'
+                     : 'swing';
         return html`<mt-climate-selector
           .hass=${this.hass}
           entityId=${this.entityId}
@@ -80,8 +88,16 @@ export class MtFeatureRow extends LitElement {
           .label=${feature.label}
           .options=${feature.options}
           .order=${feature.order}
+          .include=${feature.include}
         ></mt-climate-selector>`;
       }
+      case 'water-heater-away-mode':
+        return html`<mt-water-heater-away
+          .hass=${this.hass}
+          entityId=${this.entityId}
+          display=${feature.display ?? 'icons'}
+          .label=${feature.label}
+        ></mt-water-heater-away>`;
       case 'input-select':
         return html`<mt-input-select
           .hass=${this.hass}

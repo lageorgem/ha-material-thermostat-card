@@ -60,6 +60,11 @@ export class MtDropdown extends LitElement {
     return this.items.find((i) => i.active) ?? this.items[0];
   }
 
+  /** Disable the trigger when no option is enabled. @param this dropdown instance */
+  private get _disabled(): boolean {
+    return this.items.every((item) => item.disabled);
+  }
+
   /**
    * Whether the tile reads as "on": there is a genuinely active item and its
    * value is not a hardcoded "off" state (`off`/`none`, any case). Drives the
@@ -79,6 +84,7 @@ export class MtDropdown extends LitElement {
    */
   private _toggle(e: Event): void {
     e.stopPropagation();
+    if (this._disabled) return;
     if (!this._open) {
       const r = this.getBoundingClientRect();
       this._up = r.bottom > window.innerHeight * 0.55;
@@ -98,15 +104,17 @@ export class MtDropdown extends LitElement {
    */
   private _select(e: Event, value: string): void {
     e.stopPropagation();
+    if (this.items.find((item) => item.value === value)?.disabled) return;
     this._open = false;
     this.dispatchEvent(new CustomEvent('item-selected', { detail: { value } }));
   }
 
+  /** Render enabled controls and any open menu. @param this dropdown instance */
   protected render(): TemplateResult {
     const active = this._active;
     const trigger =
       this.variant === 'tile' ? this._renderTile(active) : this._renderPill(active);
-    return html`${trigger}${this._open ? this._renderMenu() : nothing}`;
+    return html`${trigger}${this._open && !this._disabled ? this._renderMenu() : nothing}`;
   }
 
   /**
@@ -118,6 +126,7 @@ export class MtDropdown extends LitElement {
       <button
         class=${classMap({ trigger: true, open: this._open })}
         aria-haspopup="listbox"
+        ?disabled=${this._disabled}
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}
       >
@@ -145,6 +154,7 @@ export class MtDropdown extends LitElement {
         class=${classMap({ tile: true, on: this._tileOn, open: this._open })}
         style=${accent}
         aria-haspopup="listbox"
+        ?disabled=${this._disabled}
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}
       >
@@ -161,7 +171,7 @@ export class MtDropdown extends LitElement {
     `;
   }
 
-  /** The shared option menu, anchored under whichever trigger is active. */
+  /** The shared option menu. @param this dropdown instance */
   private _renderMenu(): TemplateResult {
     return html`<div
       class=${classMap({ menu: true, up: this._up, right: this._alignRight })}
@@ -172,6 +182,9 @@ export class MtDropdown extends LitElement {
           class=${classMap({ opt: true, active: !!it.active })}
           role="option"
           aria-selected=${it.active ? 'true' : 'false'}
+          aria-disabled=${it.disabled ? 'true' : 'false'}
+          ?disabled=${it.disabled}
+          tabindex=${it.disabled ? '-1' : '0'}
           @click=${(e: Event) => this._select(e, it.value)}
         >
           ${it.icon
@@ -296,6 +309,11 @@ export class MtDropdown extends LitElement {
       .opt .check {
         --mdc-icon-size: 20px;
         color: var(--mt-on-secondary-container);
+      }
+      button:disabled {
+        opacity: 0.38;
+        cursor: default;
+        pointer-events: none;
       }
       @keyframes mt-pop {
         from {
