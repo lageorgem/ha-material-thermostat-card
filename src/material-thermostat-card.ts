@@ -20,7 +20,7 @@ import {
   CARD_PADDING_X,
   pctToSpan,
 } from './grid';
-import { tokens, climateModeColor, presetIcon, presetColor } from './theme';
+import { tokens, climateModeColor, waterHeaterModeColor, presetIcon, presetColor } from './theme';
 import { primaryDomain, targetModel, temperatureServiceCall, dialColorMode, hvacAction, isUnavailable } from './entity/adapter';
 import { entityDisplayName, formatEntityState, formatAttributeValue, formatNumber, localizeKey } from './localize';
 import { normalizeConfig } from './config/normalize';
@@ -509,6 +509,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const unit = this.hass.config?.unit_system?.temperature ?? '°C';
     const model = targetModel(state, unit);
     const colorMode = dialColorMode(state);
+    const waterHeater = primaryDomain(this._config.entity) === 'water_heater';
+    const operationFeature = this._features.find((f) => f.type === 'water-heater-operation-modes');
+    const activeColor = waterHeater
+      ? operationFeature?.options?.find((o) => o.value === state.state)?.color ?? waterHeaterModeColor(state.state)
+      : climateModeColor(colorMode);
+    const modeColors = waterHeater ? { heat: activeColor } : this._hvacColors();
     const action = hvacAction(state);
     const modeLabel = formatEntityState(this.hass, state);
     const stateLabel = this._config.show_state_label
@@ -518,7 +524,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const layout = this._layout();
 
     return html`
-      <ha-card role="group" aria-labelledby=${this._nameId} class=${fontClass} style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
+      <ha-card role="group" aria-labelledby=${this._nameId} class=${fontClass} style=${`--mt-active-color: ${activeColor}`}>
         <div class="header">
           <div class="name" id=${this._nameId} title=${name}>${name}</div>
           <button class="more" aria-label=${localizeKey(this.hass, 'ui.panel.lovelace.cards.show_more_info', 'More information')} @click=${this._showMoreInfo}>
@@ -542,7 +548,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .formatNumber=${(value: number, decimals: number) => formatNumber(this.hass, value, decimals)}
               .presetIcon=${this._presetIcon()}
               .presetIconColor=${this._presetColor()}
-              .modeColors=${this._hvacColors()}
+              .modeColors=${modeColors}
               .modeIcons=${this._hvacIcons()}
               .unit=${unit}
               .dual=${model.kind === 'dual'}

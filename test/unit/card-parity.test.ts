@@ -3,6 +3,8 @@ import sinon from 'sinon';
 import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import type { CircularDial } from '../../src/dial/circular-dial';
+import { climateModeColor, waterHeaterModeColor } from '../../src/theme';
+import type { WaterHeaterOperationFeatureConfig } from '../../src/types';
 import { makeHass, climateState, waterHeaterState } from '../helpers';
 
 window.addEventListener('error', (event) => {
@@ -41,6 +43,38 @@ describe('card parity contracts', () => {
   function dial(): CircularDial {
     return card.shadowRoot!.querySelector('mt-circular-dial')!;
   }
+
+  for (const mode of ['eco', 'off', 'electric']) {
+    for (const options of [undefined, [], [{ value: 'other', color: '#123456' }], [{ value: mode }], [{ value: mode, color: '#123456' }]]) {
+      it(`colours the water heater ${mode} dial and card from operation options ${JSON.stringify(options)}`, async () => {
+        const feature: WaterHeaterOperationFeatureConfig = { type: 'water-heater-operation-modes', options };
+        card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [feature] });
+        card.hass = makeHass({ 'water_heater.test': waterHeaterState({}, mode) });
+        await card.updateComplete;
+        const color = options?.find((option) => option.value === mode)?.color ?? waterHeaterModeColor(mode);
+        expect(dial().modeColors).to.deep.equal({ heat: color });
+        expect(card.shadowRoot!.querySelector('ha-card')!.style.getPropertyValue('--mt-active-color').trim()).to.equal(color);
+      });
+    }
+  }
+
+  it('uses the water heater operation colour without a configured feature', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme' });
+    card.hass = makeHass({ 'water_heater.test': waterHeaterState() });
+    await card.updateComplete;
+    expect(dial().modeColors).to.deep.equal({ heat: waterHeaterModeColor('eco') });
+    expect(card.shadowRoot!.querySelector('ha-card')!.style.getPropertyValue('--mt-active-color').trim()).to.equal(waterHeaterModeColor('eco'));
+  });
+
+  it('preserves climate mode colours and active accent', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', font: 'theme', features: [
+      { type: 'climate-hvac-modes', options: [{ value: 'heat', color: '#123456' }, { value: 'cool', color: '#654321' }] },
+      { type: 'water-heater-operation-modes', options: [{ value: 'heat', color: '#abcdef' }] },
+    ] });
+    await card.updateComplete;
+    expect(dial().modeColors).to.deep.equal({ heat: '#123456', cool: '#654321' });
+    expect(card.shadowRoot!.querySelector('ha-card')!.style.getPropertyValue('--mt-active-color').trim()).to.equal(climateModeColor('cool'));
+  });
 
   /** Assert that no optimistic target survives cancellation.
    * @param none No parameters.
