@@ -68,6 +68,12 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
 - A pending setpoint is never sent to a different entity, or as a different
   single/dual target kind, and is dropped when the card is detached.
 - Malformed (non-numeric) temperature attributes no longer break the dial.
+- Selector chips shrink to fit narrow cards (seven fit a ~170 px row, like the
+  stock card) instead of being cut off; text-label chips ellipsize instead of
+  overlapping, and the keyboard focus ring is visible on every chip.
+- Switch-group chips fall back to a switch icon instead of showing long entity
+  names.
+- Entity tiles keep their value readable on narrow cards by hiding the icon chip.
 - Dropdowns show an empty value instead of the first option when the active
   mode isn't listed.
 
