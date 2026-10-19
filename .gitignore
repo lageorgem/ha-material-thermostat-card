@@ -18,3 +18,4 @@ blob-report/
 # and is also attached to GitHub releases. Comment the next line out if you
 # prefer release-only distribution.
 # dist/
+dev/qa/out/
