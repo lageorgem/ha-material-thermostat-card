@@ -34,7 +34,13 @@ services cannot reliably restore an unset value. The seed does not initialize
 these four attributes; initialize them through HA before running J2.
 MQTT integration and `mqtt.publish` must exist. English/German translations are
 loaded by the real frontend, not mocked. `--only` runs checks for selected cases;
-use both `heat,full-icons` for both German localization checks.
+use `heat,full-icons,wh-tank` for all German localization checks.
+`--lang <code>` defaults to `en`. Non-English runs switch the ready HA frontend
+with `_selectLanguage(code, false)`, then allow 8 seconds for translation chunks.
+The switch is **in-session only, never saved to the user's profile**. LocalStorage
+language preferences alone cannot override HA's server-side profile language.
+Every run verifies `hass.language` equals the requested code before checking cards;
+a mismatch fails setup (including an English run with a non-English profile).
 
 Every CLI supports `--dry-run`: no credentials, network, browser or dist required.
 It prints complete request/config/check payloads. The dry-run dashboard omits the
@@ -58,12 +64,12 @@ Browser shutdown is bounded to 10 seconds; failed shutdown exits nonzero.
 | stock-yaml | J11 stock-style dropdown syntax restricts offered HVAC modes to heat/cool/off; preset/horizontal includes |
 | range-auto | J5 two sliders in auto, current temperature primary |
 | range-mqtt | J4 heat_cool increment sends both bounds, restores bounds and mode; empty preset feature safe |
-| heat | Structured name + first available server theme; J13 German fractional target comma |
+| heat | Structured name + first available server theme; J13 German slider aria-valuetext comma decimal |
 | reject | J6 optimistic display moves, frame sent, server target restored within 8 s |
 | fan-readonly | J7 no target slider/increment, HVAC/fan rows |
 | off | Off rendering |
 | climate-unavailable | J10 localized unavailable label and inert mode chips |
-| wh-tank | J8 +0.5 temperature frame and Eco operation round trip; both restore original values |
+| wh-tank | J8 +0.5 temperature frame and Eco operation round trip; both restore original values; J13 German operation chip titles |
 | wh-tank-dropdown | Stock operation_modes include syntax, dropdown |
 | wh-away | J9 away-off boolean frame; verifies REST fixture remains unchanged; operation tile |
 | wh-basic | Minimal water heater rendering |
@@ -75,7 +81,9 @@ Every case: visible ha-card + dial, no missing-entity text, paired section PNG
 after all rendered HA icons have SVG paths (bounded by the 30-second deadline).
 J10 text includes nested open shadow roots and slotted light DOM. J12 bounds don't
 overlap stock, and every visible, sized descendant ends within ha-card's bottom
-+ 2 px; floating menus/popovers are excluded. Scroll metrics are not clipping
++ 2 px; floating menus/popovers and invisible elements are excluded. Rotated
+`.orbit` wrapper boxes are not measured, but their visible dots/labels are.
+Scroll metrics are not clipping
 evidence: the dial deliberately uses a negative bottom margin. Each section
 has `QA:<case-id>` heading; no card_mod. Stock tile equivalent is dropdown (stock
 has no tile style); sensor-list and water-heater-away-mode are custom-only and
@@ -87,7 +95,11 @@ Risk focus: service payloads and HA state convergence (medium likelihood/high
 impact); rejection/read-only/unavailable guards. Dropdown/tile exhaustive option
 permutations and pixel-perfect stock comparison are intentionally manual: lower
 risk, expensive brittle automation. PNGs support side-by-side review; they are
-not a visual-diff pass claim. J13 also checks German HVAC labels in full-icons.
+not a visual-diff pass claim. J13 checks the slider's accessible decimal text,
+not the deliberately separator-free large target digits. It also checks German
+HVAC Heat/Off and water heater Electric/Off chip titles against stock option
+labels when available, otherwise rejects those English titles. Eco alone cannot
+prove translation because it is identical in German. Reports identify the fallback.
 
 ## Evidence and cleanup
 

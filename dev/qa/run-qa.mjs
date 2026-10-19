@@ -24,7 +24,7 @@ const JOURNEYS = [
   ['J10', ['climate-unavailable', 'wh-unavailable'], 'Unavailable label; mode interaction emits no service calls'],
   ['J11', ['stock-yaml'], 'Stock syntax offers only heat/cool/off'],
   ['J12', CASES.map((c) => c.id), 'Every selected section: no overlap or clipped ha-card'],
-  ['J13', ['heat', 'full-icons'], 'German fractional target uses comma; HVAC titles translated'],
+  ['J13', ['heat', 'full-icons', 'wh-tank'], 'German slider decimal uses comma; HVAC and water heater titles translated'],
 ];
 function options() {
   const args = process.argv.slice(2);
@@ -130,11 +130,10 @@ async function main() {
     context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block' });
     context.setDefaultTimeout(TIMEOUT);
     context.setDefaultNavigationTimeout(TIMEOUT);
-    await context.addInitScript(({ url, token, lang }) => {
+    await context.addInitScript(({ url, token }) => {
       if (window !== window.top || location.origin !== new URL(url).origin) return;
-      localStorage.setItem('selectedLanguage', JSON.stringify(lang));
       localStorage.setItem('hassTokens', JSON.stringify({ hassUrl: url, clientId: `${url}/`, access_token: token, token_type: 'Bearer', expires_in: 315360000, expires: Date.now() + 315360000000, refresh_token: 'x' }));
-    }, { ...auth, lang: opts.lang });
+    }, auth);
     const page = await context.newPage();
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(60000);
@@ -174,6 +173,20 @@ async function main() {
     requireHAOrigin(page.url());
     await bounded(() => page.waitForFunction(() => document.querySelector('home-assistant')?.hass?.states && customElements.get('material-thermostat-card'), null, { timeout: TIMEOUT }), 'HA readiness');
     assert(served > 0, 'Local dist route was never hit; refusing to test installed HACS bundle');
+    if (opts.lang !== 'en') {
+      await evaluate(page, async (language) => {
+        const ha = document.querySelector('home-assistant');
+        if (typeof ha._selectLanguage !== 'function') throw new Error('HA in-session language switching is unavailable');
+        // false is essential: never save a QA language to the real user's profile.
+        await ha._selectLanguage(language, false);
+      }, opts.lang);
+      // HA loads component translation chunks asynchronously after switching.
+      // This bounded settling window is separate from the language assertion.
+      await bounded(() => page.waitForTimeout(8000), 'HA translation settling', 10000);
+    }
+    const actualLanguage = await evaluate(page, () => document.querySelector('home-assistant').hass.language);
+    assert(actualLanguage === opts.lang, `HA language mismatch: requested ${opts.lang}, got ${actualLanguage}; refusing localization checks`);
+    report.checks.push({ name: 'HA session language', status: 'PASS', evidence: { requested: opts.lang, actual: actualLanguage, savedToProfile: false } });
 
     const state = (entity) => evaluate(page, (id) => document.querySelector('home-assistant').hass.states[id], entity);
     const waitState = async (entity, key, value) => poll(async () => {
@@ -424,9 +437,11 @@ async function main() {
             // Floating menus are allowed outside the card; exclude their subtree.
             if (el.matches('[role="listbox"], [role="menu"], [role="dialog"], [popover], .menu, .popover')) continue;
             const style = getComputedStyle(el);
-            if (style.display === 'none' || style.opacity === '0') continue;
+            if (style.display === 'none' || Number(style.opacity) === 0) continue;
             const rect = el.getBoundingClientRect();
-            if (style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0) {
+            // Orbit boxes rotate around the full dial: only their children paint.
+            // Still descend so visible marker dots/labels remain checked.
+            if (!el.matches('.orbit') && style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0) {
               measured++;
               if (rect.bottom > bottom + 2) overflow.push({ tag: el.localName, class: el.getAttribute('class'), bottom: rect.bottom });
             }
@@ -445,13 +460,43 @@ async function main() {
       if (enabled('heat')) await check('J13: German target decimal', async () => {
         const target = Number((await state(entity('heat'))).attributes.temperature);
         assert(Number.isFinite(target) && target % 1 !== 0, 'Fractional heat target required; rerun seed (21.5)');
-        const text = await dial('heat').locator(S.value).allTextContents();
-        assert(text.some((value) => value.includes(',')), `Target lacks comma decimal: ${text}`); return { target, text };
+        const text = await dial('heat').locator(S.slider).getAttribute('aria-valuetext');
+        assert(/\d,\d/.test(text ?? ''), `Slider aria-valuetext lacks comma decimal: ${text}`); return { target, text };
       });
-      if (enabled('full-icons')) await check('J13: German HVAC titles', async () => {
-        const heat = await rowFor('full-icons', 'heat', 0), off = await rowFor('full-icons', 'off', 0);
-        const titles = await Promise.all([heat, off].map(({ row, item }) => row.locator(`${S.chip}[title=${JSON.stringify(item.label)}]`).getAttribute('title')));
-        assert(titles.every((t) => t && !['Heat', 'Off'].includes(t)), `English HVAC titles: ${titles}`); return { titles };
+      for (const [id, kind, values, english] of [
+        ['full-icons', 'HVAC', ['heat', 'off'], ['Heat', 'Off']],
+        ['wh-tank', 'water heater operation', ['electric', 'off'], ['Electric', 'Off']],
+      ]) if (enabled(id)) await check(`J13: German ${kind} titles`, async () => {
+        const stockLabels = await evaluate(sections.get(id).locator(S.stock), (host, values) => {
+          const labels = {};
+          const text = (el) => {
+            if (el.nodeType === Node.TEXT_NODE) return el.textContent;
+            if (['STYLE', 'SCRIPT', 'HA-ICON', 'HA-SVG-ICON'].includes(el.nodeName)) return '';
+            return [...el.childNodes, ...(el.shadowRoot?.childNodes ?? [])].map(text).join(' ');
+          };
+          function walk(root) {
+            for (const el of root.querySelectorAll('*')) {
+              const value = el.value ?? el.getAttribute('value');
+              if (values.includes(value) && el.matches('option, ha-dropdown-item, ha-list-item, mwc-list-item, [role="option"]')) {
+                const label = text(el).replace(/\s+/g, ' ').trim();
+                if (label) labels[value] = label;
+              }
+              if (el.shadowRoot) walk(el.shadowRoot);
+            }
+          }
+          walk(host);
+          if (host.shadowRoot) walk(host.shadowRoot);
+          return labels;
+        }, values);
+        const titles = {};
+        for (const value of values) {
+          const { row, item } = await rowFor(id, value, 0);
+          const title = await row.locator(`${S.chip}[title=${JSON.stringify(item.label)}]`).getAttribute('title');
+          assert(title && !english.some((word) => word.toLowerCase() === title.trim().toLowerCase()), `English or missing ${kind} title for ${value}: ${title}`);
+          if (stockLabels[value]) assert(title === stockLabels[value], `${kind} title for ${value}: ${title}; stock: ${stockLabels[value]}`);
+          titles[value] = { title, stock: stockLabels[value] ?? null, comparison: stockLabels[value] ? 'stock option' : 'non-English fallback' };
+        }
+        return { titles };
       });
     }
   } catch (error) {
