@@ -105,6 +105,65 @@ const dualStates = () => states('heat_cool', {
 
 export const SHOTS = [
   {
+    name: 'reply-1', title: 'Living Room', group: 'reply', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'climate-fan-modes', display: 'tile', label: 'Fan', width: 50 },
+      { type: 'climate-preset-modes', display: 'tile', label: 'Preset', width: 50 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: OUTDOOR, label: 'Outdoor temperature' },
+      ] },
+    ], { name: 'Living Room', dial_style: 'halo' }),
+    states: {
+      ...states('heat', { temperature: 22, current_temperature: 20.4,
+        hvac_action: 'heating', fan_mode: 'auto',
+        preset_modes: ['none', 'eco', 'comfort', 'boost'], preset_mode: 'comfort' }),
+      [OUTDOOR]: { state: '11', attributes: {
+        unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
+    name: 'reply-2', title: 'Whole Home', group: 'reply', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'climate-fan-modes', display: 'tile', label: 'Fan', width: 50 },
+      { type: 'climate-preset-modes', display: 'tile', label: 'Preset', width: 50 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: OUTDOOR, label: 'Outdoor temperature' },
+      ] },
+    ], { name: 'Whole Home', dial_style: 'minimal' }),
+    states: {
+      ...states('heat_cool', { temperature: null, target_temp_low: 20,
+        target_temp_high: 24, current_temperature: 22.2, hvac_action: 'idle',
+        fan_mode: 'auto', preset_mode: 'eco' }),
+      [OUTDOOR]: { state: '11', attributes: {
+        unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
+    name: 'reply-3', title: 'Bedroom AC', group: 'reply', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'climate-fan-modes', display: 'tile', label: 'Fan', width: 50 },
+      { type: 'climate-swing-modes', display: 'tile', label: 'Swing', width: 50 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: OUTDOOR, label: 'Outdoor temperature' },
+      ] },
+    ], { entity: AC, name: 'Bedroom AC', dial_style: 'google' }),
+    states: {
+      ...states('cool', { temperature: 21, current_temperature: 24.3,
+        hvac_action: 'cooling', fan_mode: 'medium', swing_mode: 'Full Swing' }),
+      [OUTDOOR]: { state: '11', attributes: {
+        unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
     name: 'grid-1', title: 'Living Room', group: 'grid', width: 420,
     config: card([
       { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
