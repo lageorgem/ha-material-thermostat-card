@@ -19,13 +19,14 @@
         background: #0e0d12;
         font-family: 'Roboto', system-ui, sans-serif;
       }
-      #wrap {
+      #wrap, #wh {
         max-width: 480px;
       }
     </style>
   </head>
   <body>
     <div id="wrap"></div>
+    <div id="wh"></div>
     <script type="module">
       // Minimal stubs: ha-icon (shadow DOM, never light-DOM innerHTML) + ha-card.
       class HaIcon extends HTMLElement {
@@ -75,6 +76,9 @@
             hvac_modes: ['off', 'cool', 'heat', 'auto'],
             fan_modes: ['auto', 'low', 'medium', 'high'],
             swing_modes: ['off', 'vertical', 'horizontal', 'both'],
+            swing_horizontal_modes: ['off', 'left', 'right'],
+            swing_horizontal_mode: 'off',
+            supported_features: 512,
             fan_mode: 'low',
             swing_mode: 'vertical',
             current_temperature: 24,
@@ -82,6 +86,21 @@
             min_temp: 16,
             max_temp: 30,
             target_temp_step: 0.5,
+          },
+        },
+        'water_heater.boiler': {
+          entity_id: 'water_heater.boiler',
+          state: 'eco',
+          attributes: {
+            friendly_name: 'Boiler',
+            current_temperature: 48,
+            temperature: 55,
+            min_temp: 40,
+            max_temp: 75,
+            target_temp_step: 0.5,
+            operation_list: ['off', 'eco', 'electric', 'performance'],
+            away_mode: 'off',
+            supported_features: 15,
           },
         },
         'switch.eco': { entity_id: 'switch.eco', state: 'on', attributes: { friendly_name: 'Eco' } },
@@ -129,6 +148,7 @@
         features: [
           { type: 'climate-hvac-modes' },
           { type: 'climate-fan-modes', display: 'dropdown' },
+          { type: 'climate-swing-horizontal-modes', display: 'icons' },
           { type: 'switch-group', label: 'Preset', entities: [
             { entity: 'switch.eco', label: 'Eco', icon: 'mdi:leaf' },
             { entity: 'switch.boost', label: 'Boost', icon: 'mdi:rocket-launch' },
@@ -141,6 +161,18 @@
       card.hass = hass;
 
       window.__card = card;
+      const whCard = document.createElement('material-thermostat-card');
+      whCard.setConfig({
+        type: 'custom:material-thermostat-card',
+        entity: 'water_heater.boiler',
+        features: [
+          { type: 'water-heater-operation-modes', display: 'icons' },
+          { type: 'water-heater-away-mode' },
+        ],
+      });
+      document.getElementById('wh').appendChild(whCard);
+      whCard.hass = hass;
+      window.__whCard = whCard;
       window.__moreInfo = null;
       window.addEventListener('hass-more-info', (e) => {
         window.__moreInfo = e.detail?.entityId ?? null;
