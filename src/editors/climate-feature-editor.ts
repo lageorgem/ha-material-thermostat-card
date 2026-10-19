@@ -6,6 +6,8 @@ import type {
   ClimateModesFeatureConfig,
   ClimatePresetFeatureConfig,
   ClimateSwingFeatureConfig,
+  ClimateSwingHorizontalFeatureConfig,
+  WaterHeaterOperationFeatureConfig,
   OptionOverride,
 } from '../types';
 import {
@@ -31,6 +33,8 @@ type ClimateFeature =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
   | ClimateSwingFeatureConfig
+  | ClimateSwingHorizontalFeatureConfig
+  | WaterHeaterOperationFeatureConfig
   | ClimatePresetFeatureConfig;
 
 /**
@@ -42,16 +46,21 @@ type ClimateFeature =
 export class MtClimateFeatureEditor extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property() entityId!: string;
-  @property() kind!: 'hvac' | 'fan' | 'swing' | 'preset';
+  @property() kind!: 'hvac' | 'fan' | 'swing' | 'preset' | 'swing-horizontal' | 'operation';
   @property({ attribute: false }) feature!: ClimateFeature;
 
-  /** The underlying option values from the entity attributes. */
+  /**
+   * The underlying option values from the entity attributes.
+   * @param none No parameters; reads the configured entity and selector kind.
+   */
   private _values(): string[] {
     const a = this.hass?.states?.[this.entityId]?.attributes;
     if (!a) return [];
     if (this.kind === 'hvac') return a.hvac_modes ?? [];
     if (this.kind === 'fan') return a.fan_modes ?? [];
     if (this.kind === 'preset') return a.preset_modes ?? [];
+    if (this.kind === 'operation') return a.operation_list ?? [];
+    if (this.kind === 'swing-horizontal') return a.swing_horizontal_modes ?? [];
     return a.swing_modes ?? [];
   }
 
@@ -69,6 +78,7 @@ export class MtClimateFeatureEditor extends LitElement {
     if (this.kind === 'hvac') return HVAC_MODE_ICONS[value] ?? 'mdi:thermostat';
     if (this.kind === 'fan') return fanIcon(value);
     if (this.kind === 'preset') return presetIcon(value);
+    if (this.kind === 'operation') return 'mdi:water-boiler';
     return swingIcon(value);
   }
 
@@ -146,6 +156,10 @@ export class MtClimateFeatureEditor extends LitElement {
     this._emit({ options });
   }
 
+  /**
+   * Render shared selector controls and domain-specific option overrides.
+   * @param none No parameters; reads the configured feature.
+   */
   protected render(): TemplateResult {
     const values = this._values();
     const display = this.feature.display ?? 'icons';
@@ -177,7 +191,7 @@ export class MtClimateFeatureEditor extends LitElement {
 
         ${values.length === 0
           ? html`<p class="hint">
-              Pick a climate entity that exposes ${this.kind} options to customize them.
+              Pick a ${this.kind === 'operation' ? 'water heater' : 'climate'} entity that exposes ${this.kind} options to customize them.
             </p>`
           : html`<ha-sortable handle-selector=".handle" @item-moved=${this._moveOption}>
               <div class="options">

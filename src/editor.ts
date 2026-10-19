@@ -11,6 +11,7 @@ import './editors/comfort-editor';
 import { ensureHaComponents } from './editors/load-ha';
 import './editors/entity-picker';
 import { tokens } from './theme';
+import { primaryDomain, supportsFeature, WaterHeaterEntityFeature } from './entity/adapter';
 
 interface FormSchemaItem {
   name: string;
@@ -31,7 +32,7 @@ const select = (options: { value: string; label: string }[]) => ({
 });
 
 const BASE_SCHEMA: FormSchemaItem[] = [
-  { name: 'entity', selector: { entity: { domain: 'climate' } } },
+  { name: 'entity', selector: { entity: { domain: ['climate', 'water_heater'] } } },
   { name: 'name', selector: { text: {} } },
   { name: 'theme', selector: { theme: {} } },
   {
@@ -43,6 +44,7 @@ const BASE_SCHEMA: FormSchemaItem[] = [
         { value: 'google', label: 'Google Home' },
       ]) },
       { name: 'show_current_as_primary', selector: { boolean: {} } },
+      { name: 'show_state_label', selector: { boolean: {} } },
       { name: 'font', selector: select([
         { value: 'rounded', label: 'Google Sans Flex (rounded)' },
         { value: 'theme', label: 'Theme font' },
@@ -61,8 +63,11 @@ const ADDABLE_FEATURES: { type: FeatureType; label: string; icon: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes', icon: 'mdi:thermostat' },
   { type: 'climate-fan-modes', label: 'Climate fan modes', icon: 'mdi:fan' },
   { type: 'climate-swing-modes', label: 'Climate swing modes', icon: 'mdi:arrow-oscillating' },
+  { type: 'climate-swing-horizontal-modes', label: 'Climate horizontal swing modes', icon: 'mdi:arrow-left-right' },
   { type: 'climate-preset-modes', label: 'Climate preset modes', icon: 'mdi:leaf' },
   { type: 'comfort', label: 'Comfort & time to comfortable', icon: 'mdi:emoticon-happy-outline' },
+  { type: 'water-heater-operation-modes', label: 'Water heater operation modes', icon: 'mdi:water-boiler' },
+  { type: 'water-heater-away-mode', label: 'Water heater away mode', icon: 'mdi:account-arrow-right' },
   { type: 'input-select', label: 'Input select', icon: 'mdi:form-select' },
   { type: 'switch-group', label: 'Switch group', icon: 'mdi:toggle-switch-outline' },
   { type: 'switch-list', label: 'Switch list', icon: 'mdi:format-list-checks' },
@@ -76,6 +81,7 @@ const CLIMATE_FEATURE_ATTR: Partial<Record<FeatureType, string>> = {
   'climate-hvac-modes': 'hvac_modes',
   'climate-fan-modes': 'fan_modes',
   'climate-swing-modes': 'swing_modes',
+  'climate-swing-horizontal-modes': 'swing_horizontal_modes',
   'climate-preset-modes': 'preset_modes',
 };
 
@@ -144,7 +150,10 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     this._config = config;
   }
 
-  /** Data object handed to the base ha-form. */
+  /**
+   * Data object handed to the base ha-form.
+   * @param none No parameters; reads the current configuration.
+   */
   private get _baseData() {
     return {
       entity: this._config.entity,
@@ -153,6 +162,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       dial_style: this._config.dial_style ?? 'halo',
       font: this._config.font ?? 'rounded',
       show_current_as_primary: this._config.show_current_as_primary ?? false,
+      show_state_label: this._config.show_state_label ?? false,
     };
   }
 
@@ -182,7 +192,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   private _computeLabel = (s: FormSchemaItem): string => {
     switch (s.name) {
       case 'entity':
-        return 'Climate entity (required)';
+        return 'Climate or water heater entity (required)';
       case 'name':
         return 'Name';
       case 'theme':
@@ -193,6 +203,8 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         return 'Font';
       case 'show_current_as_primary':
         return 'Show current temperature as primary information';
+      case 'show_state_label':
+        return 'Show HVAC action / state label';
       case 'temperature':
         return 'Temperature sensor';
       case 'humidity':
@@ -228,11 +240,14 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     const config: MaterialThermostatCardConfig = {
       ...this._config,
       entity: data.entity,
-      name: data.name || undefined,
+      name: typeof this._config.name === 'string' || this._config.name === undefined
+        ? data.name || undefined
+        : this._config.name,
       theme: data.theme || undefined,
       dial_style: data.dial_style === 'halo' ? undefined : data.dial_style,
       font: data.font === 'rounded' ? undefined : data.font,
       show_current_as_primary: data.show_current_as_primary || undefined,
+      show_state_label: data.show_state_label || undefined,
     };
     this._emit(config);
   }
@@ -268,19 +283,26 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
   }
 
   /**
-   * The feature types offered in the "Add feature" menu: climate selectors only
-   * when the entity actually exposes them and they aren't already added (each is
-   * unique); custom features (input_select, switch/button lists, tiles) are
-   * always available and repeatable.
+   * Offer domain-specific features only when supported and not already added.
+   * Auxiliary features remain repeatable for either primary domain.
+   * @param none No parameters; reads the configured entity and features.
    */
   private _addableFeatures(): typeof ADDABLE_FEATURES {
-    const attrs = this.hass?.states?.[this._config.entity]?.attributes ?? {};
+    const stateObj = this.hass?.states?.[this._config.entity];
+    const attrs = stateObj?.attributes ?? {};
+    const domain = primaryDomain(this._config.entity);
     const existing = new Set(this._features.map((f) => f.type));
     return ADDABLE_FEATURES.filter(({ type }) => {
-      if (SINGLETON_FEATURES.has(type)) return !existing.has(type); // add-once custom feature
+      if (SINGLETON_FEATURES.has(type)) return domain === 'climate' && !existing.has(type);
+      if (type === 'water-heater-away-mode') {
+        return domain === 'water_heater' && !existing.has(type) && supportsFeature(stateObj, WaterHeaterEntityFeature.AWAY_MODE);
+      }
+      if (type === 'water-heater-operation-modes') {
+        return domain === 'water_heater' && !existing.has(type) && Array.isArray(attrs.operation_list) && attrs.operation_list.length > 0;
+      }
       const attr = CLIMATE_FEATURE_ATTR[type];
       if (!attr) return true; // custom feature → always addable, repeatable
-      return !existing.has(type) && Array.isArray(attrs[attr]) && attrs[attr].length > 0;
+      return domain === 'climate' && !existing.has(type) && Array.isArray(attrs[attr]) && attrs[attr].length > 0;
     });
   }
 
@@ -374,6 +396,10 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     this._setFeatures(features);
   }
 
+  /**
+   * Render supported visual fields without exposing structured YAML-only names.
+   * @param none No parameters; uses the reactive editor state.
+   */
   protected render(): TemplateResult {
     if (!this._config || !this.hass) return html``;
     return html`
@@ -381,13 +407,13 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         <ha-form
           .hass=${this.hass}
           .data=${this._baseData}
-          .schema=${BASE_SCHEMA}
+          .schema=${BASE_SCHEMA.filter((field) => field.name !== 'name' || typeof this._config.name === 'string' || this._config.name === undefined)}
           .computeLabel=${this._computeLabel}
           .computeHelper=${this._computeHelper}
           @value-changed=${this._baseChanged}
         ></ha-form>
 
-        <ha-expansion-panel outlined .hass=${this.hass}>
+        ${primaryDomain(this._config.entity) === 'water_heater' ? nothing : html`<ha-expansion-panel outlined .hass=${this.hass}>
           <div slot="header" class="panel-header">
             <ha-icon icon="mdi:thermometer-water"></ha-icon>
             <span>Feels-like temperature</span>
@@ -414,7 +440,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           @value-changed=${this._feelsLikeChanged}
         ></ha-form>
           </div>
-        </ha-expansion-panel>
+        </ha-expansion-panel>`}
 
         <div class="features-header">
           <span>Features</span>
@@ -514,6 +540,8 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       case 'climate-hvac-modes':
       case 'climate-fan-modes':
       case 'climate-swing-modes':
+      case 'climate-swing-horizontal-modes':
+      case 'water-heater-operation-modes':
       case 'climate-preset-modes': {
         const kind =
           feature.type === 'climate-hvac-modes'
@@ -522,7 +550,11 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
               ? 'fan'
               : feature.type === 'climate-preset-modes'
                 ? 'preset'
-                : 'swing';
+                 : feature.type === 'climate-swing-horizontal-modes'
+                   ? 'swing-horizontal'
+                   : feature.type === 'water-heater-operation-modes'
+                     ? 'operation'
+                     : 'swing';
         inner = html`<mt-climate-feature-editor
           .hass=${this.hass}
           .entityId=${this._config.entity}
@@ -532,6 +564,28 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         ></mt-climate-feature-editor>`;
         break;
       }
+      case 'water-heater-away-mode':
+        inner = html`
+          <mt-text-field
+            label="Title (optional)"
+            .value=${feature.label ?? ''}
+            @value-changed=${(e: CustomEvent<{ value: string }>) => onChange(new CustomEvent('feature-changed', { detail: { feature: { ...feature, label: e.detail.value || undefined } } }))}
+          ></mt-text-field>
+          ${this._labeledField('Display', html`<mt-display-toggle
+            .value=${feature.display ?? 'icons'}
+            .options=${[
+              { value: 'icons', label: 'Icons', icon: 'mdi:dots-grid' },
+              { value: 'tile', label: 'Tile', icon: 'mdi:card-text-outline' },
+            ]}
+            @value-changed=${(e: CustomEvent<{ value: 'icons' | 'tile' }>) => onChange(new CustomEvent('feature-changed', { detail: { feature: { ...feature, display: e.detail.value } } }))}
+          ></mt-display-toggle>`)}
+          <mt-width-field
+            .hass=${this.hass}
+            .value=${feature.width}
+            @width-changed=${(e: CustomEvent<{ value: number | undefined }>) => onChange(new CustomEvent('feature-changed', { detail: { feature: { ...feature, width: e.detail.value } } }))}
+          ></mt-width-field>
+        `;
+        break;
       case 'input-select':
         inner = html`<mt-input-select-editor
           .hass=${this.hass}

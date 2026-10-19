@@ -1,6 +1,6 @@
 import { fixture, html, expect, aTimeout } from '@open-wc/testing';
 import { sendKeys } from '@web/test-runner-commands';
-import { makeHass, climateState, entityState, captureEvents } from '../helpers';
+import { makeHass, climateState, waterHeaterState, entityState, captureEvents } from '../helpers';
 import type { TestHass } from '../helpers';
 
 import { ensureHaComponents, resetHaComponentsForTest } from '../../src/editors/load-ha';
@@ -214,15 +214,15 @@ describe('material-thermostat-card-editor', () => {
     const form = el.shadowRoot!.querySelector('ha-form') as any;
     const style = form.schema[3];
     expect(style).to.include({ name: '', type: 'expandable', title: 'Style', flatten: true, icon: 'mdi:palette-outline' });
-    expect(style.schema.map((s: any) => s.name)).to.deep.equal(['dial_style', 'show_current_as_primary', 'font']);
+    expect(style.schema.map((s: any) => s.name)).to.deep.equal(['dial_style', 'show_current_as_primary', 'show_state_label', 'font']);
     expect(style.schema[0].selector.select.mode).to.equal('dropdown');
     expect(style.schema[0].selector.select.options).to.deep.equal([
       { value: 'halo', label: 'Halo' },
       { value: 'minimal', label: 'Minimal' },
       { value: 'google', label: 'Google Home' },
     ]);
-    expect(style.schema[2].selector.select.mode).to.equal('dropdown');
-    expect(style.schema[2].selector.select.options).to.deep.equal([
+    expect(style.schema[3].selector.select.mode).to.equal('dropdown');
+    expect(style.schema[3].selector.select.options).to.deep.equal([
       { value: 'rounded', label: 'Google Sans Flex (rounded)' },
       { value: 'theme', label: 'Theme font' },
     ]);
@@ -415,6 +415,106 @@ describe('material-thermostat-card-editor', () => {
       '0 entities', '1 entities', '0 entities', '1 entities', 'input_select.x', 'No entity selected', 'Comfort', 'All modes', '1 modes', '0 modes', '2 modes', 'All modes',
     ]);
     expect(el.shadowRoot!.querySelectorAll('.feature-head > ha-icon').length).to.equal(12);
+  });
+
+  it('accepts both primary domains and exposes the optional state label', async () => {
+    const el = await mount();
+    const form = el.shadowRoot!.querySelector('ha-form') as any;
+    expect(form.schema[0].selector).to.deep.equal({ entity: { domain: ['climate', 'water_heater'] } });
+    expect(form.data.show_state_label).to.equal(false);
+    expect(form.computeLabel({ name: 'show_state_label' })).to.equal('Show HVAC action / state label');
+    expect(form.schema[3].schema[2].selector).to.deep.equal({ boolean: {} });
+    const cap = captureEvents('config-changed');
+    emitValueChanged(form, { ...form.data, show_state_label: true });
+    await el.updateComplete;
+    expect(form.data.show_state_label).to.equal(true);
+    expect((cap.events[0].detail as any).config.show_state_label).to.equal(true);
+    emitValueChanged(form, { ...form.data, show_state_label: false });
+    cap.stop();
+    expect((cap.events[1].detail as any).config.show_state_label).to.equal(undefined);
+  });
+
+  it('hides structured names and water-heater feels-like settings without losing YAML', async () => {
+    for (const name of [{ type: 'entity' }, ['Boiler', { type: 'entity' }]]) {
+      const feels_like = { temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true };
+      const el = await mount({ entity: 'water_heater.test', name, feels_like });
+      const form = el.shadowRoot!.querySelector('ha-form') as any;
+      expect(form.schema.map((s: any) => s.name)).to.not.include('name');
+      expect(el.shadowRoot!.querySelector('ha-expansion-panel')).to.equal(null);
+      const cap = captureEvents('config-changed');
+      emitValueChanged(form, { ...form.data, name: 'must not replace YAML', theme: 'night' });
+      (el as any)._pickFeature('entity-tile');
+      cap.stop();
+      for (const event of cap.events) {
+        expect((event.detail as any).config.name).to.deep.equal(name);
+        expect((event.detail as any).config.feels_like).to.deep.equal(feels_like);
+      }
+    }
+    for (const name of [undefined, 'Boiler']) {
+      const el = await mount({ name });
+      expect((el.shadowRoot!.querySelector('ha-form') as any).schema.map((s: any) => s.name)).to.include('name');
+    }
+  });
+
+  it('filters primary features by domain, available lists, and away capability', async () => {
+    const aux = ['input-select', 'switch-group', 'switch-list', 'button-list', 'entity-tile', 'sensor-list'];
+    for (const [attributes, primary] of [
+      [{}, ['water-heater-operation-modes', 'water-heater-away-mode']],
+      [{ supported_features: 0, operation_list: [] }, []],
+      [{ supported_features: 0, operation_list: undefined }, []],
+    ] as const) {
+      const el = await mount({ entity: 'water_heater.test' }, makeHass({
+        'water_heater.test': waterHeaterState({ ...attributes, hvac_modes: ['off'], fan_modes: ['auto'], swing_horizontal_modes: ['off'] }),
+      }));
+      expect((el as any)._addableFeatures().map((f: any) => f.type)).to.deep.equal([...primary, ...aux]);
+    }
+    const el = await mount({ entity: 'water_heater.test', features: [
+      { type: 'water-heater-operation-modes' }, { type: 'water-heater-away-mode' },
+    ] }, makeHass({ 'water_heater.test': waterHeaterState() }));
+    expect((el as any)._addableFeatures().map((f: any) => f.type)).to.deep.equal(aux);
+    const climate = await mount({}, makeHass({ 'climate.test': climateState({ swing_horizontal_modes: ['off', 'on'] }) }));
+    expect((climate as any)._addableFeatures().map((f: any) => f.type)).to.include('climate-swing-horizontal-modes');
+    climate.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', features: [{ type: 'climate-swing-horizontal-modes' }] });
+    expect((climate as any)._addableFeatures().map((f: any) => f.type)).to.not.include('climate-swing-horizontal-modes');
+    const unknown = await mount({ entity: 'sensor.test' });
+    expect((unknown as any)._addableFeatures().map((f: any) => f.type)).to.deep.equal(aux);
+  });
+
+  it('adds and edits new primary features with labelled rows and catalogue icons', async () => {
+    for (const [type, label, icon, kind] of [
+      ['climate-swing-horizontal-modes', 'Climate horizontal swing modes', 'mdi:arrow-left-right', 'swing-horizontal'],
+      ['water-heater-operation-modes', 'Water heater operation modes', 'mdi:water-boiler', 'operation'],
+      ['water-heater-away-mode', 'Water heater away mode', 'mdi:account-arrow-right', null],
+    ] as const) {
+      const el = await mount();
+      const cap = captureEvents('config-changed');
+      (el as any)._pickFeature(type);
+      await el.updateComplete;
+      expect((cap.events[0].detail as any).config.features).to.deep.equal([{ type }]);
+      expect(el.shadowRoot!.querySelector('.feature-title > div')!.textContent).to.equal(label);
+      expect(el.shadowRoot!.querySelector('.feature-head > ha-icon')!.getAttribute('icon')).to.equal(icon);
+      if (kind) {
+        expect(el.shadowRoot!.querySelector('mt-climate-feature-editor')!.kind).to.equal(kind);
+      } else {
+        const editor = el.shadowRoot!.querySelector('.feature-editor')!;
+        const display = editor.querySelector('mt-display-toggle')!;
+        expect(display.options.map((o) => o.value)).to.deep.equal(['icons', 'tile']);
+        expect(display.value).to.equal('icons');
+        expect(editor.querySelector('mt-text-field')!.value).to.equal('');
+        emitValueChanged(display, 'tile');
+        await el.updateComplete;
+        emitValueChanged(editor.querySelector('mt-text-field')!, 'Holiday');
+        await el.updateComplete;
+        editor.querySelector('mt-width-field')!.dispatchEvent(new CustomEvent('width-changed', { detail: { value: 50 } }));
+        await el.updateComplete;
+        expect((cap.events[3].detail as any).config.features[0]).to.deep.equal({ type, display: 'tile', label: 'Holiday', width: 50 });
+        expect(display.value).to.equal('tile');
+        expect(editor.querySelector('mt-text-field')!.value).to.equal('Holiday');
+        emitValueChanged(editor.querySelector('mt-text-field')!, '');
+        expect((cap.events[4].detail as any).config.features[0].label).to.equal(undefined);
+      }
+      cap.stop();
+    }
   });
 
   describe('feels-like section', () => {
@@ -867,7 +967,7 @@ describe('material-thermostat-card-editor', () => {
 describe('mt-climate-feature-editor', () => {
   /** Mount the climate feature editor. */
   async function mount(
-    kind: 'hvac' | 'fan' | 'swing' | 'preset',
+    kind: 'hvac' | 'fan' | 'swing' | 'preset' | 'swing-horizontal' | 'operation',
     feature: any = { type: 'climate-hvac-modes' },
     states: Record<string, any> = { 'climate.test': climateState() }
   ): Promise<MtClimateFeatureEditor> {
@@ -881,6 +981,44 @@ describe('mt-climate-feature-editor', () => {
       ></mt-climate-feature-editor>`
     );
     return el;
+  }
+
+  for (const [kind, type, attribute] of [
+    ['operation', 'water-heater-operation-modes', 'operation_list'],
+    ['swing-horizontal', 'climate-swing-horizontal-modes', 'swing_horizontal_modes'],
+  ] as const) {
+    it(`${kind} supports all overrides and order while preserving include`, async () => {
+      const include = ['eco'];
+      const el = await mount(kind, { type, include, display: 'tile' }, {
+        'climate.test': kind === 'operation'
+          ? waterHeaterState({ [attribute]: ['eco', 'off'] })
+          : climateState({ [attribute]: ['eco', 'off'] }),
+      });
+      expect((el as any)._values()).to.deep.equal(['eco', 'off']);
+      const cap = captureEvents('feature-changed');
+      el.addEventListener('feature-changed', (event) => {
+        el.feature = (event as CustomEvent).detail.feature;
+      });
+      const row = el.shadowRoot!.querySelector('.opt')!;
+      expect(row.querySelector('mt-icon-field')!.defaultIcon).to.be.a('string');
+      emitValueChanged(row.querySelector('mt-text-field')!, 'Economy');
+      await el.updateComplete;
+      emitValueChanged(row.querySelector('mt-icon-field')!, 'mdi:leaf');
+      await el.updateComplete;
+      emitValueChanged(row.querySelector('mt-color-field')!, '#123456');
+      await el.updateComplete;
+      row.querySelector<HTMLButtonElement>('.opt-hide')!.click();
+      await el.updateComplete;
+      el.shadowRoot!.querySelector('ha-sortable')!.dispatchEvent(new CustomEvent('item-moved', { detail: { oldIndex: 0, newIndex: 1 } }));
+      cap.stop();
+      for (const event of cap.events) expect((event.detail as any).feature.include).to.deep.equal(include);
+      expect((cap.events[4].detail as any).feature).to.deep.equal({
+        type, include, display: 'tile', order: ['off', 'eco'],
+        options: [{ value: 'eco', label: 'Economy', icon: 'mdi:leaf', color: '#123456', hide: true }],
+      });
+      const empty = await mount(kind, { type }, { 'climate.test': climateState() });
+      expect((empty as any)._values()).to.deep.equal([]);
+    });
   }
 
   it('_values() returns hvac_modes for kind=hvac', async () => {
