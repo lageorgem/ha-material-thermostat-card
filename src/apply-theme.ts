@@ -1,8 +1,8 @@
 import type { Theme as LegacyTheme } from 'custom-card-helpers';
 
-type ThemeVars = Record<string, string>;
+type ThemeVars = Record<string, string | number>;
 type ThemeModes = { light?: ThemeVars; dark?: ThemeVars };
-type Theme = { modes?: ThemeModes; [key: string]: string | ThemeModes | undefined };
+type Theme = { modes?: ThemeModes; [key: string]: string | number | ThemeModes | undefined };
 
 /** Theme fields consumed by the card; older HA versions may omit darkMode. */
 export interface HassThemes {
@@ -23,18 +23,18 @@ export function applyCardTheme(element: HTMLElement, themes: HassThemes | undefi
   if (theme) {
     const { modes, ...base } = theme as Theme;
     for (const [key, value] of Object.entries({ ...base, ...modes?.[themes?.darkMode ? 'dark' : 'light'] })) {
-      if (typeof value === 'string') variables[key] = value;
+      if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) variables[key] = value;
     }
   }
   const properties = new Map<string, string>();
   for (const [key, value] of Object.entries(variables)) {
-    const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value);
+    const hex = typeof value === 'string' && /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value);
     if (hex && !key.startsWith('rgb-')) {
       const digits = hex[1].length === 3 ? hex[1].split('').map((digit) => digit + digit).join('') : hex[1];
       properties.set(`--rgb-${key}`, [0, 2, 4].map((offset) => parseInt(digits.slice(offset, offset + 2), 16)).join(', '));
     }
   }
-  for (const [key, value] of Object.entries(variables)) properties.set(`--${key}`, value);
+  for (const [key, value] of Object.entries(variables)) properties.set(`--${key}`, String(value));
   for (const key of appliedKeys.get(element) ?? []) {
     if (!properties.has(key)) element.style.removeProperty(key);
   }

@@ -33,6 +33,29 @@ describe('applyCardTheme', () => {
     expect([...element.style].filter((key) => key.startsWith('--rgb-'))).to.deep.equal([]);
   });
 
+  it('applies finite numeric base and mode values, including zero', () => {
+    const numericThemes: HassThemes = { themes: { numeric: {
+      'disabled-opacity': 0.5,
+      modes: { light: { 'mode-opacity': 0.25 }, dark: { 'disabled-opacity': 0 } },
+    } } };
+    applyCardTheme(element, numericThemes, 'numeric');
+    expect(element.style.getPropertyValue('--disabled-opacity')).to.equal('0.5');
+    expect(element.style.getPropertyValue('--mode-opacity')).to.equal('0.25');
+    expect(element.style.getPropertyValue('--rgb-disabled-opacity')).to.equal('');
+    applyCardTheme(element, { ...numericThemes, darkMode: true }, 'numeric');
+    expect(element.style.getPropertyValue('--disabled-opacity')).to.equal('0');
+    expect(element.style.getPropertyValue('--mode-opacity')).to.equal('');
+  });
+
+  it('ignores non-finite numbers and non-string/non-number values', () => {
+    const invalidThemes = { themes: { invalid: {
+      nan: NaN, positive: Infinity, negative: -Infinity, object: {}, boolean: false, null: null,
+      modes: { light: { 'mode-nan': NaN, 'mode-object': {} } },
+    } } } as unknown as HassThemes;
+    applyCardTheme(element, invalidThemes, 'invalid');
+    expect(element.style.length).to.equal(0);
+  });
+
   it('merges light/dark overrides and removes obsolete mode variables', () => {
     for (const darkMode of [false, true]) {
       applyCardTheme(element, { ...themes, darkMode }, 'modes');
