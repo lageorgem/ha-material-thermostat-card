@@ -5,7 +5,6 @@ import {
   type LovelaceCard,
   type LovelaceCardEditor,
   fireEvent,
-  applyThemesOnElement,
 } from 'custom-card-helpers';
 import { styleMap, type StyleInfo } from 'lit/directives/style-map.js';
 import { CARD_TYPE, EDITOR_TYPE, CARD_NAME, CARD_DESCRIPTION, CARD_VERSION } from './const';
@@ -24,6 +23,7 @@ import { tokens, climateModeColor, waterHeaterModeColor, presetIcon, presetColor
 import { primaryDomain, targetModel, temperatureServiceCall, dialColorMode, hvacAction, isUnavailable } from './entity/adapter';
 import { entityDisplayName, formatEntityState, formatAttributeValue, formatNumber, localizeKey } from './localize';
 import { normalizeConfig } from './config/normalize';
+import { applyCardTheme } from './apply-theme';
 import type {
   ClimateModesFeatureConfig,
   ClimatePresetFeatureConfig,
@@ -221,10 +221,10 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     if (changed.has('hass') || changed.has('_config')) {
       const old = changed.get('hass') as HomeAssistant | undefined;
       if (
-        this._config?.theme &&
+        (this._config?.theme || changed.has('_config')) &&
         (!old || old.themes !== this.hass.themes || changed.has('_config'))
       ) {
-        applyThemesOnElement(this, this.hass.themes, this._config.theme);
+        applyCardTheme(this, this.hass?.themes, this._config?.theme);
       }
     }
     // Drop optimistic values once the server confirms them.

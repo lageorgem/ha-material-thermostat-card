@@ -407,14 +407,20 @@ describe('card parity contracts', () => {
   });
 
   it('reapplies a configured theme on a themes-only hass update', async () => {
-    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', theme: 'parity', font: 'theme' });
-    const theme = (color: string) => ({ default_theme: 'default', themes: { parity: { 'primary-color': color } } });
-    card.hass = { ...card.hass, themes: theme('red') };
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', theme: 'qa', font: 'theme' });
+    const theme = (color: string) => ({ default_theme: 'default', themes: { qa: { 'primary-color': color } } });
+    card.hass = { ...card.hass, themes: theme('#111111') };
     await card.updateComplete;
+    expect(card.style.getPropertyValue('--primary-color')).to.equal('#111111');
     const updated = sinon.spy(card as unknown as { updated: (changed: unknown) => void }, 'updated');
-    card.hass = { ...card.hass, themes: theme('blue') };
+    card.hass = { ...card.hass, themes: theme('#222222') };
     await card.updateComplete;
     expect(updated.calledOnce).to.equal(true);
+    expect(card.style.getPropertyValue('--primary-color')).to.equal('#222222');
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', font: 'theme' });
+    await card.updateComplete;
+    expect(card.style.getPropertyValue('--primary-color')).to.equal('');
+    expect(card.style.getPropertyValue('--rgb-primary-color')).to.equal('');
   });
 
   it('uses content-driven sections rows and a stable, per-instance group name', async () => {
