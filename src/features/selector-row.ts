@@ -48,7 +48,12 @@ export class MtSelectorRow extends LitElement {
     // Icons mode shows only the chips — no leading text label. (`label` is used
     // as the dropdown placeholder, and here as the chip group's aria-label.)
     return html`
-      <div class="chips" role="group" aria-label=${this.label ?? 'options'}>
+      <div
+        class="chips"
+        style=${`--chip-count: ${this.items.length}`}
+        role="group"
+        aria-label=${this.label ?? 'options'}
+      >
         ${this.items.map(
           (item) => html`
             <button
@@ -113,15 +118,17 @@ export class MtSelectorRow extends LitElement {
         display: flex;
         align-items: center;
         justify-content: safe center;
-        gap: 4px;
+        /* Spend spare width on the original gap, then shrink equal chips.
+           At seven options / 200px the gap reaches zero and each chip is 28px. */
+        gap: clamp(
+          0px,
+          calc((100% - var(--chip-count) * 44px) / max(1, var(--chip-count) - 1)),
+          4px
+        );
         padding: 4px 2px;
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
-        /* min-width:0 lets the pill shrink to its container instead of growing
-           to its content (the default min-width:auto), so it stays inside the
-           rounded container. Icons keep ~48px each on a single row; when they
-           don't all fit, the row scrolls horizontally (clipped to the rounded
-           shape) instead of squishing. */
+        /* Scroll only when the available width cannot hold 28px per chip. */
         min-width: 0;
         overflow-x: auto;
         overflow-y: hidden;
@@ -135,10 +142,12 @@ export class MtSelectorRow extends LitElement {
            icons never over-stretch when there is spare room. */
         flex: 1 1 44px;
         height: 44px;
-        min-width: 44px;
+        min-width: 28px;
         max-width: 120px;
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         place-items: center;
+        container-type: inline-size;
         border: none;
         border-radius: var(--mt-shape-full);
         background: transparent;
@@ -151,9 +160,13 @@ export class MtSelectorRow extends LitElement {
         -webkit-tap-highlight-color: transparent;
       }
       .chip ha-icon {
-        --mdc-icon-size: 24px;
+        --mdc-icon-size: clamp(18px, 100cqi, 24px);
       }
       .chip-text {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
         font-size: var(--md-sys-typescale-label-large-size, 14px);
         font-weight: 500;
         white-space: nowrap;

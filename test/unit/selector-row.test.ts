@@ -17,6 +17,91 @@ describe('mt-selector-row', () => {
   });
 
   describe('icons mode (default)', () => {
+    const iconItems: SelectorItem[] = Array.from({ length: 7 }, (_, index) => ({
+      value: String(index),
+      label: `Option ${index}`,
+      icon: 'mdi:fan',
+      active: index === 0,
+    }));
+
+    it('preserves the pre-change 400px / three-chip footprint', async () => {
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 400px">
+          <mt-selector-row .items=${iconItems.slice(0, 3)}></mt-selector-row>
+        </div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const chips = [...row.shadowRoot!.querySelectorAll<HTMLElement>('.chip')];
+      const widths = chips.map((chip) => getComputedStyle(chip).width);
+      expect(widths).to.deep.equal(['120px', '120px', '120px']);
+      expect(chips[1].getBoundingClientRect().left - chips[0].getBoundingClientRect().right)
+        .to.equal(4);
+    });
+
+    it('fits seven equal icon chips inside a 200px row without scrolling', async () => {
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 200px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const group = row.shadowRoot!.querySelector<HTMLElement>('.chips')!;
+      const bounds = group.getBoundingClientRect();
+      const chips = [...row.shadowRoot!.querySelectorAll<HTMLElement>('.chip')];
+      for (const chip of chips) {
+        const rect = chip.getBoundingClientRect();
+        expect(rect.left).to.be.at.least(bounds.left);
+        expect(rect.right).to.be.at.most(bounds.right);
+        expect(rect.width).to.be.at.least(28);
+        expect(rect.width).to.be.closeTo(chips[0].getBoundingClientRect().width, 0.02);
+      }
+      expect(group.scrollWidth).to.equal(group.clientWidth);
+    });
+
+    it('contains and ellipsizes long labels without overlapping neighbouring chips', async () => {
+      const labels = iconItems.slice(0, 6).map((item) => ({
+        value: item.value,
+        label: `A very long entity name for option ${item.value}`,
+      }));
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 200px"><mt-selector-row .items=${labels}></mt-selector-row></div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const chips = [...row.shadowRoot!.querySelectorAll<HTMLElement>('.chip')];
+      chips.forEach((chip, index) => {
+        const bounds = chip.getBoundingClientRect();
+        const text = chip.querySelector<HTMLElement>('.chip-text')!;
+        const textBounds = text.getBoundingClientRect();
+        expect(textBounds.left).to.be.at.least(bounds.left);
+        expect(textBounds.right).to.be.at.most(bounds.right);
+        if (index < chips.length - 1) {
+          expect(bounds.right).to.be.at.most(chips[index + 1].getBoundingClientRect().left);
+        }
+        expect(getComputedStyle(text).overflow).to.equal('hidden');
+        expect(getComputedStyle(text).textOverflow).to.equal('ellipsis');
+        expect(getComputedStyle(text).whiteSpace).to.equal('nowrap');
+        expect(text.scrollWidth).to.be.greaterThan(text.clientWidth);
+        expect(chip.title).to.equal(labels[index].label);
+        expect(chip.getAttribute('aria-label')).to.equal(labels[index].label);
+      });
+    });
+
+    it('scrolls only once equal chips would fall below the 28px minimum', async () => {
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 190px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const group = row.shadowRoot!.querySelector<HTMLElement>('.chips')!;
+      for (const chip of row.shadowRoot!.querySelectorAll('.chip')) {
+        expect(chip.getBoundingClientRect().width).to.equal(28);
+      }
+      expect(group.scrollWidth).to.be.greaterThan(group.clientWidth);
+      group.scrollLeft = group.scrollWidth;
+      expect(group.scrollLeft).to.be.greaterThan(0);
+    });
+
     const items: SelectorItem[] = [
       { value: 'a', label: 'Alpha', icon: 'mdi:a', active: true },
       { value: 'b', label: 'Beta' }, // no icon -> chip-text
