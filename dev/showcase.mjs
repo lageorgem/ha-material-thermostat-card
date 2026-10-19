@@ -104,6 +104,38 @@ const dualStates = () => states('heat_cool', {
 
 export const SHOTS = [
   {
+    name: 'forum-hero', title: 'Living Room — Google Home style',
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'climate-fan-modes', display: 'tile', label: 'Fan', width: 50 },
+      { type: 'climate-preset-modes', display: 'tile', label: 'Preset', width: 50 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: HUMIDITY, label: 'Indoor humidity' },
+        { entity: 'sensor.mt_showcase_outdoor', label: 'Outdoor temperature' },
+      ] },
+    ]),
+    states: {
+      [CLIMATE]: climate('heat', {
+        friendly_name: 'Living Room',
+        hvac_action: 'heating', temperature: 22, current_temperature: 20.4,
+        hvac_modes: ['off', 'heat', 'cool', 'auto'],
+        fan_modes: ['auto', 'low', 'medium', 'high'], fan_mode: 'auto',
+        preset_modes: ['none', 'eco', 'comfort', 'boost'], preset_mode: 'comfort',
+        min_temp: 10, max_temp: 30, target_temp_step: 0.5,
+      }),
+      [TEMPERATURE]: { state: '20.4', attributes: {
+        friendly_name: 'Indoor temperature', unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+      [HUMIDITY]: { state: '48', attributes: {
+        friendly_name: 'Indoor humidity', unit_of_measurement: '%', device_class: 'humidity',
+      } },
+      'sensor.mt_showcase_outdoor': { state: '11', attributes: {
+        friendly_name: 'Outdoor temperature', unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
     name: 'hero', title: 'Bedroom AC — cooling',
     config: card([
       { type: 'climate-hvac-modes', display: 'tile', label: 'Mode' },
