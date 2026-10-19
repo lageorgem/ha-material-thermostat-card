@@ -19,7 +19,9 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
   `water_heater.set_away_mode`, with `display: icons|tile`; shown only when the
   entity supports away mode and reports a known on/off away state.
 - **Selector allow-lists** (`include: [...]`): only listed available values are
-  shown, in order, on climate/operation/input-select selectors.
+  shown on climate HVAC/preset/fan/swing/horizontal-swing and water-heater
+  operation-mode selectors, not `input-select`. `include: []` applies no filter;
+  `order` takes precedence over the allow-list's display order.
 - **Stock thermostat YAML compatibility**: change the card type to
   `custom:material-thermostat-card`; stock `style: icons|dropdown` and
   `hvac_modes`, `preset_modes`, `fan_modes`, `swing_modes`,
@@ -52,7 +54,9 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
 
 ### Fixed
 
-- Entity selectors are disabled while their entity is unavailable.
+- Climate HVAC/preset/fan/swing/horizontal-swing and water-heater operation-mode
+  selectors, plus the water-heater away control, are disabled while the card's
+  main entity is unavailable; auxiliary controls such as `input-select` are not.
 - Rejected or ignored setpoint changes revert to the device value after about 3 s.
 - Theme-only changes now apply without requiring an entity state update.
 

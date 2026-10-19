@@ -61,9 +61,12 @@ option values). The selectors apply it via `orderValues(all, order)` in
 the entity adding/removing options). The editors persist it by drag-reordering
 the option rows (`ha-sortable` + a `.handle`, `_moveOption` → emit `{ order }`).
 
-These ordered-option selectors also accept `include?: string[]`: only available
-values in the allow-list are shown, in its order. Unlisted values do not follow
-(unlike `order`). `config/normalize.ts` translates stock `style: icons|dropdown`
+Only the five `climate-*` selectors and `water-heater-operation-modes` accept
+`include?: string[]`, not `input-select`. A non-empty allow-list shows only listed
+available values, initially in its order; unlisted values do not follow.
+`include: []` applies no filter. `order` is applied afterward: listed allowed
+values first, then remaining values in `include` order (or natural order without
+a non-empty allow-list). `config/normalize.ts` translates stock `style: icons|dropdown`
 and the corresponding `hvac_modes`/`preset_modes`/`fan_modes`/`swing_modes`/
 `swing_horizontal_modes`/`operation_modes` list to `display`/`include`, without
 mutating the input. Explicit custom keys win.
@@ -78,8 +81,11 @@ and a known `away_mode: on|off`; selection sends the opposite boolean. Missing
 numeric capability metadata retains legacy attribute-based behavior.
 
 `localize.ts` supplies HA state/attribute translations for mode values and tile
-titles, with English fallbacks. Explicit option labels win. Entity selectors
-disable items and guard service calls while unavailable. Card state text and
+titles, with English fallbacks. Explicit option labels win. Climate HVAC/preset/
+fan/swing/horizontal-swing and water-heater operation-mode selectors, plus the
+water-heater away control, disable items and guard service calls while the card's
+main entity is unavailable. This does not apply to auxiliary controls such as
+`input-select`. Card state text and
 “Unavailable” are localized; numbers follow HA number-format preferences.
 The editor's own strings remain English.
 

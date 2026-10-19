@@ -357,7 +357,7 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | --------- | --------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `display` | `climate-*`, `water-heater-operation-modes`, `input-select`, `switch-group`       | `icons` \| `dropdown` \| `tile` | `icons`                                                                               | Render the selector as an icon row, a dropdown, or a Google‑Home‑style **tile**                                                                                                                      |
 | `display` | `water-heater-away-mode`                                                          | `icons` \| `tile`               | `icons`                                                                               | Render the away toggle as an icon or tile; no dropdown                                                                                                                                               |
-| `include` | `climate-*`, `water-heater-operation-modes`, `input-select`                       | list of strings                 | all available values                                                                  | Allow-list: show only these available values, in this order                                                                                                                                          |
+| `include` | `climate-*`, `water-heater-operation-modes`                                       | list of strings                 | all available values                                                                  | Non-empty allow-list: show only these available values, in this order unless `order` overrides it. `[]` applies no filter                                                                            |
 | `label`   | `climate-*`, `water-heater-*`, `input-select`, `switch-group/list`, `button-list` | string                          | —                                                                                     | Optional **title** — rendered above the control in `icons`/`dropdown` modes, and as the **tile's title line** in `tile` mode; mode-selector tile titles fall back to HA's translated attribute label |
 | `width`   | **all** feature types                                                             | positive number                 | `50` (`entity-tile`, including `icon`) · `100` (all others, including selector tiles) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses the type's default — see [Layout](#layout--responsiveness)                          |
 
@@ -365,8 +365,9 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 
 Every climate selector renders in three display modes. `climate-fan-modes`, `climate-swing-modes`
 and `climate-preset-modes` behave identically, as does `climate-swing-horizontal-modes`
-for horizontal swing — shown here with `climate-hvac-modes`. Entity selectors are disabled
-while their entity is unavailable:
+for horizontal swing — shown here with `climate-hvac-modes`. These five climate mode selectors,
+the water-heater operation-mode selector and the water-heater away control are disabled
+while the card's main entity is unavailable; this does not apply to auxiliary controls such as `input-select`:
 
 <table>
   <tr>
@@ -458,10 +459,10 @@ operation-mode selector and does not accept `include`, `order` or `options`.
 `climate-*`, `water-heater-operation-modes` and `input-select` accept an `options:` list to customize how each underlying value is
 shown. Unlisted values keep their Home Assistant defaults.
 
-| Feature key | Type            | Description                                                                                                                                                                                                                                    |
-| ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `order`     | list of strings | Optional, e.g. `[heat, cool, 'off']`. Available values listed here come first in this order; unlisted values follow in their natural order. Unknown values are ignored. The visual editor saves this key when you drag options to reorder them |
-| `include`   | list of strings | Only show these available values, in this order; unlike `order`, unlisted values are excluded                                                                                                                                                  |
+| Feature key | Type            | Description                                                                                                                                                                                                                                        |
+| ----------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order`     | list of strings | Optional, e.g. `[heat, cool, 'off']`. Available values listed here come first in this order; unlisted values follow in their natural order. Unknown values are ignored. The visual editor saves this key when you drag options to reorder them     |
+| `include`   | list of strings | Climate and water-heater operation-mode selectors only, not `input-select`. A non-empty list excludes unlisted values; `[]` applies no filter. `order` is applied afterward: listed allowed values first, then remaining values in `include` order |
 
 ```yaml
 - type: climate-hvac-modes
