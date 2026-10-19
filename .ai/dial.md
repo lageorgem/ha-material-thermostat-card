@@ -118,23 +118,19 @@ The node and its correct dash geometry stay in place, so visibility fades rather
 than replaying the turn-on slide. Out-of-range/missing current and off mode still
 hide the segment as before; auto/dry/fan_only and dual behavior are unchanged.
 
-**Demand-or-reported dial lighting is single-setpoint heat/cool ONLY.** The card passes raw
+**Active-only lighting is single-setpoint ONLY.** The card passes raw
 `hvac_action` as `.hvacAction`; `_singleActive` is false for uncolored modes,
 otherwise a nonempty `hvacAction` wins: anything except `'idle'`/`'off'` is active.
 Absent/empty action falls back to `_demandSensible`: no current → false;
 cool needs current > setpoint, heat needs current < setpoint; other colored modes
-are true when current is present. `_dialLit` lights heat/cool when either
-`_singleActive` or `_demandSensible` is true: heating/cooling demand lights the dial
-even with reported idle/off. Other colored modes follow `_singleActive` only:
-reported activity wins, with inference only when the action is absent/empty;
-reported idle/off keeps auto/dry/fan_only neutral even with current present.
-Otherwise `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
+are true when current is present. Active → full mode color. Inactive colored mode
+→ `_dialColor`/`--dial-color` is `IDLE_COLOR` (`var(--mt-on-surface-variant)`),
 neutralizing ring and big number; `.dial.idle` dims the halo to opacity 0.5.
 `--mode-light = color-mix(in srgb, <mode color> 20%,
 var(--mt-on-surface))` tints single colored-mode setpoint markers at rest and drag.
 Off/dual setpoint markers stay `var(--mt-on-surface)`; current markers always use
-that bright color at opacity 1. Independently, `_demandColored` is true for colored
-modes when either `_singleActive` or `_demandSensible` is true. The band and mode icon
+that bright color at opacity 1. `_demandColored` is true for colored modes when
+either `_singleActive` or `_demandSensible` is true. The band and mode icon
 (`--mode-tint`) then use the full mode color, even with reported idle/off;
 otherwise the icon uses the `--mode-light` mix. Its size is `clamp(11px, 5cqi, 16px)`.
 Setpoint markers retain `--mode-light`, independent of demand coloring.

@@ -203,11 +203,6 @@ export class MtCircularDial extends LitElement {
     return COLORED_MODES.includes(this.mode) && (this._singleActive || this._demandSensible);
   }
 
-  /** Light the dial for reported activity, or inferred demand in heat/cool only. */
-  private get _dialLit(): boolean {
-    return this._singleActive || ((this.mode === 'heat' || this.mode === 'cool') && this._demandSensible);
-  }
-
   /**
    * The color for a mode: an explicit per-mode override (from the HVAC feature),
    * else the built-in semantic mode color.
@@ -227,7 +222,7 @@ export class MtCircularDial extends LitElement {
 
   /** The dial's mode color (off / idle modes use the neutral variant). */
   private get _dialColor(): string {
-    if (!this.dual && COLORED_MODES.includes(this.mode) && !this._dialLit) {
+    if (!this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive) {
       return MtCircularDial.IDLE_COLOR;
     }
     return COLORED_MODES.includes(this._effectiveMode)
@@ -235,7 +230,7 @@ export class MtCircularDial extends LitElement {
       : MtCircularDial.IDLE_COLOR;
   }
 
-  /** Single-mode segment color, shared with rendered-color wipe tracking. */
+  /** Single-mode segment color, independent of reported-only halo activity. */
   private get _singleSegColor(): string {
     return !this.dual && this._demandColored
       ? this._modeColor(this.mode)
@@ -845,7 +840,7 @@ export class MtCircularDial extends LitElement {
       ? this.dialStyle
       : 'halo';
     const isOff = !COLORED_MODES.includes(this.mode);
-    const isIdle = !this.dual && !isOff && !this._dialLit;
+    const isIdle = !this.dual && !isOff && !this._singleActive;
     const color = this._dialColor;
     const modeLight = isOff
       ? 'var(--mt-on-surface)'

@@ -159,14 +159,13 @@ also appear on the dial.
 | **`heat_cool`** | Two draggable handles for the low/high setpoints |
 | **⋮** (top‑right) | Open the entity's more‑info dialog |
 
-In **heat/cool** modes, the dial and big number light up in the mode colour whenever
-heating/cooling is demanded (setpoint above room temperature for heat, below for cool)
-or the device reports it is running, even if `hvac_action` reports idle while there is
-demand. They are neutral otherwise. The **halo** style adds a glow, dimmed when neutral/off;
+In **heat/cool** modes, the dial and big number only light up in the mode colour while actively
+heating/cooling: the card uses `hvac_action` when available, otherwise infers activity from the
+setpoint versus the current temperature. The **halo** style adds a glow, dimmed when idle/off;
 **minimal** removes it, and **google** adds a flat background disc without a glow.
 The band between the **current** temperature and the **target** visualizes the gap. It and the mode
 icon use the full mode colour whenever heating/cooling is demanded or reported, even if
-`hvac_action` still reports idle, matching the halo and big number.
+`hvac_action` still reports idle; the halo and big number keep the activity rule above.
 It is hidden when heating with the setpoint below room temperature, or cooling with the setpoint
 above room temperature.
 

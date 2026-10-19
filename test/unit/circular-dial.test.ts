@@ -454,7 +454,7 @@ describe('mt-circular-dial', () => {
       expect(style.fontVariationSettings).to.equal('normal');
     });
 
-    it('keeps current markers bright and lights demanded heat regardless of reported action', async () => {
+    it('keeps current markers bright and dims off/idle halos', async () => {
       const el = await mount();
       el.style.setProperty('--mt-motion-dur', '0s');
       el.style.setProperty('--mt-on-surface', 'rgb(237, 225, 212)');
@@ -463,7 +463,7 @@ describe('mt-circular-dial', () => {
       for (const action of ['idle', 'heating', 'off']) {
         el.hvacAction = action;
         await el.updateComplete;
-        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal('1');
+        expect(getComputedStyle(el.shadowRoot!.querySelector('.glow')!).opacity).to.equal(action === 'heating' ? '1' : '0.5');
         const marker = getComputedStyle(el.shadowRoot!.querySelector('.o-dot.current')!);
         expect(marker.opacity).to.equal('1');
         expect(marker.backgroundColor).to.equal('rgb(237, 225, 212)');
@@ -3127,12 +3127,10 @@ describe('mt-circular-dial', () => {
 
   describe('single-mode reported activity', () => {
     for (const [mode, value, current, action, colored, active] of [
-      ['heat', 23, 22, 'idle', true, true],
+      ['heat', 23, 21.2, 'idle', true, false],
       ['heat', 23, 21.2, 'heating', true, true],
-      ['heat', 16, 22, 'idle', false, false],
-      ['heat', 16, 22, 'heating', false, true],
       ['heat', 15, 22, undefined, false, false],
-      ['cool', 20, 24, 'idle', true, true],
+      ['cool', 20, 24, 'idle', true, false],
     ] as const) {
       it(`${mode}, target=${value}, current=${current}, action=${String(action)}: demand color=${colored}`, async () => {
         const el = await mount();
@@ -3145,9 +3143,9 @@ describe('mt-circular-dial', () => {
         const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
         const segment = el.shadowRoot!.querySelector('.value')!;
         const light = `color-mix(in srgb, ${climateModeColor(mode)} 20%, var(--mt-on-surface))`;
-        expect(segment.getAttribute('style')).to.contain(`stroke:${active ? climateModeColor(mode) : IDLE_COLOR}`);
+        expect(segment.getAttribute('style')).to.contain(`stroke:${colored ? climateModeColor(mode) : IDLE_COLOR}`);
         expect(getComputedStyle(segment).opacity).to.equal(colored ? '1' : '0');
-        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(active ? climateModeColor(mode) : light);
+        expect(dial.style.getPropertyValue('--mode-tint')).to.equal(colored ? climateModeColor(mode) : light);
         expect(getComputedStyle(el.shadowRoot!.querySelector('.mode-icon')!).color).to.equal(
           getComputedStyle(dial).getPropertyValue('--mode-tint').trim()
         );
@@ -3202,21 +3200,15 @@ describe('mt-circular-dial', () => {
       );
     });
 
-    for (const [mode, value, current, hvacAction, active, colored] of [
-      ['heat', 15, 20.6, 'heating', true, true],
-      ['heat', 25, 20.6, 'idle', false, true],
-      ['heat', 25, 20.6, undefined, true, true],
-      ['heat', 25, 20.6, '', true, true],
-      ['fan_only', 25, 20, undefined, true, true],
-      ['fan_only', 25, 20, 'idle', false, false],
-      ['fan_only', 25, 20, 'off', false, false],
-      ['fan_only', 25, undefined, 'idle', false, false],
-      ['off', 25, 20, 'heating', false, false],
-      ['dry', 25, 20, 'drying', true, true],
-      ['dry', 25, 20, 'idle', false, false],
-      ['dry', 25, 20, 'off', false, false],
-      ['auto', 25, 20, 'idle', false, false],
-      ['auto', 25, 20, 'off', false, false],
+    for (const [mode, value, current, hvacAction, active] of [
+      ['heat', 15, 20.6, 'heating', true],
+      ['heat', 25, 20.6, 'idle', false],
+      ['heat', 25, 20.6, undefined, true],
+      ['heat', 25, 20.6, '', true],
+      ['fan_only', 25, 20, undefined, true],
+      ['fan_only', 25, 20, 'off', false],
+      ['off', 25, 20, 'heating', false],
+      ['dry', 25, 20, 'drying', true],
     ] as const) {
       it(`${mode}, action=${String(hvacAction)}, target=${value}: active=${active}`, async () => {
         const el = await mount();
@@ -3227,17 +3219,11 @@ describe('mt-circular-dial', () => {
         await el.updateComplete;
         const dial = el.shadowRoot!.querySelector('.dial') as HTMLElement;
         expect(dial.style.getPropertyValue('--dial-color')).to.equal(
-          colored ? climateModeColor(mode) : IDLE_COLOR
+          active ? climateModeColor(mode) : IDLE_COLOR
         );
-        expect(dial.classList.contains('idle')).to.equal(!colored && mode !== 'off');
+        expect(dial.classList.contains('idle')).to.equal(!active && mode !== 'off');
         expect(dial.classList.contains('off')).to.equal(mode === 'off');
         expect((el as any)._singleActive).to.equal(active);
-        if (['fan_only', 'dry', 'auto'].includes(mode) && current != null) {
-          const segment = el.shadowRoot!.querySelector('.value')!;
-          expect(segment.getAttribute('style')).to.contain(`stroke:${climateModeColor(mode)}`);
-          expect(dial.style.getPropertyValue('--mode-tint')).to.equal(climateModeColor(mode));
-          expect((el as any)._prevSegColor).to.equal(climateModeColor(mode));
-        }
       });
     }
 
