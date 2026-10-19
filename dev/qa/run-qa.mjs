@@ -748,6 +748,13 @@ async function main() {
     if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
                     return found;
                   }
+                  // Stock features render ha-control-select / ha-control-select-menu whose
+                  // `options` property carries the localized {value, label} pairs.
+                  const fromProps = deep(host, 'ha-control-select, ha-control-select-menu')
+                    .flatMap((el) => (Array.isArray(el.options) ? el.options : []))
+                    .filter((o) => o && values.includes(o.value) && typeof o.label === 'string')
+                    .map((o) => [o.value, o.label.trim()]);
+                  if (fromProps.length) return Object.fromEntries(fromProps);
                   return Object.fromEntries(deep(host, S.stockOption).filter((el) => values.includes(el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'))).map((el) => [el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'), (el.getAttribute('title') || el.getAttribute('aria-label') || el.textContent).trim()]));
                 }, { S, values: ex.items }));
                 const actual = a.selectors.find((v) => v.kind === kindOf(ex.type));
