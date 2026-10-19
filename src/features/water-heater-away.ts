@@ -1,12 +1,21 @@
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-import { supportsFeature, isUnavailable, WaterHeaterEntityFeature } from '../entity/adapter';
-import { formatAttributeName } from '../localize';
+import { isUnavailable } from '../entity/adapter';
+import { formatAttributeName, formatAttributeValue } from '../localize';
 import { WATER_HEATER_AWAY_ICON } from '../theme';
+import { tileStyles } from './tile-styles';
 import './selector-row';
 
-/** Water-heater away-mode control, delegated to the shared selector. */
+/**
+ * Require the entity's explicit AWAY_MODE capability.
+ * @param supportedFeatures integration-provided capability mask
+ */
+function supportsAway(supportedFeatures: unknown): boolean {
+  return typeof supportedFeatures === 'number' && (supportedFeatures & 4) !== 0;
+}
+
+/** Water-heater away-mode toggle, rendered as an icon chip or native tile. */
 @customElement('mt-water-heater-away')
 export class MtWaterHeaterAway extends LitElement {
   /** HA connection. @param hass current Home Assistant instance */
@@ -21,7 +30,7 @@ export class MtWaterHeaterAway extends LitElement {
   /** Toggle the latest away state. @param this control instance */
   private _onSelect(): void {
     const s = this.hass?.states?.[this.entityId];
-    if (isUnavailable(s) || !supportsFeature(s, WaterHeaterEntityFeature.AWAY_MODE) ||
+    if (isUnavailable(s) || !supportsAway(s.attributes.supported_features) ||
       (s.attributes.away_mode !== 'on' && s.attributes.away_mode !== 'off')) return;
     this.hass.callService('water_heater', 'set_away_mode', {
       entity_id: this.entityId,
@@ -32,8 +41,24 @@ export class MtWaterHeaterAway extends LitElement {
   /** Render only supported, known away states. @param this control instance */
   protected render(): TemplateResult | typeof nothing {
     const s = this.hass?.states?.[this.entityId];
-    if (!s || !supportsFeature(s, WaterHeaterEntityFeature.AWAY_MODE) ||
+    if (!s || !supportsAway(s.attributes.supported_features) ||
       (s.attributes.away_mode !== 'on' && s.attributes.away_mode !== 'off')) return nothing;
+    if (this.display === 'tile') {
+      const on = s.attributes.away_mode === 'on';
+      return html`<button
+        type="button"
+        class=${on ? 'tile on' : 'tile'}
+        aria-pressed=${String(on)}
+        ?disabled=${isUnavailable(s)}
+        @click=${this._onSelect}
+      >
+        <span class="ic" aria-hidden="true"><ha-icon icon=${WATER_HEATER_AWAY_ICON}></ha-icon></span>
+        <span class="text">
+          <span class="title">${formatAttributeName(this.hass, s, 'away_mode', 'Away mode')}</span>
+          <span class="value">${formatAttributeValue(this.hass, s, 'away_mode')}</span>
+        </span>
+      </button>`;
+    }
     return html`<mt-selector-row
       .items=${[{
         value: 'away',
@@ -47,6 +72,15 @@ export class MtWaterHeaterAway extends LitElement {
       @item-selected=${this._onSelect}
     ></mt-selector-row>`;
   }
+
+  static styles = [tileStyles, css`
+    :host { display: block; }
+    .tile:disabled { cursor: default; opacity: 0.5; }
+    .tile:focus-visible { outline: 2px solid var(--mt-primary); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      .tile, .tile .ic { transition: none; }
+    }
+  `];
 }
 
 declare global {

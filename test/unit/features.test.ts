@@ -26,6 +26,96 @@ import { sortOperationModes, swingHorizontalIcon, waterHeaterModeColor } from '.
 
 
 describe('stock selector parity', () => {
+  for (const [kind, list, active] of [
+    ['hvac', 'hvac_modes', 'state'], ['fan', 'fan_modes', 'fan_mode'],
+    ['preset', 'preset_modes', 'preset_mode'], ['swing', 'swing_modes', 'swing_mode'],
+    ['swing_horizontal', 'swing_horizontal_modes', 'swing_horizontal_mode'],
+    ['operation', 'operation_list', 'state'],
+  ]) {
+    for (const invalid of [{}, 'off', undefined]) {
+      it(`hides malformed ${list}: ${JSON.stringify(invalid)}`, async () => {
+        const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': climateState({ [list]: invalid }) })} entityId="climate.test" kind=${kind}></mt-climate-selector>`);
+        expect(selectorRow(el)).to.equal(null);
+      });
+    }
+    it(`keeps strings and ignores a non-string active ${kind}`, async () => {
+      const s = climateState({ [list]: [null, 'eco'], [active]: null });
+      if (active === 'state') Object.assign(s, { state: null });
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': s })} entityId="climate.test" kind=${kind}></mt-climate-selector>`);
+      expect(rowItems(el).map(i => i.value)).to.deep.equal(['eco']);
+      expect(rowItems(el)[0].active).to.be.false;
+    });
+  }
+
+  for (const invalid of [{}, 'off', [null, 'eco']]) {
+    it(`sanitizes malformed include/order: ${JSON.stringify(invalid)}`, async () => {
+      const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': climateState({ preset_modes: ['eco', 'away'] }) })} entityId="climate.test" kind="preset" .include=${invalid} .order=${invalid}></mt-climate-selector>`);
+      expect(rowItems(el).map(i => i.value)).to.deep.equal(Array.isArray(invalid) ? ['eco'] : ['eco', 'away']);
+    });
+  }
+
+  for (const display of ['icons', 'tile']) {
+    for (const capability of [undefined, '4', null, 0, 1]) {
+      it(`rejects ${String(capability)} capabilities in ${display} render and activation`, async () => {
+        const hass = makeHass({ 'water_heater.test': waterHeaterState() });
+        const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" display=${display}></mt-water-heater-away>`);
+        const button = display === 'tile' ? el.shadowRoot!.querySelector<HTMLButtonElement>('button')! : chips(el)[0];
+        hass.states['water_heater.test'] = waterHeaterState({ supported_features: capability });
+        button.click();
+        expect(hass.__calls).to.have.length(0);
+        el.requestUpdate();
+        await el.updateComplete;
+        expect(el.shadowRoot!.textContent!.trim()).to.equal('');
+      });
+    }
+    it(`disables unavailable away ${display}`, async () => {
+      const hass = makeHass({ 'water_heater.test': waterHeaterState({}, 'unavailable') });
+      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" display=${display}></mt-water-heater-away>`);
+      const button = display === 'tile' ? el.shadowRoot!.querySelector<HTMLButtonElement>('button')! : chips(el)[0];
+      expect(button.disabled).to.be.true;
+      button.click();
+      expect(hass.__calls).to.have.length(0);
+    });
+    for (const away of ['on', 'off']) {
+      it(`announces and directly toggles away ${away} in ${display}`, async () => {
+        const hass = makeHass({ 'water_heater.test': waterHeaterState({ away_mode: away }) });
+        const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" display=${display}></mt-water-heater-away>`);
+        const button = display === 'tile' ? el.shadowRoot!.querySelector<HTMLButtonElement>('button')! : chips(el)[0];
+        expect(button.getAttribute('aria-pressed')).to.equal(String(away === 'on'));
+        if (display === 'tile') {
+          expect(button.querySelector('.title')!.textContent).to.equal('Away mode');
+          expect(button.querySelector('.value')!.textContent).to.equal(away === 'on' ? 'On' : 'Off');
+          expect(button.querySelector('ha-icon')).not.to.equal(null);
+          expect(selectorRow(el)).to.equal(null);
+        }
+        button.click();
+        expect(hass.__calls).to.have.length(1);
+        expect(hass.__calls[0]).to.deep.include({ domain: 'water_heater', service: 'set_away_mode' });
+        expect(hass.__calls[0].data).to.deep.equal({ entity_id: 'water_heater.test', away_mode: away !== 'on' });
+      });
+    }
+  }
+
+  it('localizes the away tile state and title', async () => {
+    const hass = Object.assign(makeHass({ 'water_heater.test': waterHeaterState() }), {
+      formatEntityAttributeName: () => 'Vacation',
+      formatEntityAttributeValue: () => 'Disabled',
+    });
+    const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" display="tile"></mt-water-heater-away>`);
+    expect(el.shadowRoot!.querySelector('.title')!.textContent).to.equal('Vacation');
+    expect(el.shadowRoot!.querySelector('.value')!.textContent).to.equal('Disabled');
+  });
+
+  it('hides missing away state and guards a stale activation', async () => {
+    const hass = makeHass({ 'water_heater.test': waterHeaterState() });
+    const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test"></mt-water-heater-away>`);
+    delete hass.states['water_heater.test'];
+    selectValue(el, 'away');
+    expect(hass.__calls).to.have.length(0);
+    el.requestUpdate();
+    await el.updateComplete;
+    expect(selectorRow(el)).to.equal(null);
+  });
   for (const kind of ['operation', 'swing_horizontal']) {
     it(`hides ${kind} without a mode list`, async () => {
       const el = await fixture<MtClimateSelector>(html`<mt-climate-selector .hass=${makeHass({ 'climate.test': climateState({ operation_list: undefined, swing_horizontal_modes: undefined }) })} entityId="climate.test" kind=${kind}></mt-climate-selector>`);
@@ -130,7 +220,7 @@ describe('stock selector parity', () => {
   for (const away of ['on', 'off']) {
     it(`toggles away ${away}`, async () => {
       const hass = makeHass({ 'water_heater.test': waterHeaterState({ supported_features: 4, away_mode: away }) });
-      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" label="Holiday" display="tile"></mt-water-heater-away>`);
+      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" label="Holiday" display="icons"></mt-water-heater-away>`);
       expect(rowItems(el)[0].active).to.equal(away === 'on');
       expect(selectorRow(el)!.label).to.equal('Holiday');
       selectValue(el, 'away');

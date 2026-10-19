@@ -21,6 +21,14 @@ import { formatEntityState, formatAttributeValue, formatAttributeName, localizeK
 
 export type ClimateSelectorKind = 'hvac' | 'fan' | 'swing' | 'preset' | 'swing_horizontal' | 'operation';
 
+/**
+ * Discard malformed lists and non-string entries from integration/config data.
+ * @param value untrusted option list
+ */
+function stringValues(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
 /** Default tile title per selector kind (used in `tile` display when unlabeled). */
 const TILE_TITLE: Record<ClimateSelectorKind, string> = {
   hvac: 'Mode',
@@ -83,38 +91,38 @@ export class MtClimateSelector extends LitElement {
     let defaultColor: (v: string) => string | undefined;
 
     if (this.kind === 'hvac') {
-      values = state.attributes.hvac_modes ?? [];
+      values = stringValues(state.attributes.hvac_modes);
       active = state.state;
       defaultIcon = (v) => HVAC_MODE_ICONS[v] ?? 'mdi:thermostat';
       defaultColor = (v) => climateModeColor(v);
     } else if (this.kind === 'fan') {
-      values = state.attributes.fan_modes ?? [];
+      values = stringValues(state.attributes.fan_modes);
       active = state.attributes.fan_mode;
       defaultIcon = (v) => fanIcon(v);
       defaultColor = () => undefined;
     } else if (this.kind === 'preset') {
-      values = state.attributes.preset_modes ?? [];
+      values = stringValues(state.attributes.preset_modes);
       active = state.attributes.preset_mode;
       defaultIcon = (v) => presetIcon(v);
       defaultColor = (v) => presetColor(v);
     } else if (this.kind === 'operation') {
-      values = sortOperationModes(state.attributes.operation_list ?? []);
+      values = sortOperationModes(stringValues(state.attributes.operation_list));
       active = state.state;
       defaultIcon = waterHeaterModeIcon;
       defaultColor = waterHeaterModeColor;
     } else if (this.kind === 'swing_horizontal') {
-      values = state.attributes.swing_horizontal_modes ?? [];
+      values = stringValues(state.attributes.swing_horizontal_modes);
       active = state.attributes.swing_horizontal_mode;
       defaultIcon = swingHorizontalIcon;
       defaultColor = () => undefined;
     } else {
-      values = state.attributes.swing_modes ?? [];
+      values = stringValues(state.attributes.swing_modes);
       active = state.attributes.swing_mode;
       defaultIcon = (v) => swingIcon(v);
       defaultColor = () => undefined;
     }
 
-    return orderValues(values, this.order, this.include)
+    return orderValues(values, stringValues(this.order), stringValues(this.include))
       .filter((v) => !overrides.get(v)?.hide)
       .map((v) => ({
         value: v,
@@ -122,7 +130,7 @@ export class MtClimateSelector extends LitElement {
           ? formatEntityState(this.hass, state, v)
           : formatAttributeValue(this.hass, state, `${this.kind}_mode`, v)),
         icon: overrides.get(v)?.icon ?? defaultIcon(v),
-        active: v === active,
+        active: typeof active === 'string' && v === active,
         color: overrides.get(v)?.color ?? defaultColor(v),
         disabled: isUnavailable(state),
       }));
