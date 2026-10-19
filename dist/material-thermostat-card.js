@@ -1012,8 +1012,6 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
         container-type: inline-size;
         border: none;
         border-radius: var(--mt-shape-full);
-        /* Keep the native focus-visible outline inside the scrolling row. */
-        outline-offset: -2px;
         background: transparent;
         color: var(--mt-on-surface-variant);
         cursor: pointer;
@@ -1022,6 +1020,11 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
           background-color 180ms cubic-bezier(0.2, 0, 0, 1),
           color 180ms cubic-bezier(0.2, 0, 0, 1);
         -webkit-tap-highlight-color: transparent;
+      }
+      .chip:focus-visible {
+        /* Use the contrasting chip foreground; keep the outline inside the scrolling row. */
+        outline: 2px solid currentColor;
+        outline-offset: -2px;
       }
       .chip ha-icon {
         --mdc-icon-size: clamp(18px, 100cqi, 24px);
@@ -1087,12 +1090,13 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
         >
           <ha-icon icon=${s}></ha-icon>
         </button>
-      `;const r=this.config.color?`--mt-tile-accent: ${this.config.color}`:B;return j`
+      `;const r=this.config.color?`--mt-tile-accent: ${this.config.color}`:B,n=o?`${i}: ${o}`:i;return j`
       <button
         class=${he({tile:!0,on:a})}
         style=${r}
         @click=${this._tap}
-        aria-label=${i}
+        aria-label=${n}
+        title=${n}
       >
         <div class="ic"><ha-icon icon=${s}></ha-icon></div>
         <div class="text">
@@ -1103,6 +1107,20 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
     `}};Pe.styles=[Mt,we,r`
       :host {
         display: block;
+        container: mt-entity-tile / inline-size;
+      }
+      .tile .value {
+        flex-shrink: 0;
+      }
+      /* Query the host's allocated width, not the padded button's content box.
+         Keep both text lines; sacrifice the decorative chip before the reading. */
+      @container mt-entity-tile (width < 120px) {
+        .tile:not(.icon) {
+          padding-inline: 12px;
+        }
+        .tile .ic {
+          display: none;
+        }
       }
       /* Icon display: a bare centered icon (no circle chip), at the same height
          as the full tile (inherits the shared .tile min-height) so mixed rows
