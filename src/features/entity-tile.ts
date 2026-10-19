@@ -104,12 +104,14 @@ export class MtEntityTile extends LitElement {
     // The chosen color tints the tile (via --mt-tile-accent); unset falls back to
     // the primary in the shared tile styles. Only the full tile carries a color.
     const accent = this.config.color ? `--mt-tile-accent: ${this.config.color}` : nothing;
+    const label = secondary ? `${name}: ${secondary}` : name;
     return html`
       <button
         class=${classMap({ tile: true, on })}
         style=${accent}
         @click=${this._tap}
-        aria-label=${name}
+        aria-label=${label}
+        title=${label}
       >
         <div class="ic"><ha-icon icon=${icon}></ha-icon></div>
         <div class="text">
@@ -126,6 +128,20 @@ export class MtEntityTile extends LitElement {
     css`
       :host {
         display: block;
+        container: mt-entity-tile / inline-size;
+      }
+      .tile .value {
+        flex-shrink: 0;
+      }
+      /* Query the host's allocated width, not the padded button's content box.
+         Keep both text lines; sacrifice the decorative chip before the reading. */
+      @container mt-entity-tile (width < 120px) {
+        .tile:not(.icon) {
+          padding-inline: 12px;
+        }
+        .tile .ic {
+          display: none;
+        }
       }
       /* Icon display: a bare centered icon (no circle chip), at the same height
          as the full tile (inherits the shared .tile min-height) so mixed rows

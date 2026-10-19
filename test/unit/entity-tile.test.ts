@@ -180,6 +180,87 @@ describe('mt-entity-tile', () => {
   });
 
   describe('layout by display', () => {
+    it('preserves the 200px tile layout snapshot', async () => {
+      const el = await mount(makeHass({
+        'sensor.temp': entityState('sensor.temp', '22.4', { unit_of_measurement: '°C' }),
+      }), { type: 'entity-tile', entity: 'sensor.temp', name: 'Measured room temperature' });
+      el.style.width = '200px';
+      const snapshot = ['.tile', '.ic', '.text', '.title', '.value'].map((selector) => {
+        const node = el.shadowRoot!.querySelector<HTMLElement>(selector)!;
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return { selector, width: rect.width, height: rect.height,
+          display: style.display, padding: style.padding, gap: style.gap };
+      });
+      // Captured in Chrome before the narrow-width styles were introduced.
+      expect(snapshot).to.deep.equal([
+        { selector: '.tile', width: 200, height: 64, display: 'flex', padding: '12px 16px', gap: '12px' },
+        { selector: '.ic', width: 40, height: 40, display: 'grid', padding: '0px', gap: 'normal' },
+        { selector: '.text', width: 116, height: 34.78125, display: 'flex', padding: '0px', gap: 'normal' },
+        { selector: '.title', width: 116, height: 15.59375, display: 'block', padding: '0px', gap: 'normal' },
+        { selector: '.value', width: 116, height: 19.1875, display: 'block', padding: '0px', gap: 'normal' },
+      ]);
+    });
+
+    it('keeps the full reading at 90px while truncating the name first', async () => {
+      const el = await mount(makeHass({
+        'sensor.temp': entityState('sensor.temp', '22.4', { unit_of_measurement: '°C' }),
+      }), { type: 'entity-tile', entity: 'sensor.temp', name: 'Measured room temperature' });
+      el.style.width = '90px';
+      const chip = el.shadowRoot!.querySelector<HTMLElement>('.ic')!;
+      const value = el.shadowRoot!.querySelector<HTMLElement>('.value')!;
+      const name = el.shadowRoot!.querySelector<HTMLElement>('.title')!;
+      const tile = el.shadowRoot!.querySelector<HTMLButtonElement>('.tile')!;
+      expect(getComputedStyle(chip).display).to.equal('none');
+      expect(value.clientWidth).to.be.greaterThan(0);
+      expect(value.scrollWidth).to.be.at.most(value.clientWidth);
+      expect(name.scrollWidth).to.be.greaterThan(name.clientWidth);
+      expect(tile.title).to.equal('Measured room temperature: 22.4 °C');
+      expect(tile.getAttribute('aria-label')).to.equal(tile.title);
+    });
+
+    it('uses tile width, not viewport width, and restores the chip at 120px', async () => {
+      const el = await mount(makeHass({
+        'sensor.power': entityState('sensor.power', '120', { unit_of_measurement: 'W' }),
+      }), { type: 'entity-tile', entity: 'sensor.power' });
+      const chip = el.shadowRoot!.querySelector<HTMLElement>('.ic')!;
+      const tile = el.shadowRoot!.querySelector<HTMLElement>('.tile')!;
+      const value = el.shadowRoot!.querySelector<HTMLElement>('.value')!;
+      el.style.width = '90px';
+      expect(getComputedStyle(chip).display).to.equal('none');
+      expect(getComputedStyle(tile).paddingInlineStart).to.equal('12px');
+      expect(value.scrollWidth).to.be.at.most(value.clientWidth);
+      el.style.width = '119px';
+      expect(getComputedStyle(chip).display).to.equal('none');
+      el.style.width = '120px';
+      expect(getComputedStyle(chip).display).to.equal('grid');
+      expect(getComputedStyle(tile).paddingInlineStart).to.equal('16px');
+    });
+
+    it('ellipsizes an oversized reading without overflowing the tile', async () => {
+      const el = await mount(makeHass({
+        'sensor.power': entityState('sensor.power', '123456789012345', { unit_of_measurement: 'W' }),
+      }), { type: 'entity-tile', entity: 'sensor.power', name: 'Power' });
+      el.style.width = '90px';
+      const value = el.shadowRoot!.querySelector<HTMLElement>('.value')!;
+      const tile = el.shadowRoot!.querySelector<HTMLButtonElement>('.tile')!;
+      expect(value.scrollWidth).to.be.greaterThan(value.clientWidth);
+      expect(getComputedStyle(value).textOverflow).to.equal('ellipsis');
+      expect(getComputedStyle(value).whiteSpace).to.equal('nowrap');
+      expect(getComputedStyle(value).flexShrink).to.equal('0');
+      expect(tile.scrollWidth).to.equal(tile.clientWidth);
+      expect(tile.title).to.equal('Power: 123456789012345 W');
+    });
+
+    it('keeps a name-only accessible label when there is no reading', async () => {
+      const el = await mount(makeHass({}), {
+        type: 'entity-tile', entity: 'button.x', name: 'Run scene',
+      });
+      const tile = el.shadowRoot!.querySelector<HTMLButtonElement>('.tile')!;
+      expect(tile.title).to.equal('Run scene');
+      expect(tile.getAttribute('aria-label')).to.equal('Run scene');
+    });
+
     it("display:'icon' -> .tile.icon showing only a bare centered icon (no circle, no value/title)", async () => {
       const hass = makeHass({
         'sensor.temp': entityState('sensor.temp', '21', { unit_of_measurement: '°C' }),
