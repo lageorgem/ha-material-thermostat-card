@@ -476,7 +476,10 @@ async function main() {
             assert(a.controls.every((d) => d === e.unavailable), `Control disabled flags ${a.controls}`);
           });
           await check(`${c.id}: state-label`, async () => {
-            const a = await snapshot(c); assert(e.stateLabel ? a.stateLabels.length > 0 && a.stateLabels.every((s) => s.trim()) : a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
+            // Unavailable/unknown cards show the status text in the label slot; that is
+            // asserted by the `unavailable` check, not the optional state label.
+            const a = await snapshot(c); if (e.unavailable) a.stateLabels = [];
+            assert(e.stateLabel ? a.stateLabels.length > 0 && a.stateLabels.every((s) => s.trim()) : a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
           });
           await check(`${c.id}: selectors`, async () => {
             let a = await snapshot(c);
@@ -553,7 +556,14 @@ async function main() {
             assert((current.length > 0) === (expected.current !== null), `Current visibility ${JSON.stringify(a.current)}; expected ${expected.current}`);
             if (expected.current !== null) {
               const digits = (v) => String(v).replace(/\D/g, '');
-              assert(current.some((t) => digits(t) === digits(expected.current)), `Current temperature ${expected.current} not visible: ${a.current}`);
+              // Text mixes the visible number (integer + superscript fraction tokens) with
+              // sr-only text ("Current 21.3 °C"): match a token or an integer+fraction pair.
+              const want = digits(expected.current);
+              const hit = (t) => {
+                const tokens = t.split(/\s+/).map(digits).filter(Boolean);
+                return tokens.some((tok, i) => tok === want || tok + (tokens[i + 1] ?? '') === want);
+              };
+              assert(current.some(hit), `Current temperature ${expected.current} not visible: ${a.current}`);
             }
           });
         }
@@ -710,7 +720,8 @@ async function main() {
                     const target = j.feature === 'switch-group' ? 'on' : before[item.value] === 'on' ? 'off' : 'on';
                      const selectedFrame = await exactFrame(start, item.value, 'homeassistant', j.feature === 'switch-group' ? 'turn_on' : 'toggle');
                     await waitState(item.value, 'state', target);
-                    if (j.feature === 'switch-group') for (const other of items.filter((i) => i.value !== item.value)) {
+                     // The card turns off only the other switches that were on.
+                     if (j.feature === 'switch-group') for (const other of items.filter((i) => i.value !== item.value && before[i.value] === 'on')) {
                        const offFrame = await exactFrame(start, other.value, 'homeassistant', 'turn_off');
                        assert(report.frames.indexOf(offFrame) < report.frames.indexOf(selectedFrame), 'Switch group must turn others off before turning selected on');
                       await waitState(other.value, 'state', 'off');
