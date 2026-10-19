@@ -17,7 +17,8 @@ type FormattingHass = {
 };
 
 /**
- * Format an entity state using HA, with an English fallback.
+ * Format an entity state using HA, with prettyLabel fallback when HA is absent
+ * or returns the raw state unchanged (no translation).
  * @param hass the Home Assistant connection, if available
  * @param stateObj the entity whose state is being displayed
  * @param state an optional state override
@@ -25,13 +26,16 @@ type FormattingHass = {
 export function formatEntityState(hass: HomeAssistant | undefined, stateObj: HassEntity, state?: string): string {
   const formatter = hass as FormattingHass | undefined;
   if (typeof formatter?.formatEntityState === 'function') {
-    return formatter.formatEntityState(stateObj, state);
+    const result = formatter.formatEntityState(stateObj, state);
+    const raw = state ?? stateObj.state;
+    return typeof result === 'string' && result === raw ? prettyLabel(raw) : result;
   }
   return prettyLabel(state ?? stateObj.state);
 }
 
 /**
- * Format an entity attribute value using HA, with an English fallback.
+ * Format an entity attribute value using HA, with prettyLabel fallback when HA
+ * is absent or returns the raw value unchanged (no translation).
  * @param hass the Home Assistant connection, if available
  * @param stateObj the entity owning the attribute
  * @param attribute the attribute key
@@ -40,7 +44,9 @@ export function formatEntityState(hass: HomeAssistant | undefined, stateObj: Has
 export function formatAttributeValue(hass: HomeAssistant | undefined, stateObj: HassEntity, attribute: string, value?: unknown): string {
   const formatter = hass as FormattingHass | undefined;
   if (typeof formatter?.formatEntityAttributeValue === 'function') {
-    return formatter.formatEntityAttributeValue(stateObj, attribute, value);
+    const result = formatter.formatEntityAttributeValue(stateObj, attribute, value);
+    const raw = value === undefined ? stateObj.attributes[attribute] : value;
+    return typeof result === 'string' && result === raw ? prettyLabel(result) : result;
   }
   return prettyLabel(String(value ?? stateObj.attributes[attribute] ?? ''));
 }

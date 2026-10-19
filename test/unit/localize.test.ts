@@ -24,7 +24,17 @@ describe('localization helpers', () => {
       },
     });
     expect(formatEntityState(hass, state)).to.equal('Kühlen');
-    expect(formatEntityState(hass, state, 'heat')).to.equal('heat');
+    expect(formatEntityState(hass, state, 'heat')).to.equal('Heat');
+  });
+
+  it('prettifies untranslated explicit and entity states, preserving translations', () => {
+    const entity = { ...state, state: 'heat_pump' };
+    const hass = hassWith({ formatEntityState: (_entity: HassEntity, value?: string) => value ?? _entity.state });
+    expect(formatEntityState(hass, entity)).to.equal('Heat Pump');
+    expect(formatEntityState(hass, state, 'heat_pump')).to.equal('Heat Pump');
+    expect(formatEntityState(hass, state, '')).to.equal('');
+    expect(formatEntityState(hassWith({ formatEntityState: () => 'Wärmepumpe' }), entity)).to.equal('Wärmepumpe');
+    expect(formatEntityState(hassWith({ formatEntityState: () => null }), entity)).to.equal(null);
   });
 
   it('falls back to English state labels without a callable formatter', () => {
@@ -53,6 +63,20 @@ describe('localization helpers', () => {
     expect(formatAttributeValue(makeHass(), state, 'missing')).to.equal('');
     expect(formatAttributeValue(hassWith({ formatEntityAttributeValue: 1 }), state, 'fan_mode', false)).to.equal('False');
     expect(formatAttributeValue(undefined, state, 'fan_mode', '')).to.equal('');
+  });
+
+  it('prettifies untranslated explicit and entity attributes, preserving translations', () => {
+    const entity = { ...state, attributes: { ...state.attributes, swing_horizontal_mode: 'left' } };
+    const hass = hassWith({
+      formatEntityAttributeValue: (entity: HassEntity, attribute: string, value?: unknown) =>
+        value === undefined ? entity.attributes[attribute] : value,
+    });
+    expect(formatAttributeValue(hass, entity, 'swing_horizontal_mode', 'left')).to.equal('Left');
+    expect(formatAttributeValue(hass, entity, 'swing_horizontal_mode')).to.equal('Left');
+    expect(formatAttributeValue(hass, entity, 'swing_horizontal_mode', '')).to.equal('');
+    expect(formatAttributeValue(hass, entity, 'swing_horizontal_mode', null)).to.equal(null);
+    expect(formatAttributeValue(hassWith({ formatEntityAttributeValue: () => 'Links' }), entity, 'swing_horizontal_mode', 'left')).to.equal('Links');
+    expect(formatAttributeValue(hassWith({ formatEntityAttributeValue: () => 'left' }), entity, 'swing_horizontal_mode', null)).to.equal('left');
   });
 
   it('delegates attribute names and rejects empty or non-string results', () => {
