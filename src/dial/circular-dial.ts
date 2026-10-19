@@ -688,10 +688,11 @@ export class MtCircularDial extends LitElement {
    * Format a temperature for display.
    * @param value the temperature
    * @param precision decimals to show
+   * @param localize use locale formatting for separator-bearing text
    */
-  private _fmt(value: number | undefined, precision: number): string {
+  private _fmt(value: number | undefined, precision: number, localize = true): string {
     if (value === undefined || value === null || Number.isNaN(value)) return '—';
-    return this.formatNumber ? this.formatNumber(value, precision) : value.toFixed(precision);
+    return localize && this.formatNumber ? this.formatNumber(value, precision) : value.toFixed(precision);
   }
 
   /**
@@ -710,8 +711,7 @@ export class MtCircularDial extends LitElement {
    * @param label accessible temperature context
    */
   private _fmtLabel(value: number | undefined, label: string): TemplateResult {
-    if (this.formatNumber) return html`<span class="label-number" aria-hidden="true">${this._fmtCompact(value)}</span><span class="sr-only">${label} ${this._fmtCompact(value)} ${this.unit}</span>`;
-    const [integer, fraction] = this._fmtCompact(value).split('.');
+    const [integer, fraction] = this._fmt(value, Number.isInteger(value) ? 0 : 1, false).split('.');
     return html`<span class="label-number" aria-hidden="true"
        >${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}</span
     ><span class="sr-only">${label} ${this._fmtCompact(value)} ${this.unit}</span>`;
@@ -723,8 +723,7 @@ export class MtCircularDial extends LitElement {
    * @param precision decimals to retain before splitting the number
    */
   private _fmtCenter(value: number | undefined, precision: number): TemplateResult {
-    if (this.formatNumber) return html`${this._fmt(value, precision)}`;
-    const [integer, fraction] = this._fmt(value, precision).split('.');
+    const [integer, fraction] = this._fmt(value, precision, false).split('.');
     return html`${integer}${fraction && fraction !== '0' ? html`<sup>${fraction}</sup>` : nothing}`;
   }
 

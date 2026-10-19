@@ -118,18 +118,25 @@ describe('mt-circular-dial', () => {
       expect(changed.called).to.be.false;
     });
 
-    it('formats every readout and slider value with the supplied formatter', async () => {
+    it('localizes separator-bearing readouts and accessible text, not superscript numbers', async () => {
       const el = await mount();
       el.formatNumber = (v, d) => v.toFixed(d).replace('.', ',');
       el.value = 21.5;
       el.current = 19.5;
       await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('21,5');
-      expect(el.shadowRoot!.querySelector('.label-number')!.textContent).to.equal('19,5');
+      const centre = el.shadowRoot!.querySelector('.value-text')!;
+      expect([...centre.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal('21');
+      expect(centre.querySelector('sup')!.textContent).to.equal('5');
+      const label = el.shadowRoot!.querySelector('.label-number')!;
+      expect(label.textContent).to.equal('195');
+      expect(label.querySelector('sup')!.textContent).to.equal('5');
+      expect(el.shadowRoot!.querySelector('.o-label .sr-only')!.textContent).to.equal('Current 19,5 °C');
+      expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent).to.equal('Target temperature 21,5 °C');
       expect(el.shadowRoot!.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).to.equal('21,5 °C');
       el.showCurrentAsPrimary = true;
       await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('19,5');
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('195');
+      expect(el.shadowRoot!.querySelector('.value-text sup')!.textContent).to.equal('5');
       el.dual = true;
       el.mode = 'heat_cool';
       el.lowValue = 18.5;
@@ -144,6 +151,25 @@ describe('mt-circular-dial', () => {
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent).to.equal('24,5');
     });
+
+    for (const value of [21.5, 21, 21.0]) {
+      it(`preserves visible centre and orbit markup with a formatter for ${value}`, async () => {
+        const el = await mount();
+        el.value = value;
+        el.current = value;
+        await el.updateComplete;
+        const visibleMarkup = (): string[] => ['.value-text', '.label-number'].map(selector =>
+          el.shadowRoot!.querySelector(selector)!.innerHTML
+        );
+        const original = visibleMarkup();
+        el.formatNumber = (v, d) => v.toFixed(d).replace('.', ',');
+        await el.updateComplete;
+        expect(visibleMarkup()).to.deep.equal(original);
+        const centre = el.shadowRoot!.querySelector('.value-text')!;
+        expect(centre.textContent).to.equal(value === 21.5 ? '215' : '21');
+        expect(centre.querySelector('sup')?.textContent ?? null).to.equal(value === 21.5 ? '5' : null);
+      });
+    }
 
     it('shows the enabled state label without replacing unavailable status', async () => {
       const el = await mount();

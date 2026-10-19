@@ -297,7 +297,8 @@ describe('material-thermostat-card', () => {
         const numberStyle = getComputedStyle(label);
         expect(numberStyle.fontWeight).to.equal(rounded ? '400' : '500');
         expect(parseFloat(numberStyle.fontSize)).to.be.closeTo(15.26, 0.1);
-        expect(label.textContent).to.equal('22.5');
+        expect(label.textContent).to.equal('225');
+        expect(label.querySelector('sup').textContent).to.equal('5');
       });
     }
 
