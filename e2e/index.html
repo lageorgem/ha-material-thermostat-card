@@ -78,7 +78,8 @@
             swing_modes: ['off', 'vertical', 'horizontal', 'both'],
             swing_horizontal_modes: ['off', 'left', 'right'],
             swing_horizontal_mode: 'off',
-            supported_features: 512,
+            // TARGET_TEMPERATURE | FAN_MODE | PRESET_MODE | SWING_MODE | SWING_HORIZONTAL_MODE
+            supported_features: 1 | 8 | 16 | 32 | 512,
             fan_mode: 'low',
             swing_mode: 'vertical',
             current_temperature: 24,
