@@ -6,6 +6,7 @@ type Call = { domain: string; service: string; data?: any; target?: any };
 const calls = (page: Page): Promise<Call[]> => page.evaluate(() => (window as any).__calls);
 
 test.beforeEach(async ({ page }) => {
+  await page.clock.install();
   await page.goto('/e2e/index.html');
   await page.waitForFunction(() => (window as any).__ready === true);
   // the dial waits a frame for ResizeObserver-driven layout
@@ -46,16 +47,26 @@ test('the fan dropdown opens and selecting an option calls set_fan_mode', async 
 });
 
 test('the + step button commits a debounced set_temperature', async ({ page }) => {
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
   await page.locator('#wrap mt-circular-dial .step[aria-label="Increase temperature"]').click();
   // optimistic UI updates immediately: 21.5 renders as "21" + superscript "5"
   await expect(page.locator('#wrap mt-circular-dial .value-text sup')).toHaveText('5');
   await expect(page.locator('#wrap mt-circular-dial .value-text')).toHaveText('215');
-  // and the service call lands after the 600ms debounce
-  await expect
-    .poll(async () => (await calls(page)).find((c) => c.service === 'set_temperature'), {
-      timeout: 2000,
-    })
-    .toMatchObject({ domain: 'climate', data: { temperature: 21.5 } });
+  expect(await calls(page)).toEqual([]);
+  await page.clock.runFor(599);
+  expect(await calls(page)).toEqual([]);
+  await page.clock.runFor(1);
+  const expected = [
+    expect.objectContaining({
+      domain: 'climate',
+      service: 'set_temperature',
+      data: { entity_id: 'climate.living_room', temperature: 21.5 },
+    }),
+  ];
+  expect(await calls(page)).toEqual(expected);
+  // A second, delayed call must not escape the singleton assertion.
+  await page.clock.runFor(600);
+  expect(await calls(page)).toEqual(expected);
 });
 
 test('the switch group is mutually exclusive (off others, then on)', async ({ page }) => {
@@ -90,17 +101,25 @@ test('the comfort feature shows a verdict from the feels-like sensors', async ({
 });
 
 test('the water heater + button commits one set_temperature with its target step', async ({ page }) => {
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
   const card = page.locator('#wh material-thermostat-card');
   await card.getByRole('button', { name: 'Increase temperature', exact: true }).click();
   await expect(card.locator('mt-circular-dial .value-text')).toHaveText('555');
   await expect(card.locator('mt-circular-dial .value-text sup')).toHaveText('5');
-  await expect.poll(() => calls(page), { timeout: 2000 }).toEqual([
+  expect(await calls(page)).toEqual([]);
+  await page.clock.runFor(599);
+  expect(await calls(page)).toEqual([]);
+  await page.clock.runFor(1);
+  const expected = [
     expect.objectContaining({
       domain: 'water_heater',
       service: 'set_temperature',
       data: { entity_id: 'water_heater.boiler', temperature: 55.5 },
     }),
-  ]);
+  ];
+  expect(await calls(page)).toEqual(expected);
+  await page.clock.runFor(600);
+  expect(await calls(page)).toEqual(expected);
 });
 
 test('selecting Electric calls water_heater.set_operation_mode', async ({ page }) => {
