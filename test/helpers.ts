@@ -73,6 +73,31 @@ export function climateState(attributes: Record<string, any> = {}, state = 'cool
 }
 
 /**
+ * Build a water heater entity state object.
+ * @param attributes attribute overrides
+ * @param state the entity state (operation mode)
+ */
+export function waterHeaterState(attributes: Record<string, any> = {}, state = 'eco') {
+  return {
+    entity_id: 'water_heater.test',
+    state,
+    attributes: {
+      friendly_name: 'Water heater',
+      current_temperature: 48,
+      temperature: 55,
+      min_temp: 40,
+      max_temp: 75,
+      target_temp_step: 0.5,
+      operation_list: ['off', 'eco', 'electric', 'performance'],
+      operation_mode: state,
+      away_mode: 'off',
+      supported_features: 15,
+      ...attributes,
+    },
+  };
+}
+
+/**
  * Build a generic entity state object.
  * @param entity_id the entity id (its domain drives behavior)
  * @param state the state string
