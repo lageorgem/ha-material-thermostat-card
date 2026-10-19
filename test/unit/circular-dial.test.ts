@@ -102,6 +102,153 @@ function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void 
 }
 
 describe('mt-circular-dial', () => {
+  describe('stock parity', () => {
+    it('suppresses in-flight drag events when switched to readonly', async () => {
+      const el = await mount();
+      const { svg, cx, cy, scale } = svgGeometry(el);
+      stubCapture(svg);
+      svg.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy - RADIUS * scale }));
+      el.readonly = true;
+      await el.updateComplete;
+      const changed = sinon.spy();
+      el.addEventListener('value-changing', changed);
+      el.addEventListener('value-changed', changed);
+      svg.dispatchEvent(new PointerEvent('pointermove', { clientX: cx, clientY: cy - RADIUS * scale }));
+      svg.dispatchEvent(new PointerEvent('pointerup'));
+      expect(changed.called).to.be.false;
+    });
+
+    it('formats every readout and slider value with the supplied formatter', async () => {
+      const el = await mount();
+      el.formatNumber = (v, d) => v.toFixed(d).replace('.', ',');
+      el.value = 21.5;
+      el.current = 19.5;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('21,5');
+      expect(el.shadowRoot!.querySelector('.label-number')!.textContent).to.equal('19,5');
+      expect(el.shadowRoot!.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).to.equal('21,5 °C');
+      el.showCurrentAsPrimary = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('19,5');
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.lowValue = 18.5;
+      el.highValue = 24.5;
+      await el.updateComplete;
+      expect([...el.shadowRoot!.querySelectorAll('.secondary .value-text')].map(n => n.textContent)).to.deep.equal(['18,5', '24,5']);
+      expect([...el.shadowRoot!.querySelectorAll('[role="slider"]')].map(n => n.getAttribute('aria-valuetext'))).to.deep.equal(['18,5 °C', '24,5 °C']);
+      el.showCurrentAsPrimary = false;
+      await el.updateComplete;
+      expect([...el.shadowRoot!.querySelectorAll('.center .value-text')].map(n => n.textContent)).to.deep.equal(['18,5', '24,5']);
+      el.current = 28.5;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.center .value-text')!.textContent).to.equal('24,5');
+    });
+
+    it('shows the enabled state label without replacing unavailable status', async () => {
+      const el = await mount();
+      el.stateLabel = 'Heating';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')!.textContent).to.equal('Heating');
+      el.stateLabel = '';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
+      el.stateLabel = 'Heating';
+      el.disabled = true;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
+      el.modeLabel = 'Unavailable';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')!.textContent).to.equal('Unavailable');
+    });
+
+    for (const dual of [false, true]) {
+      it(`renders an inert current-only dial (dual=${dual})`, async () => {
+        const el = await mount();
+        el.dual = dual;
+        el.readonly = true;
+        el.mode = 'heat';
+        el.current = 21.5;
+        await el.updateComplete;
+        const root = el.shadowRoot!;
+        expect(root.querySelector('.value-text')!.textContent).to.equal('215');
+        expect(root.querySelector('.dial')!.classList.contains('dual')).to.be.false;
+        expect(getComputedStyle(root.querySelector('.value-text')!).position).to.equal('relative');
+        expect(root.querySelector('.step, .handle, .setpoint, path.value, [role="slider"]')).to.equal(null);
+        const changed = sinon.spy();
+        el.addEventListener('value-changed', changed);
+        el.addEventListener('value-changing', changed);
+        const svg = root.querySelector('svg')!;
+        svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+        svg.dispatchEvent(new PointerEvent('pointerdown'));
+        svg.dispatchEvent(new PointerEvent('pointermove'));
+        svg.dispatchEvent(new PointerEvent('pointerup'));
+        svg.dispatchEvent(new PointerEvent('pointercancel'));
+        (el as any)._onHandlePointerDown(new PointerEvent('pointerdown'), null);
+        (el as any)._step(1);
+        expect(changed.called).to.be.false;
+        el.current = undefined;
+        await el.updateComplete;
+        expect(root.querySelector('.value-text')!.textContent).to.equal('—');
+      });
+    }
+
+    for (const [key, expected] of [['PageUp', 26], ['PageDown', 16], ['Home', 7], ['End', 35]] as const) {
+      it(`handles single ${key}`, async () => {
+        const el = await mount();
+        el.value = 21;
+        await el.updateComplete;
+        const changed = sinon.spy();
+        el.addEventListener('value-changed', changed);
+        el.shadowRoot!.querySelector('[role="slider"]')!.dispatchEvent(new KeyboardEvent('keydown', { key }));
+        expect(changed.firstCall.args[0].detail).to.deep.equal({ value: expected });
+      });
+    }
+
+    for (const side of ['low', 'high'] as const) {
+      for (const key of ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End', 'Enter']) {
+        it(`handles dual ${side} ${key} independently`, async () => {
+          const el = await mount();
+          el.dual = true;
+          el.lowValue = 18;
+          el.highValue = 24;
+          await el.updateComplete;
+          const sliders = el.shadowRoot!.querySelectorAll<HTMLElement>('[role="slider"]');
+          expect(sliders.length).to.equal(2);
+          const slider = sliders[side === 'low' ? 0 : 1];
+          expect(slider.tabIndex).to.equal(0);
+          expect(slider.getAttribute('aria-label')).to.equal(`${side === 'low' ? 'Low' : 'High'} target temperature`);
+          expect(slider.getAttribute('aria-valuenow')).to.equal(side === 'low' ? '18' : '24');
+          expect(slider.getAttribute('aria-valuemin')).to.equal(side === 'low' ? '7' : '18.5');
+          expect(slider.getAttribute('aria-valuemax')).to.equal(side === 'low' ? '23.5' : '35');
+          const changing = sinon.spy();
+          const changed = sinon.spy();
+          el.addEventListener('value-changing', changing);
+          el.addEventListener('value-changed', changed);
+          const ev = new KeyboardEvent('keydown', { key, cancelable: true });
+          slider.dispatchEvent(ev);
+          if (key === 'Enter') {
+            expect(changed.called).to.be.false;
+            expect(ev.defaultPrevented).to.be.false;
+          } else {
+            const base = side === 'low' ? 18 : 24;
+            const raw = key === 'Home' ? 7 : key === 'End' ? 35 : base + (key === 'PageUp' ? 5 : key === 'PageDown' ? -5 : key === 'ArrowUp' || key === 'ArrowRight' ? 0.5 : -0.5);
+            const value = side === 'low' ? Math.min(raw, 23.5) : Math.max(raw, 18.5);
+            const detail = { low: side === 'low' ? value : 18, high: side === 'high' ? value : 24 };
+            expect(changed.firstCall.args[0].detail).to.deep.equal(detail);
+            expect(changing.firstCall.args[0].detail).to.deep.equal(detail);
+            expect(ev.defaultPrevented).to.be.true;
+          }
+          el.disabled = true;
+          await el.updateComplete;
+          changed.resetHistory();
+          slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+          expect(slider.tabIndex).to.equal(-1);
+          expect(changed.called).to.be.false;
+        });
+      }
+    }
+  });
   describe('dial styles and centre typography', () => {
     it('defaults to halo', async () => {
       const el = await mount();
@@ -2681,16 +2828,17 @@ describe('mt-circular-dial', () => {
       expect(svg.getAttribute('tabindex')).to.equal('0');
     });
 
-    it('tabindex is -1 when disabled and aria-valuenow uses high in dual mode', async () => {
+    it('both dual sliders have tabindex -1 when disabled and expose their own values', async () => {
       const el = await mount();
       el.disabled = true;
       el.dual = true;
       el.highValue = 24;
       el.lowValue = 18;
       await el.updateComplete;
-      const svg = el.shadowRoot!.querySelector('svg')!;
-      expect(svg.getAttribute('tabindex')).to.equal('-1');
-      expect(svg.getAttribute('aria-valuenow')).to.equal('24');
+      const sliders = el.shadowRoot!.querySelectorAll('[role="slider"]');
+      expect(sliders.length).to.equal(2);
+      expect([...sliders].map(slider => slider.getAttribute('tabindex'))).to.deep.equal(['-1', '-1']);
+      expect([...sliders].map(slider => slider.getAttribute('aria-valuenow'))).to.deep.equal(['18', '24']);
     });
   });
 

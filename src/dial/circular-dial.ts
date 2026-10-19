@@ -105,6 +105,12 @@ export class MtCircularDial extends LitElement {
   @property() unit = '°C';
   @property({ type: Boolean }) showCurrentAsPrimary = false;
   @property({ type: Boolean }) disabled = false;
+  /** Optional localized temperature formatter; receives the value and decimal precision. */
+  @property({ attribute: false }) formatNumber?: (value: number, decimals: number) => string;
+  /** Optional localized action/state label shown above the enabled readout. */
+  @property() stateLabel?: string;
+  /** Display current temperature without any setpoint or adjustment controls. */
+  @property({ type: Boolean }) readonly = false;
 
   // Dual setpoint (heat_cool) support.
   @property({ type: Boolean }) dual = false;
@@ -222,6 +228,7 @@ export class MtCircularDial extends LitElement {
 
   /** The dial's mode color (off / idle modes use the neutral variant). */
   private get _dialColor(): string {
+    if (this.readonly) return this._modeColor(this.mode);
     if (!this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive) {
       return MtCircularDial.IDLE_COLOR;
     }
@@ -402,7 +409,7 @@ export class MtCircularDial extends LitElement {
   private _roundToStep(raw: number): number {
     const clamped = Math.min(this.max, Math.max(this.min, raw));
     const snapped = Math.round(clamped / this.step) * this.step;
-    return parseFloat(snapped.toFixed(this._precision));
+    return Math.min(this.max, Math.max(this.min, parseFloat(snapped.toFixed(this._precision))));
   }
 
   /** Whether a client point lands on the interactive ring (not center/gap/outside). */
@@ -470,7 +477,7 @@ export class MtCircularDial extends LitElement {
    * @param e pointer event
    */
   private _onPointerDown = (e: PointerEvent): void => {
-    if (this.disabled || !this._isRingHit(e.clientX, e.clientY)) return;
+    if (this.disabled || this.readonly || !this._isRingHit(e.clientX, e.clientY)) return;
     this._pressX = e.clientX;
     this._pressY = e.clientY;
     if (e.pointerType === 'touch') {
@@ -603,22 +610,38 @@ export class MtCircularDial extends LitElement {
    * @param handle the dual setpoint to drag, or null in single mode
    */
   private _onHandlePointerDown(e: PointerEvent, handle: 'low' | 'high' | null): void {
-    if (this.disabled) return;
+    if (this.disabled || this.readonly) return;
     e.stopPropagation();
     this._beginDrag(e, handle);
   }
 
   /**
-   * Keyboard control for accessibility (single mode only).
+   * Keyboard control for the single slider or an independently focused dual handle.
    * @param e keyboard event
+   * @param handle dual handle to adjust, or null for the single slider
    */
-  private _onKeyDown = (e: KeyboardEvent): void => {
-    if (this.disabled || this.dual) return;
+  private _onKeyDown = (e: KeyboardEvent, handle: 'low' | 'high' | null = null): void => {
+    if (this.disabled || this.readonly || (this.dual && handle === null)) return;
+    const value = handle === 'low' ? this._displayLow : handle === 'high' ? this._displayHigh : this.value;
     let next: number | undefined;
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = this.value + this.step;
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = this.value - this.step;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = value + this.step;
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = value - this.step;
+    else if (e.key === 'PageUp') next = value + 10 * this.step;
+    else if (e.key === 'PageDown') next = value - 10 * this.step;
+    else if (e.key === 'Home') next = this.min;
+    else if (e.key === 'End') next = this.max;
     if (next === undefined) return;
     e.preventDefault();
+    if (handle !== null) {
+      this._selected = handle;
+      const detail = {
+        low: handle === 'low' ? Math.min(this._roundToStep(next), this._displayHigh - this.step) : this._displayLow,
+        high: handle === 'high' ? Math.max(this._roundToStep(next), this._displayLow + this.step) : this._displayHigh,
+      };
+      this._emit('value-changing', detail);
+      this._emit('value-changed', detail);
+      return;
+    }
     this._emit('value-changed', { value: this._roundToStep(next) });
   };
 
@@ -628,7 +651,7 @@ export class MtCircularDial extends LitElement {
    * @param delta number of steps (±1)
    */
   private _step(delta: number): void {
-    if (this.disabled) return;
+    if (this.disabled || this.readonly) return;
     if (this.dual) {
       if (this._selSide === 'low') {
         const low = Math.min(
@@ -657,6 +680,7 @@ export class MtCircularDial extends LitElement {
     type: 'value-changing' | 'value-changed',
     detail: { value?: number; low?: number; high?: number }
   ): void {
+    if (this.readonly) return;
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
@@ -667,7 +691,7 @@ export class MtCircularDial extends LitElement {
    */
   private _fmt(value: number | undefined, precision: number): string {
     if (value === undefined || value === null || Number.isNaN(value)) return '—';
-    return value.toFixed(precision);
+    return this.formatNumber ? this.formatNumber(value, precision) : value.toFixed(precision);
   }
 
   /**
@@ -676,6 +700,7 @@ export class MtCircularDial extends LitElement {
    */
   private _fmtCompact(value: number | undefined): string {
     if (value == null || Number.isNaN(value)) return '—';
+    if (this.formatNumber) return this.formatNumber(value, Number.isInteger(value) ? 0 : 1);
     return Number.isInteger(value) ? String(value) : value.toFixed(1);
   }
 
@@ -685,6 +710,7 @@ export class MtCircularDial extends LitElement {
    * @param label accessible temperature context
    */
   private _fmtLabel(value: number | undefined, label: string): TemplateResult {
+    if (this.formatNumber) return html`<span class="label-number" aria-hidden="true">${this._fmtCompact(value)}</span><span class="sr-only">${label} ${this._fmtCompact(value)} ${this.unit}</span>`;
     const [integer, fraction] = this._fmtCompact(value).split('.');
     return html`<span class="label-number" aria-hidden="true"
        >${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}</span
@@ -696,7 +722,8 @@ export class MtCircularDial extends LitElement {
    * @param value the temperature
    * @param precision decimals to retain before splitting the number
    */
-  private _fmtCenter(value: number, precision: number): TemplateResult {
+  private _fmtCenter(value: number | undefined, precision: number): TemplateResult {
+    if (this.formatNumber) return html`${this._fmt(value, precision)}`;
     const [integer, fraction] = this._fmt(value, precision).split('.');
     return html`${integer}${fraction && fraction !== '0' ? html`<sup>${fraction}</sup>` : nothing}`;
   }
@@ -741,6 +768,15 @@ export class MtCircularDial extends LitElement {
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
       <div
         class="handle"
+        role=${handle === null ? nothing : 'slider'}
+        tabindex=${handle === null ? nothing : this.disabled ? -1 : 0}
+        aria-label=${handle === null ? nothing : `${handle === 'low' ? 'Low' : 'High'} target temperature`}
+        aria-valuemin=${handle === null ? nothing : handle === 'low' ? this.min : this._displayLow + this.step}
+        aria-valuemax=${handle === null ? nothing : handle === 'low' ? this._displayHigh - this.step : this.max}
+        aria-valuenow=${handle === null ? nothing : handle === 'low' ? this._displayLow : this._displayHigh}
+        aria-valuetext=${handle === null ? nothing : `${this._fmt(handle === 'low' ? this._displayLow : this._displayHigh, this._precision)} ${this.unit}`}
+        aria-disabled=${handle === null ? nothing : String(this.disabled)}
+        @keydown=${(e: KeyboardEvent) => this._onKeyDown(e, handle)}
         @pointerdown=${(e: PointerEvent) => this._onHandlePointerDown(e, handle)}
       ></div>
     </div>`;
@@ -953,7 +989,7 @@ export class MtCircularDial extends LitElement {
         class=${classMap({
           dial: true,
           [`style-${dialStyle}`]: true,
-          dual: this.dual,
+          dual: this.dual && !this.readonly,
           off: isOff,
           idle: isIdle,
           disabled: this.disabled,
@@ -963,12 +999,13 @@ export class MtCircularDial extends LitElement {
       >
         <svg
           viewBox="0 0 ${VIEW} ${VIEW}"
-          role="slider"
-          tabindex=${this.disabled ? -1 : 0}
-          aria-valuemin=${this.min}
-          aria-valuemax=${this.max}
-          aria-valuenow=${this.dual ? this._displayHigh : this._displayValue}
-          aria-label="Target temperature"
+          role=${this.readonly || this.dual ? nothing : 'slider'}
+          tabindex=${this.readonly || this.dual ? nothing : this.disabled ? -1 : 0}
+          aria-valuemin=${this.readonly || this.dual ? nothing : this.min}
+          aria-valuemax=${this.readonly || this.dual ? nothing : this.max}
+          aria-valuenow=${this.readonly || this.dual ? nothing : this._displayValue}
+          aria-valuetext=${this.readonly || this.dual ? nothing : `${this._fmt(this._displayValue, this._precision)} ${this.unit}`}
+          aria-label=${this.readonly || this.dual ? nothing : 'Target temperature'}
           @pointerdown=${this._onPointerDown}
           @pointermove=${this._onPointerMove}
           @pointerup=${this._onPointerUp}
@@ -993,7 +1030,7 @@ export class MtCircularDial extends LitElement {
             : nothing}
           <circle class="glow" cx=${CENTER} cy=${CENTER} r="150" fill="url(#mt-glow)" />
           <path class="ring" d=${ringPath} />
-          ${this.dual
+          ${this.readonly ? nothing : this.dual
             ? dualSegs.map(
                 (seg) => svg`<path
                   class=${`value ${seg.cls}`}
@@ -1013,7 +1050,7 @@ export class MtCircularDial extends LitElement {
                 style=${`opacity:${showSeg ? 1 : 0};stroke:${segColor}`}
               />`}
           <path class="hit" d=${ringPath} />
-          ${!this.dual && this._wipeFrom && showSeg
+          ${!this.readonly && !this.dual && this._wipeFrom && showSeg
             ? svg`<path
                 class="value wipe-value"
                 d=${ringPath}
@@ -1026,7 +1063,7 @@ export class MtCircularDial extends LitElement {
         </svg>
 
         <div class="markers">
-          ${this.dual
+          ${this.readonly ? (showCurrent ? this._dotOrbit(curAngle, 'current') : nothing) : this.dual
             ? html`
                 ${this._dotOrbit(lowAngle, `setpoint${selSide === 'low' ? ' sel' : ''}`)}
                 ${this._dotOrbit(highAngle, `setpoint${selSide === 'high' ? ' sel' : ''}`)}
@@ -1063,8 +1100,8 @@ export class MtCircularDial extends LitElement {
               `}
         </div>
 
-        ${this.dual ? this._renderDualCenter() : this._renderSingleCenter()}
-        ${this._renderPresetIcon()} ${this._renderAdjust()}
+        ${this.dual && !this.readonly ? this._renderDualCenter() : this._renderSingleCenter()}
+        ${this._renderPresetIcon()} ${this.readonly ? nothing : this._renderAdjust()}
       </div>
     `;
   }
@@ -1075,8 +1112,9 @@ export class MtCircularDial extends LitElement {
    * unavailable/disabled state — never the normal "Cool"/"Heat"/"Dry" label.
    */
   private _renderStatus(): TemplateResult | typeof nothing {
-    return this.disabled && this.modeLabel
-      ? html`<div class="mode">${this.modeLabel}</div>`
+    const label = this.disabled ? this.modeLabel : this.stateLabel;
+    return label
+      ? html`<div class="mode">${label}</div>`
       : nothing;
   }
 
@@ -1099,7 +1137,7 @@ export class MtCircularDial extends LitElement {
   private _renderSingleCenter(): TemplateResult {
     const target = this._displayValue;
     const current = this.current;
-    const showingCurrent = this.showCurrentAsPrimary && current != null;
+    const showingCurrent = this.readonly || (this.showCurrentAsPrimary && current != null);
     const big = showingCurrent ? current : target;
     const bigPrecision = showingCurrent ? 1 : this._precision;
     return html`
@@ -1122,6 +1160,18 @@ export class MtCircularDial extends LitElement {
    */
   private _renderDualCenter(): TemplateResult {
     if (this._showRange) {
+      if (this.showCurrentAsPrimary && this.current != null) {
+        return html`<div class=${classMap({ center: true, tight: this._centerTight })}>
+          ${this._renderStatus()}
+          <div class="temp"><span class="value-text">${this._fmt(this.current, 1)}</span><span class="unit">${this.unit}</span></div>
+          <div class="temp dual settled secondary">
+            <span class="value-text">${this._fmt(this._displayLow, this._precision)}</span>
+            <span class="dash">–</span>
+            <span class="value-text">${this._fmt(this._displayHigh, this._precision)}</span>
+            <span class="unit">${this.unit}</span>
+          </div>
+        </div>`;
+      }
       // While actively changing (dragging or the 5s post-change window) the range
       // is shown at the larger dynamic size; once it settles it shrinks back so it
       // isn't oversized at rest.
