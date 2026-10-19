@@ -20,7 +20,10 @@ import {
   CARD_PADDING_X,
   pctToSpan,
 } from './grid';
-import { tokens, climateModeColor, prettyLabel, presetIcon, presetColor } from './theme';
+import { tokens, climateModeColor, presetIcon, presetColor } from './theme';
+import { primaryDomain, targetModel, temperatureServiceCall, dialColorMode, hvacAction, isUnavailable } from './entity/adapter';
+import { entityDisplayName, formatEntityState, formatAttributeValue, formatNumber, localizeKey } from './localize';
+import { normalizeConfig } from './config/normalize';
 import type {
   ClimateModesFeatureConfig,
   ClimatePresetFeatureConfig,
@@ -51,10 +54,10 @@ console.info(
   description: CARD_DESCRIPTION,
   preview: true,
   documentationURL: 'https://github.com/lageorgem/ha-material-thermostat-card',
-  // Suggest this card for climate entities in the "Suggested cards" picker
+  // Suggest this card for supported entities in the "Suggested cards" picker
   // (Home Assistant 2026.6+; ignored on older versions).
   getEntitySuggestion: (_hass: HomeAssistant, entityId: string) =>
-    entityId.split('.')[0] === 'climate'
+    primaryDomain(entityId)
       ? { config: { type: `custom:${CARD_TYPE}`, entity: entityId } }
       : null,
 });
@@ -92,11 +95,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param hass the Home Assistant connection
    */
   public static getStubConfig(hass: HomeAssistant): MaterialThermostatCardConfig {
-    const entity = Object.keys(hass.states).find((e) => e.startsWith('climate.')) ?? '';
+    const entities = Object.keys(hass.states);
+    const entity = entities.find((e) => e.startsWith('climate.')) ??
+      entities.find((e) => e.startsWith('water_heater.')) ?? '';
     return {
       type: `custom:${CARD_TYPE}`,
       entity,
-      features: [{ type: 'climate-hvac-modes' }],
+      features: [{ type: primaryDomain(entity) === 'water_heater' ? 'water-heater-operation-modes' : 'climate-hvac-modes' }],
     };
   }
 
@@ -105,15 +110,30 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param config the Lovelace card config
    */
   public setConfig(config: MaterialThermostatCardConfig): void {
-    if (!config.entity || config.entity.split('.')[0] !== 'climate') {
-      throw new Error('You must specify a climate entity.');
+    if (!primaryDomain(config.entity)) {
+      throw new Error('Specify an entity from within the climate or water_heater domain');
     }
-    this._config = config;
+    this._config = normalizeConfig(config);
     if (config.font !== 'theme') ensureGoogleSansFlex();
   }
 
+  /** Estimate height using only domain-compatible features.
+   * @param none No parameters.
+   */
   public getCardSize(): number {
-    return 7 + (this._config?.features?.length ?? 0);
+    return 7 + this._features.length;
+  }
+
+  /** Features compatible with the configured primary domain.
+   * @param none No parameters.
+   */
+  private get _features(): FeatureConfig[] {
+    const domain = primaryDomain(this._config?.entity);
+    return (this._config?.features ?? []).filter((feature) => {
+      if (feature.type.startsWith('climate-') || feature.type === 'comfort') return domain === 'climate';
+      if (feature.type.startsWith('water-heater-')) return domain === 'water_heater';
+      return true;
+    });
   }
 
   /** The backing climate state object. */
@@ -144,7 +164,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    */
   private _displayCurrent(fallback: number | undefined): number | undefined {
     const fl = this._config.feels_like;
-    if (!fl?.show_as_current || !fl.temperature || !fl.humidity) return fallback;
+    if (primaryDomain(this._config.entity) === 'water_heater' || !fl?.show_as_current || !fl.temperature || !fl.humidity) return fallback;
     const t = parseReading(this.hass?.states?.[fl.temperature]?.state);
     const rh = parseReading(this.hass?.states?.[fl.humidity]?.state);
     if (t === undefined || rh === undefined) return fallback;
@@ -239,7 +259,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * (wide). The feature area is a CSS grid whose auto-flow packs features and
    * wraps a row when the next feature's width doesn't fit. In a wide layout the
    * feature area is the widest feature's percentage (right) and the fixed-size
-   * dial is centered in the remaining space (left).
+     * dial is centered in the remaining space (left).
+     * @param none No parameters.
    */
   private _layout(): {
     wide: boolean;
@@ -247,7 +268,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     featureStyle: StyleInfo;
     gridCols: number;
   } {
-    const feats = this._config.features ?? [];
+    const feats = this._features;
     const cardPx = this._widthPx;
     const maxPct = feats.length ? Math.max(...feats.map((f) => this._featureWidthPct(f))) : 100;
     // Wide only when the features don't need the full width AND the leftover
@@ -279,45 +300,23 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     };
   }
 
-  /** Whether the entity is using dual (heat_cool) setpoints. */
-  private get _isDual(): boolean {
-    const a = this._stateObj?.attributes;
-    return (
-      this._stateObj?.state === 'heat_cool' &&
-      a?.target_temp_low != null &&
-      a?.target_temp_high != null
-    );
-  }
-
-  /** Current single target temperature (optimistic value wins). */
-  private get _targetTemp(): number | undefined {
-    return this._selectedTemp ?? this._stateObj?.attributes.temperature;
-  }
-
-  /** Current low setpoint (optimistic value wins). */
-  private get _targetLow(): number | undefined {
-    return this._selectedLow ?? this._stateObj?.attributes.target_temp_low;
-  }
-
-  /** Current high setpoint (optimistic value wins). */
-  private get _targetHigh(): number | undefined {
-    return this._selectedHigh ?? this._stateObj?.attributes.target_temp_high;
-  }
-
   /**
-   * Debounce a climate.set_temperature call using the current optimistic values.
+   * Debounce a domain-specific temperature call using optimistic values.
+   * @param none No parameters.
    */
   private _scheduleCommit(): void {
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
     this._debounceTimer = window.setTimeout(() => {
-      const data: Record<string, unknown> = { entity_id: this._config.entity };
-      if (this._isDual) {
-        data.target_temp_low = this._targetLow;
-        data.target_temp_high = this._targetHigh;
-      } else {
-        data.temperature = this._targetTemp;
-      }
-      this.hass.callService('climate', 'set_temperature', data);
+      const stateObj = this._stateObj;
+      if (!stateObj) return;
+      const model = targetModel(stateObj, this.hass.config?.unit_system?.temperature ?? '°C');
+      if (model.kind === 'none') return;
+      const call = temperatureServiceCall(stateObj, model.kind, {
+        value: this._selectedTemp ?? model.value,
+        low: this._selectedLow ?? model.low,
+        high: this._selectedHigh ?? model.high,
+      });
+      this.hass.callService(call.domain, call.service, call.data);
     }, SERVICE_DEBOUNCE_MS);
   }
 
@@ -355,10 +354,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * configured and a meaningful preset is active. A per-option icon override
    * wins; an explicit "no icon" override ('') suppresses it; otherwise the
    * heuristic {@link presetIcon} is used. Returns undefined when there's nothing
-   * worth showing.
+     * worth showing.
+     * @param none No parameters.
    */
   private _presetIcon(): string | undefined {
-    const feat = this._config.features?.find((f) => f.type === 'climate-preset-modes') as
+    const feat = this._features.find((f) => f.type === 'climate-preset-modes') as
       | ClimatePresetFeatureConfig
       | undefined;
     if (!feat) return undefined;
@@ -372,10 +372,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   /**
    * Per-mode color overrides configured on the HVAC modes feature — fed to the
    * dial so a custom mode color drives the halo, temperature and mode icon.
-   * Empty when there is no HVAC feature or no color overrides.
+     * Empty when there is no HVAC feature or no color overrides.
+     * @param none No parameters.
    */
   private _hvacColors(): Record<string, string> {
-    const feat = this._config.features?.find((f) => f.type === 'climate-hvac-modes') as
+    const feat = this._features.find((f) => f.type === 'climate-hvac-modes') as
       | ClimateModesFeatureConfig
       | undefined;
     const map: Record<string, string> = {};
@@ -388,10 +389,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   /**
    * Per-mode icon overrides from the HVAC modes feature for the dial markers.
    * The last option for a value wins, matching the selector; missing or empty
-   * icons leave the dial's built-in default in place.
+     * icons leave the dial's built-in default in place.
+     * @param none No parameters.
    */
   private _hvacIcons(): Record<string, string> {
-    const feat = this._config.features?.find((f) => f.type === 'climate-hvac-modes') as
+    const feat = this._features.find((f) => f.type === 'climate-hvac-modes') as
       | ClimateModesFeatureConfig
       | undefined;
     const map: Record<string, string> = {};
@@ -405,10 +407,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   /**
    * The color for the active preset icon under the dial number: the per-option
    * override, else the preset special-case color (eco→green, sleep→blue). Mirrors
-   * {@link _presetIcon} — undefined when no preset icon is shown or no color applies.
+     * {@link _presetIcon} — undefined when no preset icon is shown or no color applies.
+     * @param none No parameters.
    */
   private _presetColor(): string | undefined {
-    const feat = this._config.features?.find((f) => f.type === 'climate-preset-modes') as
+    const feat = this._features.find((f) => f.type === 'climate-preset-modes') as
       | ClimatePresetFeatureConfig
       | undefined;
     if (!feat) return undefined;
@@ -418,45 +421,38 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     return override?.color ?? presetColor(preset);
   }
 
-  /** Color basis for the dial: prefer the active HVAC action, else the mode. */
-  private _colorMode(): string {
-    const a = this._stateObj?.attributes;
-    switch (a?.hvac_action) {
-      case 'cooling':
-        return 'cool';
-      case 'heating':
-        return 'heat';
-      case 'drying':
-        return 'dry';
-      case 'fan':
-        return 'fan_only';
-      default:
-        return this._stateObj?.state ?? 'off';
-    }
-  }
-
+  /** Render the normalized config and primary entity model.
+   * @param none No parameters.
+   */
   protected render(): TemplateResult {
     if (!this._config || !this.hass) return html``;
     const fontClass = this._config.font === 'theme' ? '' : 'font-rounded';
     const state = this._stateObj;
     if (!state) {
       return html`<ha-card class=${fontClass}
-        ><div class="error">Entity not found: ${this._config.entity}</div></ha-card
+        ><div class="error">${this.hass.localize?.('ui.panel.lovelace.warning.entity_not_found', 'entity', this._config.entity) || `Entity not found: ${this._config.entity}`}</div></ha-card
       >`;
     }
 
     const a = state.attributes;
-    const name = this._config.name ?? a.friendly_name ?? this._config.entity;
-    const unavailable = state.state === 'unavailable' || state.state === 'unknown';
+    const name = entityDisplayName(this.hass, state, this._config.entity, this._config.name);
+    const unavailable = isUnavailable(state);
     const unit = this.hass.config?.unit_system?.temperature ?? '°C';
-    const colorMode = this._colorMode();
+    const model = targetModel(state, unit);
+    const colorMode = dialColorMode(state);
+    const action = hvacAction(state);
+    const modeLabel = formatEntityState(this.hass, state);
+    const stateLabel = this._config.show_state_label
+      ? action && action !== 'off' ? formatAttributeValue(this.hass, state, 'hvac_action') : modeLabel
+      : undefined;
+    const features = this._features;
     const layout = this._layout();
 
     return html`
       <ha-card class=${fontClass} style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
         <div class="header">
           <div class="name" title=${name}>${name}</div>
-          <button class="more" aria-label="More information" @click=${this._showMoreInfo}>
+          <button class="more" aria-label=${localizeKey(this.hass, 'ui.panel.lovelace.cards.show_more_info', 'More information')} @click=${this._showMoreInfo}>
             <ha-icon icon="mdi:dots-vertical"></ha-icon>
           </button>
         </div>
@@ -465,22 +461,25 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
           <div class="dial-wrap" style=${styleMap(layout.dialStyle)}>
             <mt-circular-dial
               .dialStyle=${this._config.dial_style ?? 'halo'}
-              .value=${this._targetTemp ?? a.min_temp ?? 20}
-              .min=${a.min_temp ?? 7}
-              .max=${a.max_temp ?? 35}
-              .step=${a.target_temp_step ?? 0.5}
+              .value=${this._selectedTemp ?? model.value ?? model.min}
+              .min=${model.min}
+              .max=${model.max}
+              .step=${model.step}
               .current=${this._displayCurrent(a.current_temperature)}
               .mode=${colorMode}
-              .hvacAction=${a.hvac_action}
-              .modeLabel=${unavailable ? 'Unavailable' : prettyLabel(state.state)}
+              .hvacAction=${action}
+              .modeLabel=${modeLabel}
+              .stateLabel=${stateLabel}
+              .formatNumber=${(value: number, decimals: number) => formatNumber(this.hass, value, decimals)}
               .presetIcon=${this._presetIcon()}
               .presetIconColor=${this._presetColor()}
               .modeColors=${this._hvacColors()}
               .modeIcons=${this._hvacIcons()}
               .unit=${unit}
-              .dual=${this._isDual}
-              .lowValue=${this._targetLow}
-              .highValue=${this._targetHigh}
+              .dual=${model.kind === 'dual'}
+              .readonly=${model.kind === 'none'}
+              .lowValue=${this._selectedLow ?? model.low}
+              .highValue=${this._selectedHigh ?? model.high}
               .showCurrentAsPrimary=${this._config.show_current_as_primary ?? false}
               .disabled=${unavailable}
               @value-changing=${this._onChanging}
@@ -488,7 +487,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
             ></mt-circular-dial>
           </div>
 
-          ${this._config.features?.length
+          ${features.length
             ? html`<div
                 class="features"
                 style=${styleMap({
@@ -496,7 +495,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
                   gridTemplateColumns: `repeat(${layout.gridCols}, minmax(0, 1fr))`,
                 })}
               >
-                ${this._config.features.map(
+                ${features.map(
                   (feature: FeatureConfig) =>
                     html`<mt-feature-row
                       .hass=${this.hass}

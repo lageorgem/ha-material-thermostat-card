@@ -2,7 +2,7 @@ import { expect, aTimeout, nextFrame } from '@open-wc/testing';
 import sinon from 'sinon';
 import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
-import { makeHass, climateState, entityState } from '../helpers';
+import { makeHass, climateState, waterHeaterState, entityState } from '../helpers';
 import { feelsLikeC } from '../../src/calc/comfort-metrics';
 import { fromCelsius, type TempUnit } from '../../src/calc/units';
 import type { MaterialThermostatCardConfig } from '../../src/types';
@@ -74,21 +74,146 @@ describe('material-thermostat-card', () => {
       const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
       expect(() =>
         el.setConfig({ type: 'x', entity: '' } as MaterialThermostatCardConfig)
-      ).to.throw('You must specify a climate entity.');
+      ).to.throw('Specify an entity from within the climate or water_heater domain');
     });
 
     it('throws when the entity is not a climate.* entity', () => {
       const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
       expect(() =>
         el.setConfig({ type: 'x', entity: 'light.kitchen' } as MaterialThermostatCardConfig)
-      ).to.throw('You must specify a climate entity.');
+      ).to.throw('Specify an entity from within the climate or water_heater domain');
     });
 
     it('stores a valid config', () => {
       const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
       const cfg = baseConfig();
       el.setConfig(cfg);
-      expect((el as any)._config).to.equal(cfg);
+      expect((el as any)._config).to.deep.equal(cfg);
+      expect((el as any)._config).not.to.equal(cfg);
+    });
+  });
+
+  describe('stock parity', () => {
+    const WATER = 'water_heater.test';
+
+    it('accepts water heaters, suggests them, and picks them without climate entities', async () => {
+      const el = track(await mount(baseConfig({ entity: WATER }), { [WATER]: waterHeaterState() }));
+      expect(dial(el).value).to.equal(55);
+      const cfg = MaterialThermostatCard.getStubConfig(el.hass);
+      expect(cfg.entity).to.equal(WATER);
+      expect(cfg.features).to.deep.equal([{ type: 'water-heater-operation-modes' }]);
+      const entry = (window as any).customCards.find((c: any) => c.type === 'material-thermostat-card');
+      expect(entry.getEntitySuggestion(el.hass, WATER).config.entity).to.equal(WATER);
+    });
+
+    it('normalizes frozen stock config without mutating it', () => {
+      const feature = Object.freeze({ type: 'climate-hvac-modes', style: 'dropdown', hvac_modes: ['heat'] });
+      const cfg = Object.freeze(baseConfig({ features: [feature] as any }));
+      const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
+      el.setConfig(cfg);
+      expect((el as any)._config.features).to.deep.equal([{ type: 'climate-hvac-modes', display: 'dropdown', include: ['heat'] }]);
+      expect(feature.style).to.equal('dropdown');
+    });
+
+    it('water heater plus commits to its own domain', async () => {
+      const el = track(await mount(baseConfig({ entity: WATER }), { [WATER]: waterHeaterState() }));
+      const clock = sinon.useFakeTimers();
+      try {
+        await dial(el).updateComplete;
+        dial(el).shadowRoot.querySelector('[aria-label="Increase temperature"]').click();
+        clock.tick(600);
+        expect(el.hass.__calls[0]).to.include({ domain: 'water_heater', service: 'set_temperature' });
+        expect(el.hass.__calls[0].data).to.deep.equal({ entity_id: WATER, temperature: 55.5 });
+      } finally { clock.restore(); }
+    });
+
+    it('no target capabilities makes a readonly dial', async () => {
+      const el = track(await mount(baseConfig(), { [ENTITY]: climateState({ supported_features: 0 }) }));
+      expect(dial(el).readonly).to.equal(true);
+      expect(dial(el).value).to.equal(16);
+    });
+
+    it('does not commit if the entity disappears or loses target capabilities', async () => {
+      const el = track(await mount(baseConfig()));
+      const clock = sinon.useFakeTimers();
+      try {
+        (el as any)._scheduleCommit();
+        el.hass = makeHass({});
+        clock.tick(600);
+        expect(el.hass.__calls).to.have.length(0);
+        el.hass = makeHass({ [ENTITY]: climateState({ supported_features: 0 }) }, { config: {} } as any);
+        (el as any)._scheduleCommit();
+        clock.tick(600);
+        expect(el.hass.__calls).to.have.length(0);
+      } finally { clock.restore(); }
+    });
+
+    for (const show_state_label of [false, true]) {
+      for (const action of ['heating', 'off', undefined]) {
+        it(`climate state label ${show_state_label} with action ${action}`, async () => {
+          const el = track(await mount(baseConfig({ show_state_label }), { [ENTITY]: climateState({ hvac_action: action }, 'heat') }));
+          expect(dial(el).stateLabel).to.equal(show_state_label ? action === 'heating' ? 'Heating' : 'Heat' : undefined);
+        });
+      }
+      it(`water heater state label ${show_state_label}`, async () => {
+        const el = track(await mount(baseConfig({ entity: WATER, show_state_label }), { [WATER]: waterHeaterState() }));
+        expect(dial(el).stateLabel).to.equal(show_state_label ? 'Eco' : undefined);
+      });
+    }
+
+    it('uses HA state/action formatting, structured names, and German numbers', async () => {
+      const el = track(await mount(baseConfig({ name: { type: 'entity' }, show_state_label: true })));
+      const nameFormatter = sinon.stub().returns('Arbeitszimmer');
+      el.hass = makeHass({ [ENTITY]: climateState({ temperature: 21.5 }) }, {
+        locale: { language: 'de', number_format: 'language' },
+        formatEntityName: nameFormatter,
+        formatEntityState: () => 'Kühlen',
+        formatEntityAttributeValue: () => 'Kühlt',
+      } as any);
+      await el.updateComplete;
+      await dial(el).updateComplete;
+      expect(el.shadowRoot!.querySelector('.name')!.textContent).to.equal('Arbeitszimmer');
+      expect(nameFormatter.firstCall.args[1]).to.deep.equal({ type: 'entity' });
+      expect(dial(el).modeLabel).to.equal('Kühlen');
+      expect(dial(el).stateLabel).to.equal('Kühlt');
+      expect(dial(el).shadowRoot.textContent).to.contain('21,5');
+    });
+
+    it('filters foreign features before rendering, sizing, and layout, and ignores water heater feels-like', async () => {
+      const el = track(await mount(baseConfig({ entity: WATER,
+        features: [{ type: 'climate-hvac-modes' }, { type: 'comfort' }, { type: 'sensor-list', entities: [], width: 50 }],
+        feels_like: { temperature: 'sensor.t', humidity: 'sensor.h', show_as_current: true },
+      }), { [WATER]: waterHeaterState(), 'sensor.t': entityState('sensor.t', '30'), 'sensor.h': entityState('sensor.h', '60') }));
+      (el as any)._widthPx = 800;
+      await el.updateComplete;
+      expect(el.getCardSize()).to.equal(8);
+      expect((el as any)._layout().wide).to.equal(true);
+      expect(el.shadowRoot!.querySelectorAll('mt-feature-row')).to.have.length(1);
+      expect(dial(el).current).to.equal(48);
+      expect(dial(el).hvacAction).to.equal(undefined);
+      el.setConfig(baseConfig({ features: [{ type: 'water-heater-operation-modes' }, { type: 'water-heater-away-mode' }] }));
+      el.hass = makeHass({ [ENTITY]: climateState() });
+      await el.updateComplete;
+      expect(el.getCardSize()).to.equal(7);
+      expect(el.shadowRoot!.querySelector('.features')).to.equal(null);
+    });
+
+    it('localizes missing entity and more-info, with English fallback', async () => {
+      const el = track(await mount(baseConfig(), {}));
+      el.hass = makeHass({}, { localize: ((key: string, _arg: string, id: string) => key.endsWith('entity_not_found') ? `Fehlt: ${id}` : 'Mehr') as any });
+      el.requestUpdate('_config');
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.error')!.textContent).to.equal(`Fehlt: ${ENTITY}`);
+      el.hass = makeHass({ [ENTITY]: climateState() }, { localize: () => 'Mehr' });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.more')!.getAttribute('aria-label')).to.equal('Mehr');
+      el.hass = makeHass({}, { localize: () => '' });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.error')!.textContent).to.equal(`Entity not found: ${ENTITY}`);
+      el.hass = makeHass({}, { localize: undefined } as any);
+      el.requestUpdate('_config');
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.error')!.textContent).to.equal(`Entity not found: ${ENTITY}`);
     });
   });
 
@@ -168,13 +293,11 @@ describe('material-thermostat-card', () => {
           expect(centre.fontVariationSettings).to.equal('normal');
         }
         expect(parseFloat(centre.fontSize)).to.be.closeTo(67.84, 0.1);
-        const label = dialEl.shadowRoot.querySelector('.o-label .num');
+        const label = dialEl.shadowRoot.querySelector('.o-label .label-number');
         const numberStyle = getComputedStyle(label);
         expect(numberStyle.fontWeight).to.equal(rounded ? '400' : '500');
         expect(parseFloat(numberStyle.fontSize)).to.be.closeTo(15.26, 0.1);
-        const sup = getComputedStyle(label.querySelector('sup'));
-        expect(parseFloat(sup.fontSize)).to.be.closeTo(parseFloat(numberStyle.fontSize) * 0.56, 0.1);
-        expect(parseFloat(sup.top)).to.be.closeTo(parseFloat(sup.fontSize) * 0.085, 0.1);
+        expect(label.textContent).to.equal('22.5');
       });
     }
 
@@ -296,6 +419,9 @@ describe('material-thermostat-card', () => {
 
     it('shows "Entity not found" when the entity is missing from states', async () => {
       const el = track(await mount(baseConfig(), {}));
+      el.hass = makeHass({}, { localize: () => '' });
+      el.requestUpdate('_config');
+      await el.updateComplete;
       const err = el.shadowRoot!.querySelector('.error');
       expect(err).to.not.equal(null);
       expect(err!.textContent).to.contain('Entity not found');
@@ -313,7 +439,7 @@ describe('material-thermostat-card', () => {
       const el = track(await mount(baseConfig(), { [ENTITY]: climateState({}, 'unknown') }));
       const d = dial(el);
       expect(d.disabled).to.equal(true);
-      expect(d.modeLabel).to.equal('Unavailable');
+      expect(d.modeLabel).to.equal('Unknown');
     });
 
     it('passes the raw idle hvac_action to the dial', async () => {
@@ -347,7 +473,8 @@ describe('material-thermostat-card', () => {
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.name')!.textContent).to.equal(ENTITY);
       const d = dial(el);
-      expect(d.value).to.equal(20); // min_temp ?? 20 (and _targetTemp undefined)
+      expect(d.readonly).to.equal(true);
+      expect(d.value).to.equal(d.min);
       expect(d.min).to.equal(7); // min_temp ?? 7
       expect(d.max).to.equal(35); // max_temp ?? 35
       expect(d.step).to.equal(0.5); // target_temp_step ?? 0.5
@@ -386,7 +513,7 @@ describe('material-thermostat-card', () => {
       const el = track(
         await mount(baseConfig(), { [ENTITY]: climateState({ hvac_action }, state) })
       );
-      return (el as any)._colorMode();
+      return dial(el).mode;
     }
 
     it("cooling → 'cool'", async () => {
@@ -403,12 +530,6 @@ describe('material-thermostat-card', () => {
     });
     it('otherwise → the entity state', async () => {
       expect(await colorOf('idle', 'heat')).to.equal('heat');
-    });
-    it('falls back to "off" when there is no state object', () => {
-      const el = document.createElement('material-thermostat-card') as MaterialThermostatCard;
-      el.setConfig(baseConfig());
-      // no hass yet → _stateObj undefined → default branch returns 'off'
-      expect((el as any)._colorMode()).to.equal('off');
     });
   });
 
@@ -581,24 +702,25 @@ describe('material-thermostat-card', () => {
     it('true when heat_cool with low+high present', async () => {
       const el = track(
         await mount(baseConfig(), {
-          [ENTITY]: climateState({ target_temp_low: 18, target_temp_high: 24 }, 'heat_cool'),
+          [ENTITY]: climateState({ temperature: null, target_temp_low: 18, target_temp_high: 24 }, 'heat_cool'),
         })
       );
-      expect((el as any)._isDual).to.equal(true);
+      expect(dial(el).dual).to.equal(true);
     });
 
     it('false when heat_cool but setpoints missing', async () => {
       const el = track(await mount(baseConfig(), { [ENTITY]: climateState({}, 'heat_cool') }));
-      expect((el as any)._isDual).to.equal(false);
+      expect(dial(el).dual).to.equal(false);
     });
 
-    it('false when not heat_cool even with setpoints', async () => {
+    it('single wins with a populated temperature even with range setpoints', async () => {
       const el = track(
         await mount(baseConfig(), {
-          [ENTITY]: climateState({ target_temp_low: 18, target_temp_high: 24 }, 'cool'),
+          [ENTITY]: climateState({ supported_features: 3, target_temp_low: 18, target_temp_high: 24 }, 'cool'),
         })
       );
-      expect((el as any)._isDual).to.equal(false);
+      expect(dial(el).dual).to.equal(false);
+      expect(dial(el).readonly).to.equal(false);
     });
 
     it('renders dual props on the dial', async () => {
@@ -927,7 +1049,7 @@ describe('material-thermostat-card', () => {
     async function mountDual(): Promise<MaterialThermostatCard> {
       return track(
         await mount(baseConfig(), {
-          [ENTITY]: climateState({ target_temp_low: 18, target_temp_high: 24 }, 'heat_cool'),
+          [ENTITY]: climateState({ supported_features: 2, target_temp_low: 18, target_temp_high: 24 }, 'auto'),
         })
       );
     }
