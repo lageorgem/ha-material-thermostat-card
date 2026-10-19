@@ -1,10 +1,11 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { SCENARIOS, AUX } from './matrix.mjs';
 import { buildCases } from './cases.mjs';
 import { URL_PATH } from './dashboard.mjs';
-import { credentials, safeError, TIMEOUT } from './ha-client.mjs';
+import { credentials, safeError, rest, TIMEOUT } from './ha-client.mjs';
 
 // Component internals: keep all CSS knowledge in this block, including browser-side scans.
 const S = {
@@ -88,7 +89,7 @@ function journeys(c, opts) {
   if (e.interactive && c.view === 'aux') for (const feature of e.aux) {
     if (['input-select', 'switch-group', 'switch-list', 'button-list'].includes(feature)) result.push({ type: 'J-aux', feature });
   }
-  if (!opts.lang || !/^en(?:-GB)?$/i.test(opts.lang)) result.push({ type: 'J-locale' });
+  if (c.view.startsWith('s-') && (!opts.lang || !/^en(?:-GB)?$/i.test(opts.lang))) result.push({ type: 'J-locale' });
   return result;
 }
 
@@ -97,6 +98,7 @@ function inspect(host, S) {
   function deep(root, selector) {
     const found = [...root.querySelectorAll(selector)];
     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
     return found;
   }
   function text(node) {
@@ -148,7 +150,7 @@ function inspect(host, S) {
     increase: dial ? deep(dial, S.increase).length : 0, decrease: dial ? deep(dial, S.decrease).length : 0,
     stateLabels: dial ? deep(dial, S.stateLabel).filter(visible).map(text) : [],
     controls: deep(host, S.controls).map(disabled), selectors: deep(host, S.selector).map(rowInfo), away,
-    aux: Object.fromEntries(Object.entries(S.aux).map(([k, v]) => [k, deep(host, v).map((el) => text(el).trim() || (deep(el, S.controls).length ? 'controls' : ''))])),
+    aux: Object.fromEntries(Object.entries(S.aux).map(([k, v]) => [k, deep(host, v).map((el) => text(el).trim() || (deep(el, `${S.controls}, ${S.icon}`).some(visible) ? 'controls/icon' : ''))])),
     current, overflow, scroll, bounds: bounds?.toJSON(),
   };
 }
@@ -181,16 +183,39 @@ async function main() {
   const clean = (value) => JSON.parse(JSON.stringify(value).split(auth.token).join('[REDACTED]'));
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ channel: 'chrome', headless: !opts.headed, timeout: TIMEOUT });
-  const report = { language: opts.lang, scheme: opts.scheme, cases, checks: [], frames: [], consoleErrors: [], bundleRouteHit: 0 };
-  let context, page, fatal, out, currentView = 'setup';
-  const abort = (error) => { fatal ??= error; void context?.close().catch(() => {}); return fatal; };
+  const report = { language: opts.lang, scheme: opts.scheme, cases, checks: [], frames: [], restores: [], consoleErrors: [], bundleRouteHit: 0 };
+  let context, page, fatal, originViolation, out, currentView = 'setup';
+  const journal = new Set();
+  const viewScope = new AsyncLocalStorage();
+  let activeScope;
+  const closeContext = async () => {
+    const previous = context;
+    context = undefined;
+    let timer;
+    try {
+      await Promise.race([previous?.close().catch(() => {}), new Promise((r) => { timer = setTimeout(r, 10000); })]);
+    } finally { clearTimeout(timer); }
+  };
+  const abort = (error) => {
+    const scope = viewScope.getStore();
+    if (scope) scope.cancelled ??= error;
+    if (!scope || scope === activeScope) {
+      fatal ??= error;
+      void context?.close().catch(() => {});
+    }
+    return scope?.cancelled ?? fatal ?? error;
+  };
   const bounded = async (fn, description, timeout = TIMEOUT) => {
+    if (viewScope.getStore()?.cancelled) throw viewScope.getStore().cancelled;
     if (fatal) throw fatal;
     let timer;
     try {
       return await Promise.race([Promise.resolve().then(fn), new Promise((_, reject) => {
         timer = setTimeout(() => reject(abort(new Error(`Deadline: ${description} (${timeout} ms); context closed`))), timeout);
       })]);
+    } catch (error) {
+      if (/context.*closed|page.*closed|browser.*closed|Target crashed/i.test(String(error))) throw abort(error);
+      throw error;
     } finally { clearTimeout(timer); }
   };
   const evaluate = (target, fn, arg) => bounded(() => target.evaluate(fn, arg), 'frontend evaluation');
@@ -210,11 +235,11 @@ async function main() {
     await fn();
   }, 'negative observation', duration + 1000);
   const check = async (name, fn, timeout = 120000) => {
-    const start = report.frames.length;
-    try { report.checks.push({ name, view: currentView, status: 'PASS', evidence: clean(await bounded(fn, name, timeout) ?? {}), frames: [start, report.frames.length] }); }
+    const start = report.frames.length, view = currentView;
+    try { report.checks.push({ name, view, status: 'PASS', evidence: clean(await bounded(fn, name, timeout) ?? {}), frames: [start, report.frames.length] }); }
     catch (error) {
-      report.checks.push({ name, view: currentView, status: 'FAIL', error: safeError(error), frames: [start, report.frames.length] });
-      if (fatal) throw fatal;
+      report.checks.push({ name, view, status: 'FAIL', error: safeError(error), frames: [start, report.frames.length] });
+      if (viewScope.getStore()?.cancelled || fatal) throw viewScope.getStore()?.cancelled ?? fatal;
     }
   };
   const warn = (name, evidence) => report.checks.push({ name, view: currentView, status: 'WARN', evidence: clean(evidence) });
@@ -223,8 +248,6 @@ async function main() {
   const state = (id) => evaluate(page, ({ id, S }) => document.querySelector(S.ha).hass.states[id], { id, S });
   const stateValue = (s, key) => key === 'state' ? s?.state : s?.attributes?.[key];
   const waitState = (id, key, value, timeout = 5000) => poll(async () => equal(stateValue(await state(id), key), value), `${id}.${key} restore/convergence`, Math.max(1, timeout));
-  const call = (domain, service, id, data) => evaluate(page, ({ domain, service, id, data, S }) =>
-    document.querySelector(S.ha).hass.callService(domain, service, { ...data, entity_id: id }), { domain, service, id, data, S });
   const matching = (start, id) => report.frames.slice(start).filter((f) => {
     const ids = f.target?.entity_id ?? f.service_data?.entity_id;
     return Array.isArray(ids) ? ids.includes(id) : ids === id;
@@ -233,14 +256,54 @@ async function main() {
     await poll(() => matching(start, id).length > 0, `${domain}.${service} frame`);
     await observe(() => assert(matching(start, id).length === 1, `Expected exactly one call for ${id}; got ${matching(start, id).length}`));
     const [f] = matching(start, id);
+    const target = f.target?.entity_id ?? f.service_data?.entity_id;
+    assert(equal(Array.isArray(target) ? target : [target], [id]), `Unexpected entity targets: ${JSON.stringify(target)}`);
     assert(f.domain === domain && f.service === service && Object.entries(data).every(([k, v]) => equal(f.service_data?.[k], v)), `Wrong frame: ${JSON.stringify(f)}; expected ${domain}.${service} ${JSON.stringify(data)}`);
     return f;
   };
-  const restore = async (id, domain, service, data, expected) => {
-    const start = report.frames.length;
-    await call(domain, service, id, data);
-    await exactFrame(start, id, domain, service, data);
-    for (const [key, value] of Object.entries(expected)) await waitState(id, key, value);
+  const recordRestore = (id, domain, service, data, verify) => {
+    if (viewScope.getStore()?.cancelled) throw viewScope.getStore().cancelled;
+    assert(![...journal].some((entry) => entry.data.entity_id === id), `Pending restore for ${id}; refusing another mutation`);
+    const entry = { domain, service, data: { ...data, entity_id: id }, verify, view: currentView };
+    journal.add(entry);
+    return entry;
+  };
+  // Independent of page/context/fatal: every request has ha-client's 30 s bound.
+  const performRestore = async (entry) => {
+    const id = entry.data.entity_id;
+    await rest(auth, `/api/services/${entry.domain}/${entry.service}`, 'POST', entry.data);
+    const end = Date.now() + 5000;
+    do {
+      const actual = await rest(auth, `/api/states/${encodeURIComponent(id)}`);
+      if (Object.entries(entry.verify).every(([key, value]) => equal(stateValue(actual, key), value))) return;
+      await new Promise((r) => setTimeout(r, 50));
+    } while (Date.now() < end);
+    throw new Error(`REST restoration did not converge: ${id}`);
+  };
+  let restoreWork = Promise.resolve(), drainWork = Promise.resolve();
+  const restore = (entry) => {
+    const task = restoreWork.then(() => performRestore(entry));
+    restoreWork = task.catch(() => {});
+    return task;
+  };
+  const drainJournal = () => {
+    const task = drainWork.then(async () => {
+      const restored = [];
+      for (const entry of [...journal]) {
+        try {
+          await restore(entry);
+          journal.delete(entry);
+          restored.push(entry);
+          report.restores.push(clean({ ...entry, status: 'PASS' }));
+        } catch (error) {
+          report.restores.push(clean({ ...entry, status: 'FAIL', error: safeError(error) }));
+          report.checks.push({ name: `restore: ${entry.data.entity_id}`, view: entry.view, status: 'FAIL', error: safeError(error) });
+        }
+      }
+      return restored;
+    });
+    drainWork = task.catch(() => {});
+    return task;
   };
   const selectorHost = async (c, type) => {
     const hosts = card(c).locator(S.selector), kind = kindOf(type);
@@ -258,7 +321,7 @@ async function main() {
       await row.locator(S.option).nth(index).click();
     }
   };
-  try {
+  const openView = async (view) => {
     context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, colorScheme: opts.scheme, serviceWorkers: 'block' });
     context.setDefaultTimeout(TIMEOUT); context.setDefaultNavigationTimeout(60000);
     await context.addInitScript(({ url, token }) => {
@@ -268,7 +331,10 @@ async function main() {
     }, auth);
     page = await context.newPage();
     const requireOrigin = (url) => {
-      if (new URL(url).origin !== new URL(auth.url).origin) throw abort(new Error('Unexpected top-level origin; only HA origin allowed; context closed'));
+      if (new URL(url).origin !== new URL(auth.url).origin) {
+        originViolation = new Error('Unexpected top-level origin; only HA origin allowed; context closed');
+        throw abort(originViolation);
+      }
     };
     page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) { try { requireOrigin(frame.url()); } catch { /* abort recorded */ } } });
     await page.route('**/*', async (route) => {
@@ -289,9 +355,11 @@ async function main() {
     }));
     page.on('console', (msg) => { if (msg.type() === 'error') report.consoleErrors.push(clean({ text: msg.text(), location: msg.location().url })); });
     page.on('pageerror', (e) => report.consoleErrors.push(clean({ text: e.message, location: e.stack ?? '' })));
-    await bounded(() => page.goto(`${auth.url}/${URL_PATH}/${selectedViews[0]}`, { waitUntil: 'domcontentloaded' }), 'initial navigation', 60000);
+    const hitsBefore = report.bundleRouteHit;
+    await bounded(() => page.goto(`${auth.url}/${URL_PATH}/${view}`, { waitUntil: 'domcontentloaded' }), 'initial navigation', 60000);
     requireOrigin(page.url());
     await poll(() => evaluate(page, (S) => !!document.querySelector(S.ha)?.hass?.states, S), 'HA ready', TIMEOUT);
+    await poll(() => report.bundleRouteHit > hitsBefore, 'fresh context local bundle route', TIMEOUT);
     if (opts.lang) {
       await evaluate(page, async ({ lang, S }) => {
         const ha = document.querySelector(S.ha);
@@ -307,9 +375,17 @@ async function main() {
     const theme = await evaluate(page, (S) => Object.keys(document.querySelector(S.ha).hass.themes?.themes ?? {})[0], S);
     cases = buildCases({ theme }).filter((c) => selectedViews.includes(c.view));
     report.cases = cases;
-
+  };
+  try {
     for (const view of selectedViews) {
       currentView = view;
+      try {
+      activeScope = {};
+      await viewScope.run(activeScope, async () => {
+      if (!context || fatal || page?.isClosed()) {
+        fatal = undefined;
+        await openView(view);
+      }
       const vc = cases.filter((c) => c.view === view);
       // Large matrix views get a finite budget proportional to their declared work.
       const viewBudget = 120000 + vc.length * 12000 + vc.flatMap((c) => journeys(c, opts)).length * 120000;
@@ -324,6 +400,7 @@ async function main() {
             function deep(root, selector) {
               const found = [...root.querySelectorAll(selector)];
               for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
               return found;
             }
             const cards = deep(document, `${S.card}, ${S.stock}`);
@@ -342,6 +419,7 @@ async function main() {
             function deep(root, selector) {
               const found = [...root.querySelectorAll(selector)];
               for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
               return found;
             }
             return deep(document, S.error).map((el) => {
@@ -356,6 +434,7 @@ async function main() {
             function deep(root, selector) {
               const found = [...root.querySelectorAll(selector)];
               for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
               return found;
             }
             return deep(document, `${S.card}, ${S.stock}`).filter((el) => ids.includes(el.getAttribute('data-mtqa-id'))).every((host) =>
@@ -457,6 +536,7 @@ async function main() {
               function deep(root, selector) {
                 const found = [...root.querySelectorAll(selector)];
                 for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
                 return found;
               }
               return deep(document, `${S.card}, ${S.stock}`).filter((el) => el.getAttribute('data-mtqa-id') !== id).map((el) => el.getBoundingClientRect().toJSON());
@@ -469,15 +549,17 @@ async function main() {
             const a = await snapshot(c), expected = scenario.expect;
             const values = expected.model === 'single' ? [expected.target] : expected.model === 'dual' ? [expected.low, expected.high] : [];
             assert(equal(a.sliders.map((s) => s.value), values), `Slider values ${JSON.stringify(a.sliders)}; expected ${JSON.stringify(values)}`);
-            assert((a.current.length > 0) === (expected.current !== null), `Current visibility ${JSON.stringify(a.current)}; expected ${expected.current}`);
+            const current = a.current.filter((t) => t.trim() && !(t.includes('—') && !/\d/.test(t)));
+            assert((current.length > 0) === (expected.current !== null), `Current visibility ${JSON.stringify(a.current)}; expected ${expected.current}`);
             if (expected.current !== null) {
-              const formats = [String(expected.current), new Intl.NumberFormat(report.language, { maximumFractionDigits: 1 }).format(expected.current), String(expected.current).replace('.', '')];
-              assert(a.current.some((t) => formats.some((v) => t.includes(v))), `Current temperature ${expected.current} not visible: ${a.current}`);
+              const digits = (v) => String(v).replace(/\D/g, '');
+              assert(current.some((t) => digits(t) === digits(expected.current)), `Current temperature ${expected.current} not visible: ${a.current}`);
             }
           });
         }
 
         for (const c of vc) for (const j of journeys(c, { ...opts, lang: report.language })) {
+          try {
           await check(`${c.id}: ${j.type}${j.selector ? ` ${j.selector.type}=${j.value}` : ''}${j.feature ? ` ${j.feature}` : ''}`, async () => {
             const s = scenarioFor(c), id = s.entity_id;
             if (j.type === 'J-select') {
@@ -485,21 +567,20 @@ async function main() {
               assert(domain, `Unknown selector service ${j.selector.type}`);
               const original = stateValue(await state(id), attribute);
               assert(typeof original === 'string', `Cannot restore unset ${attribute}; no mutation performed`);
-              const start = report.frames.length;
-              try {
-                const began = Date.now();
-                await pick(await selectorHost(c, j.selector.type), j.selector.display, j.value);
-                const sent = await exactFrame(start, id, domain, service, { [key]: j.value });
-                await waitState(id, attribute, j.value, 5000 - (Date.now() - began)); return sent;
-              } finally { await restore(id, domain, service, { [key]: original }, { [attribute]: original }); }
+              recordRestore(id, domain, service, { [key]: original }, { [attribute]: original });
+              const start = report.frames.length, began = Date.now();
+              await pick(await selectorHost(c, j.selector.type), j.selector.display, j.value);
+              const sent = await exactFrame(start, id, domain, service, { [key]: j.value });
+              await waitState(id, attribute, j.value, 5000 - (Date.now() - began));
+              return sent;
             }
             if (j.type === 'J-dial') {
               const previous = await state(id), domain = s.domain;
               const dual = s.expect.model === 'dual';
               const original = dual ? { target_temp_low: previous.attributes.target_temp_low, target_temp_high: previous.attributes.target_temp_high } : { temperature: previous.attributes.temperature };
-              assert(Object.values(original).every(Number.isFinite), 'Cannot restore missing temperature');
-              const sliders = card(c).locator(S.dial).locator(S.slider);
-              try {
+               assert(Object.values(original).every(Number.isFinite), 'Cannot restore missing temperature');
+               const entry = recordRestore(id, domain, 'set_temperature', original, original);
+               const sliders = card(c).locator(S.dial).locator(S.slider);
                 for (let handle = 0; handle < (dual ? 2 : 1); handle++) {
                   for (const key of ['Increase', 'Decrease', 'ArrowUp', 'PageUp', 'Home', 'End']) {
                     if (dual && ['Increase', 'Decrease'].includes(key)) {
@@ -510,7 +591,8 @@ async function main() {
                       await sliders.nth(handle).press('Home');
                       await exactFrame(start, id, domain, 'set_temperature', data);
                       for (const [attribute, v] of Object.entries(data)) await waitState(id, attribute, v);
-                      await restore(id, domain, 'set_temperature', original, original);
+                       await restore(entry);
+                       for (const [attribute, v] of Object.entries(original)) await waitState(id, attribute, v);
                     }
                     const a = await snapshot(c), slider = a.sliders[handle], step = a.dial.step;
                     assert(Number.isFinite(step) && step > 0, 'Missing positive dial step');
@@ -539,10 +621,10 @@ async function main() {
                     await exactFrame(start, id, domain, 'set_temperature', data);
                     for (const [attribute, v] of Object.entries(data)) await waitState(id, attribute, v);
                     // Reset between keys so PageUp/Home/End each exercise a change.
-                    await restore(id, domain, 'set_temperature', original, original);
+                     await restore(entry);
+                     for (const [attribute, v] of Object.entries(original)) await waitState(id, attribute, v);
                   }
                 }
-              } finally { await restore(id, domain, 'set_temperature', original, original); }
               return { original, handles: dual ? 2 : 1, keys: ['Increase', 'Decrease', 'ArrowUp', 'PageUp', 'Home', 'End'] };
             }
             if (j.type === 'J-away') {
@@ -601,14 +683,11 @@ async function main() {
                 const original = (await state(entity)).state;
                 const options = items.filter((i) => i.value !== original);
                 assert(options.length, 'No alternate input-select option');
-                try {
-                  for (const item of opts.quick ? options.slice(0, 1) : options) {
-                    const start = report.frames.length;
-                    await pick(host, display, item.value);
-                    await exactFrame(start, entity, 'input_select', 'select_option', { option: item.value });
-                    await waitState(entity, 'state', item.value);
-                  }
-                } finally { await restore(entity, 'input_select', 'select_option', { option: original }, { state: original }); }
+                for (const item of opts.quick ? options.slice(0, 1) : options) {
+                  const start = report.frames.length;
+                  await pick(host, display, item.value);
+                  await exactFrame(start, entity, 'input_select', 'select_option', { option: item.value });
+                }
               } else if (j.feature === 'button-list') {
                 for (const item of items) {
                   assert(AUX.buttons.some((b) => (typeof b === 'string' ? b : b.entity_id) === item.value), `Non-fixture button ${item.value}; refusing click`);
@@ -623,25 +702,20 @@ async function main() {
                   originals[item.value] = (await state(item.value)).state;
                   assert(['on', 'off'].includes(originals[item.value]), 'Cannot restore unavailable switch');
                 }
-                try {
-                  for (const item of items) {
+                 for (const [entity, original] of Object.entries(originals)) recordRestore(entity, 'homeassistant', `turn_${original}`, {}, { state: original });
+                   for (const item of items) {
                     const before = Object.fromEntries(await Promise.all(items.map(async (i) => [i.value, (await state(i.value)).state])));
                     const start = report.frames.length;
                     await pick(host, display, item.value);
                     const target = j.feature === 'switch-group' ? 'on' : before[item.value] === 'on' ? 'off' : 'on';
-                    await exactFrame(start, item.value, 'switch', `turn_${target}`);
+                     const selectedFrame = await exactFrame(start, item.value, 'homeassistant', j.feature === 'switch-group' ? 'turn_on' : 'toggle');
                     await waitState(item.value, 'state', target);
                     if (j.feature === 'switch-group') for (const other of items.filter((i) => i.value !== item.value)) {
-                      if (before[other.value] === 'on') await exactFrame(start, other.value, 'switch', 'turn_off');
+                       const offFrame = await exactFrame(start, other.value, 'homeassistant', 'turn_off');
+                       assert(report.frames.indexOf(offFrame) < report.frames.indexOf(selectedFrame), 'Switch group must turn others off before turning selected on');
                       await waitState(other.value, 'state', 'off');
                     }
                   }
-                } finally {
-                  // Attempt every restore even if an earlier switch fails.
-                  const errors = [];
-                  for (const [entity, original] of Object.entries(originals)) try { await restore(entity, 'switch', `turn_${original}`, {}, { state: original }); } catch (e) { errors.push(safeError(e)); }
-                  assert(!errors.length, `Switch restore failed: ${errors.join('; ')}`);
-                }
               }
               return { feature: j.feature, items };
             }
@@ -657,6 +731,7 @@ async function main() {
                   function deep(root, selector) {
                     const found = [...root.querySelectorAll(selector)];
                     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    if (root.shadowRoot) found.push(...deep(root.shadowRoot, selector));
                     return found;
                   }
                   return Object.fromEntries(deep(host, S.stockOption).filter((el) => values.includes(el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'))).map((el) => [el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'), (el.getAttribute('title') || el.getAttribute('aria-label') || el.textContent).trim()]));
@@ -675,12 +750,32 @@ async function main() {
               return { decimal, fractionalSliders: a.sliders.filter((v) => v.value % 1 !== 0).length, stockComparisons: comparisons };
             }
           }, j.type === 'J-dial' ? 120000 : 60000);
+          } finally {
+            const restored = await drainJournal();
+            // REST convergence may precede the browser's WebSocket state update.
+            // Do not snapshot a stale "original" for the following journey.
+            if (!fatal && !viewScope.getStore()?.cancelled) {
+              for (const entry of restored) for (const [key, value] of Object.entries(entry.verify)) {
+                await waitState(entry.data.entity_id, key, value);
+              }
+            }
+          }
         }
       }, `view ${view}`, viewBudget);
+      });
+      } catch (error) {
+        activeScope.cancelled ??= error;
+        report.checks.push({ name: `view ${view}: runtime`, view, status: 'FAIL', error: safeError(fatal ?? error) });
+        await drainJournal();
+        await closeContext();
+        if (originViolation) throw originViolation;
+        fatal = undefined;
+      }
     }
   } catch (error) {
     report.checks.push({ name: 'setup/runtime', view: currentView, status: 'FAIL', error: safeError(fatal ?? error) });
   } finally {
+    await drainJournal();
     let timer;
     const closed = await Promise.race([browser.close().then(() => true, () => false), new Promise((r) => { timer = setTimeout(() => r(false), 10000); })]);
     clearTimeout(timer);

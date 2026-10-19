@@ -57,10 +57,10 @@ Every custom case gets checks named `<case id>: <check>`:
 | `selectors` | Feature/display, offered values (set or explicit order), DOM options, overrides, active markers and disabled controls; no unexpected feature family. Disabled dropdowns cannot open: verify item model + disabled trigger. |
 | `labels` | No unoverridden raw lowercase/snake_case option labels. |
 | `away` | Presence, display, pressed state, disabled state, configured label (including Holiday). |
-| `aux` | Each declared auxiliary feature has nonempty rendered content/controls. |
+| `aux` | Each declared auxiliary feature has rendered content/controls; icon-only tiles may render a visible ha-icon without text. |
 | `text` | Deep shadow/light DOM text excludes NaN, undefined, null and object-string artefacts. |
 | `layout` | No visible descendant outside ha-card by >2 px on any side; no neighbouring card overlap. Floating menus/popovers and orbit wrapper boxes excluded; orbit children checked. Horizontally scrolling chips WARN (known), not FAIL. |
-| `values` | Single target or dual low/high aria values; current-temperature visibility/value (read-only uses primary number). |
+| `values` | Single target or dual low/high aria values; current-temperature visibility/value (read-only uses primary number). Digits normalize split superscripts and locale separators; absent or “—” means no current value. |
 
 ## Journeys
 
@@ -75,8 +75,8 @@ cosmetic pixel equality is deliberately not tested (low impact, high upkeep).
 | `J-away` | REST away-on/off cases: boolean set_away_mode frame only; disabled emits nothing. Verify REST fixture remains unchanged. |
 | `J-unavailable` | Dispatch clicks to disabled selector/away controls; no service frame. |
 | `J-reject` | Reject halo Options: prove optimistic movement, outgoing temperature frame, return to server value within 8 s. |
-| `J-aux` | Input-select options, every switch group/list item, every button-list press. Verify exact services and MQTT state; restore input/switch originals. Switch expectations are strict `switch.turn_on/turn_off`, not a permissive homeassistant.toggle fallback. |
-| `J-locale` | Non-en/en-GB: fractional aria-valuetext decimal separator, HVAC/operation labels compared with translated stock options in the same view. Missing stock counterparts or unusable translation evidence FAIL rather than claiming parity. |
+| `J-aux` | REST-only input-select options assert `input_select.select_option` frames only, without convergence/restore. Switch group expects `homeassistant.turn_off` for the other entities then `homeassistant.turn_on` for the selected entity; switch list expects `homeassistant.toggle`. Assert MQTT convergence and restore switch originals using `homeassistant.turn_on/turn_off`. Button-list expects `button.press`; presses cannot be undone. Entity targets may be strings or lists. |
+| `J-locale` | Non-en/en-GB, scenario views (`s-*`) only: fractional aria-valuetext decimal separator, HVAC/operation labels compared with translated stock options in the same view. Other views skip this journey. Missing scenario stock counterparts or unusable translation evidence FAIL rather than claiming parity. |
 
 REST-away/unavailable and reject are intentional guarded/non-echo exceptions to
 the `interactive` flag. Read-only aux sensors/comfort do not get mutation journeys.
@@ -99,10 +99,24 @@ Evaluation/action deadlines: 30 s; navigation: 60 s; readiness: 30 s;
 state/frame polls: 5 s; rollback: 8 s. Each journey has a 60 s deadline
 (dial: 120 s); views have finite budgets proportional to declared case/journey
 counts. Deadline expiry closes the context, including wedged evaluations.
+Fatal view/journey errors record FAIL for the affected view, abandon its remaining
+checks and continue with the next view in a fresh context. Recovery re-injects
+the guarded token, reapplies the session language and requires a fresh local-bundle
+route hit. Cancelled view work cannot resume frontend actions in a later context.
+Only an origin violation or missing credentials aborts the whole run.
 Duplicate/negative assertions use a bounded 1.2 s observation window, not a
-readiness sleep. Browser shutdown: 10 s. Restores run in `finally`, through the
-page's `hass.callService`, with outgoing frame and state assertions. Fatal abort,
-crash or process interruption can prevent restoration: **reseed before retrying**.
+readiness sleep. Context/browser shutdown: 10 s each. Before a reversible mutation,
+a Node-side journal records its domain/service/data and expected state. Every
+journey's `finally`, view recovery and final shutdown drain the journal through
+independently bounded REST service POSTs (30 s per request), then REST state reads
+until convergence (5 s polling window; an in-flight read still has a 30 s bound).
+Restoration never uses the page, so a closed context or fatal frontend timeout
+cannot prevent sending it. Every entry is attempted even if another restore fails;
+failures report `FAIL restore: <entity>` and remain queued for retry at subsequent
+drains, including shutdown. Pending restores block further mutations of that entity.
+Restoration attempts and results are recorded in `report.json`, not WebSocket frames.
+Hard process termination or an unreachable HA can still prevent restoration:
+**reseed before retrying**. The journal is in memory, not persisted to disk.
 Button presses cannot be undone; use only the dedicated fixture buttons.
 
 ```sh

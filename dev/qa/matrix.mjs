@@ -40,9 +40,9 @@ const { current_temperature: ignoredCurrent, ...waterWithoutCurrent } = baseW;
 const waterExpect = (state, extra = {}) => ({ target: 55, current: 48, away: 'off', values: { operation: operations }, active: { operation: state }, ...extra });
 
 export const SCENARIOS = [
-  c('c-mqtt-full', 'heat', {}, singleExpect('heat', { current: 21.3, values: { ...allValues, preset: ['eco', 'comfort', 'sleep', 'away', 'boost'] }, active: { hvac: 'heat', fan: 'auto', preset: 'eco', swing: 'off', swing_horizontal: 'off' } }), 'mtqa_full'),
+  c('c-mqtt-full', 'heat', {}, singleExpect('heat', { current: 21.3, values: { ...allValues, preset: ['none', 'eco', 'comfort', 'sleep', 'away', 'boost'] }, active: { hvac: 'heat', fan: 'auto', preset: 'eco', swing: 'off', swing_horizontal: 'off' } }), 'mtqa_full'),
   c('c-mqtt-range', 'heat_cool', {}, { model: 'dual', low: 20, high: 24, current: 22.1, values: { hvac: ['off', 'heat_cool', 'auto'] }, active: { hvac: 'heat_cool' } }, 'mtqa_range'),
-  c('c-mqtt-heat', 'heat', {}, singleExpect('heat', { current: 20.4, values: { hvac: ['off', 'heat'], preset: ['eco', 'comfort'] }, active: { hvac: 'heat', preset: 'eco' } }), 'mtqa_heat'),
+  c('c-mqtt-heat', 'heat', {}, singleExpect('heat', { current: 20.4, values: { hvac: ['off', 'heat'], preset: ['none', 'eco', 'comfort'] }, active: { hvac: 'heat', preset: 'eco' } }), 'mtqa_heat'),
   c('c-mqtt-reject', 'heat', {}, { target: 21, current: 20, values: { hvac: ['off', 'heat'] }, active: { hvac: 'heat' } }, 'mtqa_reject'),
   c('c-mqtt-fan', 'fan_only', {}, { model: 'none', current: 23, values: { hvac: ['off', 'fan_only'], fan: ['low', 'high'] }, active: { hvac: 'fan_only', fan: 'low' } }, 'mtqa_fan'),
   ...[
