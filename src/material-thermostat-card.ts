@@ -63,6 +63,8 @@ console.info(
 });
 
 const SERVICE_DEBOUNCE_MS = 600;
+const RESYNC_MS = 3000;
+let nextNameId = 0;
 /** Fraction of halo/minimal dial height safe to crop below +/- (bottom edge ~93.5%). */
 const DIAL_BOTTOM_GAP = 0.065;
 /** Fraction safe to crop below the google dial's disc (bottom edge ~96.4%). */
@@ -80,6 +82,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @state() private _widthPx = 0;
 
   private _debounceTimer?: number;
+  private _resyncTimer?: number;
+  private _commitVersion = 0;
+  private readonly _nameId = `mt-name-${++nextNameId}`;
   private _resizeObserver?: ResizeObserver;
 
   /**
@@ -122,6 +127,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    */
   public getCardSize(): number {
     return 7 + this._features.length;
+  }
+
+  /** Let sections measure the content instead of allocating fixed-height rows.
+   * @param none No parameters.
+   */
+  public getGridOptions(): { columns: number; min_columns: number; rows: 'auto' } {
+    return { columns: 12, min_columns: 6, rows: 'auto' };
   }
 
   /** Features compatible with the configured primary domain.
@@ -172,6 +184,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     return fromCelsius(feelsLikeC(tC, rh), systemTempUnit(this.hass));
   }
 
+  /** Update for tracked entities, local state, or the configured theme.
+   * @param changed previous reactive property values
+   */
   protected shouldUpdate(changed: PropertyValues): boolean {
     if (
       changed.has('_config') ||
@@ -185,6 +200,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     if (changed.has('hass')) {
       const old = changed.get('hass') as HomeAssistant | undefined;
       if (!old) return true;
+      if (this._config.theme && old.themes !== this.hass.themes) return true;
       return this._trackedEntityIds().some((id) => old.states[id] !== this.hass.states[id]);
     }
     return false;
@@ -305,6 +321,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param none No parameters.
    */
   private _scheduleCommit(): void {
+    this._cancelResync();
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
     this._debounceTimer = window.setTimeout(() => {
       const stateObj = this._stateObj;
@@ -316,8 +333,36 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         low: this._selectedLow ?? model.low,
         high: this._selectedHigh ?? model.high,
       });
-      this.hass.callService(call.domain, call.service, call.data);
+      const version = this._commitVersion;
+      const sent = model.kind === 'dual'
+        ? { _selectedLow: this._selectedLow, _selectedHigh: this._selectedHigh }
+        : { _selectedTemp: this._selectedTemp };
+      const rollback = (): void => {
+        if (version !== this._commitVersion) return;
+        for (const key of Object.keys(sent) as (keyof typeof sent)[]) {
+          if (this[key] === sent[key]) this[key] = undefined;
+        }
+      };
+      Promise.resolve(this.hass.callService(call.domain, call.service, call.data)).then(
+        () => {
+          if (version !== this._commitVersion) return;
+          this._resyncTimer = window.setTimeout(rollback, RESYNC_MS);
+        },
+        (error: unknown) => {
+          rollback();
+          console.warn('Temperature update failed:', error instanceof Error ? error.message : String(error));
+        }
+      );
     }, SERVICE_DEBOUNCE_MS);
+  }
+
+  /** Invalidate older service results and cancel their resync deadline.
+   * @param none No parameters.
+   */
+  private _cancelResync(): void {
+    this._commitVersion++;
+    window.clearTimeout(this._resyncTimer);
+    this._resyncTimer = undefined;
   }
 
   /**
@@ -325,6 +370,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
    * @param e the dial's value-changing event
    */
   private _onChanging(e: CustomEvent): void {
+    this._cancelResync();
     const { value, low, high } = e.detail;
     if (low != null || high != null) {
       this._selectedLow = low;
@@ -449,9 +495,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const layout = this._layout();
 
     return html`
-      <ha-card class=${fontClass} style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
+      <ha-card role="group" aria-labelledby=${this._nameId} class=${fontClass} style=${`--mt-active-color: ${climateModeColor(colorMode)}`}>
         <div class="header">
-          <div class="name" title=${name}>${name}</div>
+          <div class="name" id=${this._nameId} title=${name}>${name}</div>
           <button class="more" aria-label=${localizeKey(this.hass, 'ui.panel.lovelace.cards.show_more_info', 'More information')} @click=${this._showMoreInfo}>
             <ha-icon icon="mdi:dots-vertical"></ha-icon>
           </button>
@@ -612,8 +658,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     `,
   ];
 
+  /** Release observers and invalidate pending temperature work.
+   * @param none No parameters.
+   */
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._cancelResync();
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
