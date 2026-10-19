@@ -108,6 +108,7 @@ outgoing call_service frames, bundle-related console errors). Any FAIL exits 1.
 The local dist bundle is intercepted over the installed HACS resource URL; a
 never-hit route fails rather than silently testing HACS. Selectors are centralized
 at the top of `run-qa.mjs`; localized chip titles come from rendered row items.
+The runner serves the local build; opening the dashboard by hand uses the HACS-installed version (water-heater cases show configuration errors until 1.10.0 is installed).
 Credentials are injected in browser localStorage only in the top frame on
 `new URL(HA_URL).origin`; initialization is a no-op on other origins and child
 frames. Unexpected top-level origins abort the run and close the context (SSO

@@ -69,6 +69,8 @@ async function main() {
   const plan = JOURNEYS.filter(([id, ids]) => (id !== 'J13' || opts.lang === 'de') && ids.some(enabled));
   if (opts.dry) {
     console.log(JSON.stringify({ language: opts.lang, cases, checks: [
+      { id: 'dashboard: no error cards', description: 'Every hui-error-card across the dashboard: section heading and error message; includes unselected cases' },
+      { id: 'bundle version', description: 'Informational: card version logged by the loaded bundle' },
       { id: 'render', cases: cases.map((c) => c.id), description: 'ha-card, no missing entity, dial, section screenshot' },
       ...plan.map(([id, ids, description]) => ({ id, cases: ids.filter(enabled), description })),
       { id: 'bundle', description: 'Local dist resource route hit' },
@@ -126,6 +128,7 @@ async function main() {
     }
   };
   let served = 0;
+  const bundleVersions = new Set();
   try {
     context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block' });
     context.setDefaultTimeout(TIMEOUT);
@@ -164,7 +167,11 @@ async function main() {
     const bundleError = (text, location = '') => {
       if (/material-thermostat/i.test(`${text} ${location}`)) report.consoleErrors.push(clean({ text, location }));
     };
-    page.on('console', (msg) => { if (msg.type() === 'error') bundleError(msg.text(), msg.location().url); });
+    page.on('console', (msg) => {
+      const text = msg.text();
+      for (const match of text.matchAll(/MATERIAL-THERMOSTAT-CARD\s+v([^\s%]+)/gi)) bundleVersions.add(match[1]);
+      if (msg.type() === 'error') bundleError(text, msg.location().url);
+    });
     page.on('pageerror', (error) => bundleError(error.message, error.stack ?? ''));
     await page.route('**/material-thermostat-card*.js*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle }); served++;
@@ -187,6 +194,49 @@ async function main() {
     const actualLanguage = await evaluate(page, () => document.querySelector('home-assistant').hass.language);
     assert(actualLanguage === opts.lang, `HA language mismatch: requested ${opts.lang}, got ${actualLanguage}; refusing localization checks`);
     report.checks.push({ name: 'HA session language', status: 'PASS', evidence: { requested: opts.lang, actual: actualLanguage, savedToProfile: false } });
+
+    await check('dashboard: no error cards', async () => {
+      // Wait for all dashboard sections, even with --only; do not require healthy cards.
+      await poll(() => evaluate(page, (ids) => {
+        const headings = [];
+        function walk(root) {
+          for (const el of root.querySelectorAll('*')) {
+            if (el.localName === 'hui-heading-card') headings.push(el._config?.heading ?? el.shadowRoot?.textContent ?? el.textContent);
+            if (el.shadowRoot) walk(el.shadowRoot);
+          }
+        }
+        walk(document);
+        return ids.every((id) => headings.some((heading) => heading?.trim() === `QA:${id}`));
+      }, CASES.map(({ id }) => id)), 'all dashboard headings ready', TIMEOUT);
+      const errors = await evaluate(page, async () => {
+        // Lit updates may create further shadow hosts; settle each before descending.
+        async function settle(root) {
+          for (const el of root.children) {
+            if (el.updateComplete) await el.updateComplete;
+            await settle(el);
+            if (el.shadowRoot) await settle(el.shadowRoot);
+          }
+        }
+        await settle(document);
+        function deep(root, selector) {
+          const found = [...root.querySelectorAll(selector)];
+          for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+          return found;
+        }
+        return deep(document, 'hui-error-card').map((card) => {
+          let section = card;
+          while (section && !section.matches('hui-grid-section, hui-section')) section = section.parentElement ?? section.getRootNode().host;
+          const heading = section && deep(section.shadowRoot ?? section, 'hui-heading-card')[0];
+          const title = heading?._config?.heading ?? heading?.shadowRoot?.textContent ?? heading?.textContent ?? '';
+          return {
+            heading: title.match(/QA:[\w-]+/)?.[0] ?? '(outside QA section)',
+            message: String(card._config?.origConfig?.message ?? card._config?.error ?? card.textContent).trim(),
+          };
+        });
+      });
+      assert(errors.length === 0, clean(errors.map(({ heading, message }) => `${heading}: ${message}`).join('\n')));
+      return { errorCards: errors };
+    });
 
     const state = (entity) => evaluate(page, (id) => document.querySelector('home-assistant').hass.states[id], entity);
     const waitState = async (entity, key, value) => poll(async () => {
@@ -513,11 +563,12 @@ async function main() {
     clearTimeout(closeTimer);
     if (!closed) report.checks.push({ name: 'browser shutdown deadline', status: 'FAIL', error: 'Browser did not close cleanly; exiting to terminate Playwright' });
     report.checks.push({ name: 'bundle route hit', status: served ? 'PASS' : 'FAIL', evidence: { served } });
+    report.checks.push({ name: 'bundle version', status: 'INFO', evidence: clean({ source: 'page console', versions: [...bundleVersions], detail: bundleVersions.size ? [...bundleVersions].map((version) => `MATERIAL-THERMOSTAT-CARD v${version}`).join(', ') : 'Version banner not observed' }) });
     report.checks.push({ name: 'bundle console errors', status: report.consoleErrors.length ? 'FAIL' : 'PASS', evidence: { count: report.consoleErrors.length } });
     await writeFile(resolve(out, 'report.json'), JSON.stringify(clean(report), null, 2));
-    console.table(report.checks.map(({ name, status, error }) => ({ check: name, result: status, error: error ?? '' })));
+    console.table(clean(report.checks.map(({ name, status, error, evidence }) => ({ check: name, result: status, error: error ?? (status === 'INFO' ? evidence.detail : '') }))));
     const failures = report.checks.filter((c) => c.status === 'FAIL').length;
-    console.log(`${report.checks.length - failures} PASS / ${failures} FAIL; dev/qa/out/${opts.lang}/report.json`);
+    console.log(`${report.checks.filter((c) => c.status === 'PASS').length} PASS / ${failures} FAIL; dev/qa/out/${opts.lang}/report.json`);
     if (failures) process.exitCode = 1;
     if (!closed) process.exit(1);
   }
