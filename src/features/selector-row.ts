@@ -118,17 +118,19 @@ export class MtSelectorRow extends LitElement {
         display: flex;
         align-items: center;
         justify-content: safe center;
-        /* Spend spare width on the original gap, then shrink equal chips.
-           At seven options / 200px the gap reaches zero and each chip is 28px. */
+        /* Spend spare width on padding and the original gap, then shrink equal
+           chips with neither horizontal padding nor gap under pressure. */
         gap: clamp(
           0px,
           calc((100% - var(--chip-count) * 44px) / max(1, var(--chip-count) - 1)),
           4px
         );
-        padding: 4px 2px;
+        padding: 4px
+          clamp(0px, calc((100% - var(--chip-count) * 44px - (var(--chip-count) - 1) * 4px) / 2), 2px);
         background: var(--mt-surface-container);
         border-radius: var(--mt-shape-full);
-        /* Scroll only when the available width cannot hold 28px per chip. */
+        /* Scroll only when the available width cannot hold 22px per chip.
+           This extreme-width floor is below WCAG 2.5.8's 24px target size. */
         min-width: 0;
         overflow-x: auto;
         overflow-y: hidden;
@@ -142,7 +144,7 @@ export class MtSelectorRow extends LitElement {
            icons never over-stretch when there is spare room. */
         flex: 1 1 44px;
         height: 44px;
-        min-width: 28px;
+        min-width: 22px;
         max-width: 120px;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -150,6 +152,8 @@ export class MtSelectorRow extends LitElement {
         container-type: inline-size;
         border: none;
         border-radius: var(--mt-shape-full);
+        /* Keep the native focus-visible outline inside the scrolling row. */
+        outline-offset: -2px;
         background: transparent;
         color: var(--mt-on-surface-variant);
         cursor: pointer;

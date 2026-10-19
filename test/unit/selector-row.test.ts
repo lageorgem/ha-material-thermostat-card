@@ -39,9 +39,9 @@ describe('mt-selector-row', () => {
         .to.equal(4);
     });
 
-    it('fits seven equal icon chips inside a 200px row without scrolling', async () => {
+    it('fits seven equal icon chips inside a 167px row without scrolling', async () => {
       const container = await fixture<HTMLDivElement>(html`
-        <div style="width: 200px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
+        <div style="width: 167px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
       `);
       const row = container.querySelector('mt-selector-row')!;
       await row.updateComplete;
@@ -52,10 +52,14 @@ describe('mt-selector-row', () => {
         const rect = chip.getBoundingClientRect();
         expect(rect.left).to.be.at.least(bounds.left);
         expect(rect.right).to.be.at.most(bounds.right);
-        expect(rect.width).to.be.at.least(28);
+        expect(rect.width).to.be.at.least(22);
         expect(rect.width).to.be.closeTo(chips[0].getBoundingClientRect().width, 0.02);
       }
-      expect(group.scrollWidth).to.equal(group.clientWidth);
+      expect(group.scrollWidth).to.be.at.most(group.clientWidth + 1);
+      expect(chips[1].getBoundingClientRect().left - chips[0].getBoundingClientRect().right)
+        .to.equal(0);
+      expect(getComputedStyle(group).paddingLeft).to.equal('0px');
+      expect(getComputedStyle(group).paddingRight).to.equal('0px');
     });
 
     it('contains and ellipsizes long labels without overlapping neighbouring chips', async () => {
@@ -87,19 +91,44 @@ describe('mt-selector-row', () => {
       });
     });
 
-    it('scrolls only once equal chips would fall below the 28px minimum', async () => {
+    it('scrolls only once equal chips would fall below the 22px minimum', async () => {
+      const tenItems = Array.from({ length: 10 }, (_, index) => ({
+        ...iconItems[0],
+        value: String(index),
+      }));
       const container = await fixture<HTMLDivElement>(html`
-        <div style="width: 190px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
+        <div style="width: 167px"><mt-selector-row .items=${tenItems}></mt-selector-row></div>
       `);
       const row = container.querySelector('mt-selector-row')!;
       await row.updateComplete;
       const group = row.shadowRoot!.querySelector<HTMLElement>('.chips')!;
       for (const chip of row.shadowRoot!.querySelectorAll('.chip')) {
-        expect(chip.getBoundingClientRect().width).to.equal(28);
+        expect(chip.getBoundingClientRect().width).to.equal(22);
       }
       expect(group.scrollWidth).to.be.greaterThan(group.clientWidth);
       group.scrollLeft = group.scrollWidth;
       expect(group.scrollLeft).to.be.greaterThan(0);
+    });
+
+    it('fits seven chips at the exact 22px floor and keeps focus outlines inset', async () => {
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 154px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const group = row.shadowRoot!.querySelector<HTMLElement>('.chips')!;
+      expect(group.scrollWidth).to.equal(group.clientWidth);
+      const chips = [...row.shadowRoot!.querySelectorAll<HTMLButtonElement>('.chip')];
+      for (const chip of chips) {
+        expect(chip.getBoundingClientRect().width).to.equal(22);
+      }
+      chips[0].focus();
+      expect(row.shadowRoot!.activeElement).to.equal(chips[0]);
+      expect(chips[0].matches(':focus-visible')).to.be.true;
+      const style = getComputedStyle(chips[0]);
+      expect(style.outlineStyle).to.not.equal('none');
+      expect(parseFloat(style.outlineWidth)).to.be.greaterThan(0);
+      expect(parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)).to.be.at.most(0);
     });
 
     const items: SelectorItem[] = [
