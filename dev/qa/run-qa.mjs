@@ -563,7 +563,10 @@ async function main() {
                 const tokens = t.split(/\s+/).map(digits).filter(Boolean);
                 return tokens.some((tok, i) => tok === want || tok + (tokens[i + 1] ?? '') === want);
               };
-              assert(current.some(hit), `Current temperature ${expected.current} not visible: ${a.current}`);
+              // feels_like.show_as_current on climate replaces the reading with the computed
+              // feels-like value, so only presence is asserted (above) in that case.
+              const feelsLike = c.config.feels_like?.show_as_current && scenario.domain === 'climate';
+              if (!feelsLike) assert(current.some(hit), `Current temperature ${expected.current} not visible: ${a.current}`);
             }
           });
         }
