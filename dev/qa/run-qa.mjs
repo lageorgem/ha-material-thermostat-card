@@ -226,7 +226,7 @@ async function main() {
       return { value, title: item.label };
     };
     for (const c of cases) await check(`render:${c.id}`, async () => {
-      const heading = page.locator(S.heading).filter({ hasText: new RegExp(`^QA:${c.id}$`) });
+      const heading = page.locator(S.heading).filter({ hasText: new RegExp(`QA:${c.id}(?![\\w-])`) });
       await heading.waitFor({ state: 'visible' });
       await evaluate(heading, (heading, { id, S }) => {
         function deep(root, selector) {
