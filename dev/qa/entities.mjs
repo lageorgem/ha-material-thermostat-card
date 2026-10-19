@@ -1,3 +1,4 @@
+import { SCENARIOS, AUX } from './matrix.mjs';
 // Data only. Every retained publication is enumerated for symmetric cleanup.
 const device = { identifiers: ['mtqa'], name: 'MT Parity QA' };
 const climate = (id, extra) => ({ domain: 'climate', id, config: {
@@ -9,7 +10,7 @@ const climate = (id, extra) => ({ domain: 'climate', id, config: {
 const single = (id) => ({ temperature_command_topic: `mtqa/${id}/temperature/set` });
 const range = (id) => ({ temperature_low_command_topic: `mtqa/${id}/low/set`, temperature_high_command_topic: `mtqa/${id}/high/set` });
 const presets = (id, modes) => ({ preset_modes: modes, preset_mode_command_topic: `mtqa/${id}/preset/set` });
-export const MQTT_ENTITIES = [
+const MQTT_SCENARIO_ENTITIES = [
   climate('mtqa_full', { modes: ['off', 'heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'],
     ...single('mtqa_full'), ...range('mtqa_full'), ...presets('mtqa_full', ['eco', 'comfort', 'sleep', 'away', 'boost']),
     fan_modes: ['auto', 'low', 'medium', 'high'], fan_mode_command_topic: 'mtqa/mtqa_full/fan/set',
@@ -26,14 +27,29 @@ export const MQTT_ENTITIES = [
       current_temperature_topic: `mtqa/${id}/current`, power_command_topic: `mtqa/${id}/power/set`, min_temp: 40, max_temp: 75, precision: 0.5 },
   })),
 ];
+export const MQTT_ENTITIES = [
+  ...SCENARIOS.filter(({ source }) => source === 'mqtt').map(({ entity_id }) => {
+    const entity = MQTT_SCENARIO_ENTITIES.find(({ domain, id }) => `${domain}.${id}` === entity_id);
+    if (!entity) throw new Error(`Missing MQTT definition: ${entity_id}`);
+    return entity;
+  }),
+  ...AUX.switches.map((entity_id) => {
+    const id = entity_id.split('.')[1];
+    return { domain: 'switch', id, config: { name: id, unique_id: id, default_entity_id: entity_id, device, optimistic: true, command_topic: `mtqa/${id}/set` } };
+  }),
+  ...AUX.buttons.map((entity_id) => {
+    const id = entity_id.split('.')[1];
+    return { domain: 'button', id, config: { name: id, unique_id: id, default_entity_id: entity_id, device, command_topic: `mtqa/${id}/press` } };
+  }),
+  ...Object.entries(AUX.sensors).map(([kind, entity_id]) => {
+    const id = entity_id.split('.')[1];
+    return { domain: 'sensor', id, config: { name: id, unique_id: id, default_entity_id: entity_id, device, state_topic: `mtqa/${id}/state`, device_class: kind, unit_of_measurement: { temperature: '°C', humidity: '%', power: 'W' }[kind] } };
+  }),
+];
 const state = (entity_id, value, attributes) => ({ entity_id, body: { state: value, attributes } });
 export const REST_ENTITIES = [
-  state('water_heater.mtqa_away', 'eco', { friendly_name: 'MTQA Away', supported_features: 15, operation_list: ['off', 'eco', 'electric', 'boost'], operation_mode: 'eco', away_mode: 'on', temperature: 55, current_temperature: 48, min_temp: 40, max_temp: 75, target_temp_step: 1 }),
-  state('water_heater.mtqa_readonly', 'electric', { friendly_name: 'MTQA WH readonly', supported_features: 2, operation_list: ['off', 'electric'], current_temperature: 50, min_temp: 40, max_temp: 75 }),
-  state('water_heater.mtqa_unavailable', 'unavailable', { friendly_name: 'MTQA WH unavailable', supported_features: 3, operation_list: ['off', 'eco'] }),
-  state('climate.mtqa_unavailable', 'unavailable', { friendly_name: 'MTQA Climate unavailable', hvac_modes: ['off', 'heat'], supported_features: 1 }),
-  state('climate.mtqa_auto_range', 'auto', { friendly_name: 'MTQA Auto range', supported_features: 18, hvac_modes: ['off', 'heat_cool', 'auto'], temperature: null, target_temp_low: 20, target_temp_high: 24, current_temperature: 22, hvac_action: 'idle', preset_modes: ['none', 'eco'], preset_mode: 'none' }),
-  state('climate.mtqa_off', 'off', { friendly_name: 'MTQA Off', supported_features: 1, hvac_modes: ['off', 'heat'], temperature: 21, current_temperature: 19.5, hvac_action: 'off' }),
+  ...SCENARIOS.filter(({ source }) => source === 'rest').map(({ entity_id, body }) => ({ entity_id, body })),
+  state(AUX.input_select, 'medium', { friendly_name: 'MTQA Select', options: ['low', 'medium', 'high'] }),
 ];
 export const RETAINED_STATES = Object.entries({
   'mtqa/mtqa_full/current': '21.3', 'mtqa/mtqa_full/action': 'heating',
@@ -41,6 +57,7 @@ export const RETAINED_STATES = Object.entries({
   'mtqa/mtqa_heat/current': '20.4', 'mtqa/mtqa_heat/action': 'idle',
   'mtqa/mtqa_reject/current': '20', 'mtqa/mtqa_reject/temperature': '21', 'mtqa/mtqa_reject/mode': 'heat',
   'mtqa/mtqa_fan/current': '23', 'mtqa/mtqa_tank/current': '47.5', 'mtqa/mtqa_basic/current': '52',
+  'mtqa/mtqa_temp/state': '22.4', 'mtqa/mtqa_humidity/state': '48', 'mtqa/mtqa_power/state': '120',
 }).map(([topic, payload]) => ({ topic, payload, retain: true }));
 export const DISCOVERY = MQTT_ENTITIES.map(({ domain, id, config }) => ({ topic: `homeassistant/${domain}/${id}/config`, payload: JSON.stringify(config), retain: true }));
 // Optimistic MQTT entities need service calls (not unechoed state topics) to initialize targets.
@@ -55,3 +72,15 @@ export const INITIAL_SERVICES = [
   { domain, service: domain === 'climate' ? 'set_hvac_mode' : 'set_operation_mode', data: { entity_id: `${domain}.${id}`, [domain === 'climate' ? 'hvac_mode' : 'operation_mode']: mode } },
   ...(temperature ? [{ domain, service: 'set_temperature', data: { entity_id: `${domain}.${id}`, ...temperature } }] : []),
 ]);
+// Explicit selector initialization makes repeated seeding deterministic too.
+INITIAL_SERVICES.push(
+  ...[
+    ['mtqa_full', 'set_preset_mode', 'preset_mode', 'eco'],
+    ['mtqa_full', 'set_fan_mode', 'fan_mode', 'auto'],
+    ['mtqa_full', 'set_swing_mode', 'swing_mode', 'off'],
+    ['mtqa_full', 'set_swing_horizontal_mode', 'swing_horizontal_mode', 'off'],
+    ['mtqa_heat', 'set_preset_mode', 'preset_mode', 'eco'],
+    ['mtqa_fan', 'set_fan_mode', 'fan_mode', 'low'],
+  ].map(([id, service, key, value]) => ({ domain: 'climate', service, data: { entity_id: `climate.${id}`, [key]: value } })),
+  ...AUX.switches.map((entity_id) => ({ domain: 'switch', service: 'turn_off', data: { entity_id } })),
+);

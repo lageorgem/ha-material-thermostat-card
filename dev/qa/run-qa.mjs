@@ -1,575 +1,704 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
-import { CASES, URL_PATH } from './dashboard.mjs';
+import { SCENARIOS, AUX } from './matrix.mjs';
+import { buildCases } from './cases.mjs';
+import { URL_PATH } from './dashboard.mjs';
 import { credentials, safeError, TIMEOUT } from './ha-client.mjs';
 
-// All component-internal selectors live here. CSS pierces Playwright's open shadow roots.
+// Component internals: keep all CSS knowledge in this block, including browser-side scans.
 const S = {
-  card: 'material-thermostat-card', stock: 'hui-thermostat-card', heading: 'hui-heading-card',
-  shell: 'ha-card', dial: 'mt-circular-dial', slider: '[role="slider"]',
-  increase: '.adjust .step:last-child', value: '.value-text',
-  row: 'mt-selector-row', chip: '.chip', dropdown: 'mt-dropdown', trigger: '.trigger', option: '.opt',
+  card: 'material-thermostat-card', stock: 'hui-thermostat-card', shell: 'ha-card',
+  ha: 'home-assistant', error: 'hui-error-card', section: 'hui-grid-section, hui-section',
+  heading: 'hui-heading-card', icon: 'ha-icon', svgIcon: 'ha-svg-icon', path: 'path[d]',
+  dial: 'mt-circular-dial', slider: '[role="slider"]',
+  increase: 'button[aria-label="Increase temperature"]', decrease: 'button[aria-label="Decrease temperature"]',
+  stateLabel: '.center .mode', current: '.num.current, .current-primary, .current-marker',
+  value: '.value-text', accessibleText: '.sr-only', center: '.center',
+  selector: 'mt-climate-selector', row: 'mt-selector-row', chip: '.chip[title]',
+  dropdown: 'mt-dropdown', trigger: 'button[aria-haspopup="listbox"]', option: '[role="option"]',
+  away: 'mt-water-heater-away', awayButton: 'button[aria-pressed]',
+  controls: '.chip, button[aria-haspopup="listbox"], button[aria-pressed]',
+  active: '.active, [aria-pressed="true"], [aria-selected="true"]',
+  excludedLayout: '[role="listbox"], [role="menu"], [role="dialog"], [popover], .menu, .popover',
+  orbit: '.orbit', scrollRow: '.chips',
+  aux: { 'input-select': 'mt-input-select', 'switch-group': 'mt-switch-group',
+    'switch-list': 'mt-switch-list', 'button-list': 'mt-button-list', 'sensor-list': 'mt-sensor-list',
+    'entity-tile': 'mt-entity-tile', comfort: 'mt-comfort' },
+  stockOption: 'option, ha-dropdown-item, ha-list-item, mwc-list-item, [role="option"], [value], [data-value], button[title]',
 };
-const JOURNEYS = [
-  ['J1', ['full-icons'], 'HVAC cool frame + live state, restore original mode'],
-  ['J2', ['full-icons'], 'Preset/fan/swing/horizontal frames + live attributes'],
-  ['J3', ['full-icons'], 'One debounced temperature frame, previous + 0.5'],
-  ['J4', ['range-mqtt'], 'Range temperature frame includes low and high'],
-  ['J5', ['range-auto'], 'Two sliders in auto mode'],
-  ['J6', ['reject'], 'Rejected optimistic temperature returns to server value'],
-  ['J7', ['fan-readonly', 'wh-readonly'], 'Read-only: no increment or sliders'],
-  ['J8', ['wh-tank'], 'Water heater increment and Eco operation frame + state'],
-  ['J9', ['wh-away'], 'Away toggle frame has away_mode false'],
-  ['J10', ['climate-unavailable', 'wh-unavailable'], 'Unavailable label; mode interaction emits no service calls'],
-  ['J11', ['stock-yaml'], 'Stock syntax offers only heat/cool/off'],
-  ['J12', CASES.map((c) => c.id), 'Every selected section: no overlap or clipped ha-card'],
-  ['J13', ['heat', 'full-icons', 'wh-tank'], 'German slider decimal uses comma; HVAC and water heater titles translated'],
-];
+const CHECKS = ['sliders', 'plus-minus', 'unavailable', 'state-label', 'selectors', 'labels', 'away', 'aux', 'text', 'layout', 'values'];
+const SERVICES = {
+  hvac: ['climate', 'set_hvac_mode', 'hvac_mode', 'state'],
+  preset: ['climate', 'set_preset_mode', 'preset_mode', 'preset_mode'],
+  fan: ['climate', 'set_fan_mode', 'fan_mode', 'fan_mode'],
+  swing: ['climate', 'set_swing_mode', 'swing_mode', 'swing_mode'],
+  swing_horizontal: ['climate', 'set_swing_horizontal_mode', 'swing_horizontal_mode', 'swing_horizontal_mode'],
+  operation: ['water_heater', 'set_operation_mode', 'operation_mode', 'state'],
+};
+const kindOf = (type) => ({ 'climate-hvac-modes': 'hvac', 'climate-preset-modes': 'preset',
+  'climate-fan-modes': 'fan', 'climate-swing-modes': 'swing',
+  'climate-swing-horizontal-modes': 'swing_horizontal', 'water-heater-operation-modes': 'operation' })[type] ?? type;
+const slug = (s) => String(s).replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'section';
+const assert = (ok, message) => { if (!ok) throw new Error(message); };
+const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function options() {
+  const opts = { lang: null, scheme: 'light', quick: false, headed: false, dry: false, only: null };
   const args = process.argv.slice(2);
-  const opts = { lang: 'en', only: null, headed: false, dry: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--dry-run') opts.dry = true;
     else if (arg === '--headed') opts.headed = true;
-    else if (arg === '--lang' || arg === '--only') {
+    else if (arg === '--quick') opts.quick = true;
+    else if (['--lang', '--scheme', '--only'].includes(arg)) {
       const value = args[++i];
-      if (!value || value.startsWith('--')) throw new Error(`${arg} requires a value`);
-      if (arg === '--lang') opts.lang = value; else opts.only = value.split(',');
+      assert(value && !value.startsWith('--'), `${arg} requires a value`);
+      if (arg === '--lang') opts.lang = value;
+      else if (arg === '--scheme') opts.scheme = value;
+      else opts.only = value.split(',');
     } else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]+)*$/.test(opts.lang)) throw new Error('Invalid language code');
-  for (const id of opts.only ?? []) if (!CASES.some((c) => c.id === id)) throw new Error(`Unknown case: ${id}`);
+  assert(!opts.lang || /^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]+)*$/.test(opts.lang), 'Invalid language code');
+  assert(['light', 'dark'].includes(opts.scheme), '--scheme must be light or dark');
   return opts;
 }
-function assert(ok, message) { if (!ok) throw new Error(message); }
-async function pollUntil(fn, description, timeout = 5000) {
-  const end = Date.now() + timeout;
-  do {
-    const value = await fn();
-    if (value) return value;
-    // Bounded condition polling, never a readiness sleep.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  } while (Date.now() < end);
-  throw new Error(`Timeout: ${description} (${timeout} ms)`);
+function scenarioFor(c) {
+  const scenario = typeof c.scenario === 'object' ? c.scenario : SCENARIOS.find((s) => s.id === c.scenario);
+  assert(scenario, `Unknown scenario for ${c.id}`);
+  return scenario;
 }
-async function observeFor(fn, duration = 1200) {
-  const end = Date.now() + duration;
-  do {
-    await fn();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  } while (Date.now() < end);
+function journeys(c, opts) {
+  if (c.kind !== 'ours' || !c.expect) return [];
+  const s = scenarioFor(c), e = c.expect, result = [];
+  if (e.interactive && ['features-climate', 'features-wh'].includes(c.view)) {
+    for (const selector of e.selectors) {
+      const values = selector.items.filter((v) => v !== selector.active);
+      for (const value of opts.quick ? values.slice(0, 1) : values) result.push({ type: 'J-select', selector, value });
+    }
+  }
+  const optionsSection = /options/i.test(c.section);
+  if (e.interactive && optionsSection && ['s-c-mqtt-full', 's-c-mqtt-range', 's-w-mqtt-tank'].includes(c.view)
+      && c.config.show_current_as_primary === false && c.config.show_state_label === false) result.push({ type: 'J-dial' });
+  if (c.view === 'features-wh' && /^(?:s-)?w-away-(on|off)$/.test(s.id) && e.away) result.push({ type: 'J-away' });
+  if (/^(?:s-)?[cw]-unavailable$/.test(s.id)) result.push({ type: 'J-unavailable' });
+  // Reject/REST-away/unavailable journeys intentionally exercise guarded controls
+  // even though these fixtures do not echo service calls (interactive=false).
+  if (optionsSection && c.view === 's-c-mqtt-reject' && c.config.show_current_as_primary === false
+      && c.config.show_state_label === false && (c.config.dial_style ?? c.config.dial?.style) === 'halo') result.push({ type: 'J-reject' });
+  if (e.interactive && c.view === 'aux') for (const feature of e.aux) {
+    if (['input-select', 'switch-group', 'switch-list', 'button-list'].includes(feature)) result.push({ type: 'J-aux', feature });
+  }
+  if (!opts.lang || !/^en(?:-GB)?$/i.test(opts.lang)) result.push({ type: 'J-locale' });
+  return result;
+}
+
+// Executed in a bounded evaluation. No token, network calls or mutations here.
+function inspect(host, S) {
+  function deep(root, selector) {
+    const found = [...root.querySelectorAll(selector)];
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+    return found;
+  }
+  function text(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (['STYLE', 'SCRIPT'].includes(node.nodeName)) return '';
+    return [...node.childNodes, ...(node.shadowRoot?.childNodes ?? [])].map(text).join(' ');
+  }
+  const visible = (el) => {
+    const style = getComputedStyle(el), r = el.getBoundingClientRect();
+    return style.display !== 'none' && !['hidden', 'collapse'].includes(style.visibility) && Number(style.opacity) !== 0 && r.width > 0 && r.height > 0;
+  };
+  const disabled = (el) => el.disabled === true || el.getAttribute('aria-disabled') === 'true';
+  const dial = deep(host, S.dial)[0], shell = deep(host, S.shell)[0];
+  const rowInfo = (feature) => {
+    const row = deep(feature, S.row)[0];
+    const controls = row ? deep(row, S.chip + ', ' + S.option).filter(visible) : [];
+    return { kind: feature.kind, display: row?.display, items: (row?.items ?? []).map((i) => ({ ...i })),
+      controls: controls.map((el, i) => ({ value: row?.items?.[i]?.value,
+        label: el.title || text(el).trim(), active: el.matches(S.active), disabled: disabled(el) })),
+      triggerDisabled: row && deep(row, S.trigger).map(disabled) };
+  };
+  const bounds = shell?.getBoundingClientRect(), overflow = [], scroll = [];
+  function layout(root, clipped = false) {
+    for (const el of root.children) {
+      if (el.matches(S.excludedLayout)) continue;
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || Number(style.opacity) === 0) continue;
+      const r = el.getBoundingClientRect();
+      const scrolling = el.matches(S.scrollRow) && el.scrollWidth > el.clientWidth + 2;
+      if (scrolling) scroll.push({ width: el.clientWidth, scrollWidth: el.scrollWidth });
+      if (visible(el) && !el.matches(S.orbit) && bounds && !clipped &&
+          (r.left < bounds.left - 2 || r.right > bounds.right + 2 || r.top < bounds.top - 2 || r.bottom > bounds.bottom + 2)) {
+        overflow.push({ tag: el.localName, class: el.className?.baseVal ?? el.className,
+          left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+      }
+      layout(el, clipped || scrolling);
+      if (el.shadowRoot) layout(el.shadowRoot, clipped || scrolling);
+    }
+  }
+  if (shell) { layout(shell); if (shell.shadowRoot) layout(shell.shadowRoot); }
+  const away = deep(host, S.away).map((el) => ({ display: el.display, label: el.label,
+    text: text(el).trim(), buttons: deep(el, S.awayButton).map((b) => ({ pressed: b.getAttribute('aria-pressed'), disabled: disabled(b) })) }));
+  const current = dial ? deep(dial, S.current).filter(visible).map(text) : [];
+  // Read-only/current-primary center has no separate current marker.
+  if (dial && dial.current != null && (dial.readonly || dial.showCurrentAsPrimary)) current.push(...deep(dial, S.value).filter(visible).map(text));
+  return { text: text(host), dial: dial && { disabled: dial.disabled, step: dial.step, current: dial.current },
+    sliders: dial ? deep(dial, S.slider).map((el) => ({ value: Number(el.getAttribute('aria-valuenow')),
+      min: Number(el.getAttribute('aria-valuemin')), max: Number(el.getAttribute('aria-valuemax')), text: el.getAttribute('aria-valuetext'), disabled: disabled(el) })) : [],
+    increase: dial ? deep(dial, S.increase).length : 0, decrease: dial ? deep(dial, S.decrease).length : 0,
+    stateLabels: dial ? deep(dial, S.stateLabel).filter(visible).map(text) : [],
+    controls: deep(host, S.controls).map(disabled), selectors: deep(host, S.selector).map(rowInfo), away,
+    aux: Object.fromEntries(Object.entries(S.aux).map(([k, v]) => [k, deep(host, v).map((el) => text(el).trim() || (deep(el, S.controls).length ? 'controls' : ''))])),
+    current, overflow, scroll, bounds: bounds?.toJSON(),
+  };
 }
 
 async function main() {
   const opts = options();
-  const cases = CASES.filter((c) => !opts.only || opts.only.includes(c.id));
-  const enabled = (id) => cases.some((c) => c.id === id);
-  const plan = JOURNEYS.filter(([id, ids]) => (id !== 'J13' || opts.lang === 'de') && ids.some(enabled));
+  const allCases = buildCases({ theme: undefined });
+  const views = [...new Set(allCases.map((c) => c.view))];
+  for (const view of opts.only ?? []) assert(views.includes(view), `Unknown view: ${view}`);
+  let cases = allCases.filter((c) => !opts.only || opts.only.includes(c.view));
+  assert(new Set(cases.map((c) => c.id)).size === cases.length, 'Case IDs must be unique');
+  const selectedViews = views.filter((v) => cases.some((c) => c.view === v));
   if (opts.dry) {
-    console.log(JSON.stringify({ language: opts.lang, cases, checks: [
-      { id: 'dashboard: no error cards', description: 'Every hui-error-card across the dashboard: section heading and error message; includes unselected cases' },
-      { id: 'bundle version', description: 'Informational: card version logged by the loaded bundle' },
-      { id: 'render', cases: cases.map((c) => c.id), description: 'ha-card, no missing entity, dial, section screenshot' },
-      ...plan.map(([id, ids, description]) => ({ id, cases: ids.filter(enabled), description })),
-      { id: 'bundle', description: 'Local dist resource route hit' },
-      { id: 'console', description: 'No bundle-related console errors/pageerrors' },
-    ] }, null, 2)); return;
+    for (const view of selectedViews) {
+      const vc = cases.filter((c) => c.view === view);
+      const plan = vc.flatMap((c) => journeys(c, opts).map((j) => `${c.id}: ${j.type}${j.selector ? ` ${j.selector.type}=${j.value}` : ''}${j.feature ? ` ${j.feature}` : ''}`));
+      console.log(`view ${view}: ${vc.length} cases (${vc.filter((c) => c.kind === 'ours').length} ours); ${1 + vc.filter((c) => c.expect).length * CHECKS.length} invariant checks; ${plan.length} journeys`);
+      console.log(`  cases: ${vc.map((c) => c.id).join(', ')}`);
+      for (const j of plan) console.log(`  ${j}`);
+    }
+    console.log(`Checks per our case: ${CHECKS.join(', ')}`);
+    console.log('Stock: render only. Every view: all cases, error-card scan, icons, section screenshots.');
+    console.log(`TOTAL: ${selectedViews.length} views; ${cases.length} cases; ${selectedViews.length + cases.filter((c) => c.expect).length * CHECKS.length} invariant checks; ${cases.flatMap((c) => journeys(c, opts)).length} journeys`);
+    console.log(`Language: ${opts.lang ?? 'user session (J-locale conditional)'}; scheme: ${opts.scheme}; quick: ${opts.quick}; OFFLINE (no credentials/browser/build required)`);
+    return;
   }
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-  const bundlePath = resolve(root, 'dist/material-thermostat-card.js');
-  let bundle;
-  try { bundle = await readFile(bundlePath, 'utf8'); } catch { throw new Error('Missing dist/material-thermostat-card.js; run npm run build in this worktree'); }
+  const bundle = await readFile(resolve(root, 'dist/material-thermostat-card.js'), 'utf8').catch(() => { throw new Error('Missing local dist build; run npm run build in this worktree'); });
   const auth = credentials();
-  const out = resolve(root, 'dev/qa/out', opts.lang);
-  await mkdir(out, { recursive: true });
-  // Lazy import: dry-run has no browser/dependency/network requirements.
+  const clean = (value) => JSON.parse(JSON.stringify(value).split(auth.token).join('[REDACTED]'));
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ channel: 'chrome', headless: !opts.headed, timeout: TIMEOUT });
-  const report = { language: opts.lang, cases: cases.map(({ id, entity }) => ({ id, entity })), checks: [], frames: [], consoleErrors: [] };
-  const clean = (value) => JSON.parse(JSON.stringify(value).split(auth.token).join('[REDACTED]'));
-  let context, fatal;
-  const abort = (error) => {
-    fatal ??= error;
-    // Closing the context cancels evaluations/actions, including a wedged renderer.
-    void context?.close().catch(() => {});
-    return fatal;
-  };
+  const report = { language: opts.lang, scheme: opts.scheme, cases, checks: [], frames: [], consoleErrors: [], bundleRouteHit: 0 };
+  let context, page, fatal, out, currentView = 'setup';
+  const abort = (error) => { fatal ??= error; void context?.close().catch(() => {}); return fatal; };
   const bounded = async (fn, description, timeout = TIMEOUT) => {
     if (fatal) throw fatal;
     let timer;
     try {
-      return await Promise.race([
-        Promise.resolve().then(fn),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => reject(abort(new Error(`Deadline: ${description} (${timeout} ms); context closed`))), timeout);
-        }),
-      ]);
+      return await Promise.race([Promise.resolve().then(fn), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(abort(new Error(`Deadline: ${description} (${timeout} ms); context closed`))), timeout);
+      })]);
     } finally { clearTimeout(timer); }
   };
   const evaluate = (target, fn, arg) => bounded(() => target.evaluate(fn, arg), 'frontend evaluation');
   const poll = (fn, description, timeout = 5000) => bounded(async () => {
-    try { return await pollUntil(fn, description, timeout); }
-    catch (error) {
-      if (String(error.message).startsWith('Timeout:')) throw abort(error);
-      throw error;
-    }
-  }, description, timeout);
-  const observe = (fn, duration = 1200) => bounded(() => observeFor(fn, duration), 'negative observation', duration + 1000);
-  const check = async (name, fn) => {
+    const end = Date.now() + timeout;
+    do {
+      const value = await fn();
+      if (value) return value;
+      await new Promise((r) => setTimeout(r, 50));
+    } while (Date.now() < end);
+    throw abort(new Error(`Timeout: ${description} (${timeout} ms); context closed`));
+  }, description, timeout + 100);
+  // Observation windows are deliberate negative assertions, not readiness sleeps.
+  const observe = (fn, duration = 1200) => bounded(async () => {
+    const end = Date.now() + duration;
+    do { await fn(); await new Promise((r) => setTimeout(r, 25)); } while (Date.now() < end);
+    await fn();
+  }, 'negative observation', duration + 1000);
+  const check = async (name, fn, timeout = 120000) => {
     const start = report.frames.length;
-    try {
-      const evidence = await bounded(fn, name, 120000);
-      report.checks.push({ name, status: 'PASS', evidence: clean(evidence ?? {}), frames: [start, report.frames.length] });
-    } catch (error) {
-      report.checks.push({ name, status: 'FAIL', error: safeError(error), frames: [start, report.frames.length] });
+    try { report.checks.push({ name, view: currentView, status: 'PASS', evidence: clean(await bounded(fn, name, timeout) ?? {}), frames: [start, report.frames.length] }); }
+    catch (error) {
+      report.checks.push({ name, view: currentView, status: 'FAIL', error: safeError(error), frames: [start, report.frames.length] });
       if (fatal) throw fatal;
     }
   };
-  let served = 0;
-  const bundleVersions = new Set();
+  const warn = (name, evidence) => report.checks.push({ name, view: currentView, status: 'WARN', evidence: clean(evidence) });
+  const card = (c) => page.locator(`[data-mtqa-id=${JSON.stringify(c.id)}]`);
+  const snapshot = (c) => evaluate(card(c), inspect, S);
+  const state = (id) => evaluate(page, ({ id, S }) => document.querySelector(S.ha).hass.states[id], { id, S });
+  const stateValue = (s, key) => key === 'state' ? s?.state : s?.attributes?.[key];
+  const waitState = (id, key, value, timeout = 5000) => poll(async () => equal(stateValue(await state(id), key), value), `${id}.${key} restore/convergence`, Math.max(1, timeout));
+  const call = (domain, service, id, data) => evaluate(page, ({ domain, service, id, data, S }) =>
+    document.querySelector(S.ha).hass.callService(domain, service, { ...data, entity_id: id }), { domain, service, id, data, S });
+  const matching = (start, id) => report.frames.slice(start).filter((f) => {
+    const ids = f.target?.entity_id ?? f.service_data?.entity_id;
+    return Array.isArray(ids) ? ids.includes(id) : ids === id;
+  });
+  const exactFrame = async (start, id, domain, service, data = {}) => {
+    await poll(() => matching(start, id).length > 0, `${domain}.${service} frame`);
+    await observe(() => assert(matching(start, id).length === 1, `Expected exactly one call for ${id}; got ${matching(start, id).length}`));
+    const [f] = matching(start, id);
+    assert(f.domain === domain && f.service === service && Object.entries(data).every(([k, v]) => equal(f.service_data?.[k], v)), `Wrong frame: ${JSON.stringify(f)}; expected ${domain}.${service} ${JSON.stringify(data)}`);
+    return f;
+  };
+  const restore = async (id, domain, service, data, expected) => {
+    const start = report.frames.length;
+    await call(domain, service, id, data);
+    await exactFrame(start, id, domain, service, data);
+    for (const [key, value] of Object.entries(expected)) await waitState(id, key, value);
+  };
+  const selectorHost = async (c, type) => {
+    const hosts = card(c).locator(S.selector), kind = kindOf(type);
+    for (let i = 0; i < await hosts.count(); i++) if (await evaluate(hosts.nth(i), (el) => el.kind) === kind) return hosts.nth(i);
+    throw new Error(`Missing ${type}`);
+  };
+  const pick = async (host, display, value) => {
+    const row = host.locator(S.row).first();
+    const items = await evaluate(row, (el) => el.items.map((i) => ({ value: i.value, label: i.label })));
+    const index = items.findIndex((i) => i.value === value);
+    assert(index >= 0, `Missing option ${value}`);
+    if (display === 'icons') await row.locator(S.chip).nth(index).click();
+    else {
+      await row.locator(S.trigger).click();
+      await row.locator(S.option).nth(index).click();
+    }
+  };
   try {
-    context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block' });
-    context.setDefaultTimeout(TIMEOUT);
-    context.setDefaultNavigationTimeout(TIMEOUT);
+    context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, colorScheme: opts.scheme, serviceWorkers: 'block' });
+    context.setDefaultTimeout(TIMEOUT); context.setDefaultNavigationTimeout(60000);
     await context.addInitScript(({ url, token }) => {
       if (window !== window.top || location.origin !== new URL(url).origin) return;
-      localStorage.setItem('hassTokens', JSON.stringify({ hassUrl: url, clientId: `${url}/`, access_token: token, token_type: 'Bearer', expires_in: 315360000, expires: Date.now() + 315360000000, refresh_token: 'x' }));
+      localStorage.setItem('hassTokens', JSON.stringify({ hassUrl: url, clientId: `${url}/`, access_token: token,
+        token_type: 'Bearer', expires_in: 315360000, expires: Date.now() + 315360000000, refresh_token: 'x' }));
     }, auth);
-    const page = await context.newPage();
-    page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(60000);
-    const requireHAOrigin = (url) => {
-      if (new URL(url).origin !== new URL(auth.url).origin) {
-        // Do not include the redirect URL: an SSO URL may contain credentials.
-        throw abort(new Error('Unexpected top-level origin; only the HA origin is allowed; context closed'));
-      }
+    page = await context.newPage();
+    const requireOrigin = (url) => {
+      if (new URL(url).origin !== new URL(auth.url).origin) throw abort(new Error('Unexpected top-level origin; only HA origin allowed; context closed'));
     };
-    page.on('framenavigated', (frame) => {
-      if (frame === page.mainFrame()) {
-        try { requireHAOrigin(frame.url()); } catch { /* abort recorded; pending work is cancelled. */ }
-      }
-    });
+    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) { try { requireOrigin(frame.url()); } catch { /* abort recorded */ } } });
     await page.route('**/*', async (route) => {
-      const request = route.request();
-      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-        try { requireHAOrigin(request.url()); } catch { await route.abort().catch(() => {}); return; }
+      if (route.request().isNavigationRequest() && route.request().frame() === page.mainFrame()) {
+        try { requireOrigin(route.request().url()); } catch { await route.abort().catch(() => {}); return; }
       }
       await route.continue();
     });
+    await page.route('**/material-thermostat-card*.js*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle }); report.bundleRouteHit++;
+    });
     page.on('websocket', (ws) => ws.on('framesent', ({ payload }) => {
       try {
-        const msg = JSON.parse(String(payload));
-        if (msg.type === 'call_service') report.frames.push(clean({ type: msg.type, domain: msg.domain, service: msg.service, service_data: msg.service_data, target: msg.target }));
-      } catch { /* Binary and non-JSON transport frames are not service evidence. */ }
+        const f = JSON.parse(String(payload));
+        if (f.type === 'call_service') report.frames.push(clean({ at: Date.now(), view: currentView, type: f.type,
+          domain: f.domain, service: f.service, service_data: f.service_data, target: f.target }));
+      } catch { /* Never retain authentication/non-service frames. */ }
     }));
-    const bundleError = (text, location = '') => {
-      if (/material-thermostat/i.test(`${text} ${location}`)) report.consoleErrors.push(clean({ text, location }));
-    };
-    page.on('console', (msg) => {
-      const text = msg.text();
-      for (const match of text.matchAll(/MATERIAL-THERMOSTAT-CARD\s+v([^\s%]+)/gi)) bundleVersions.add(match[1]);
-      if (msg.type() === 'error') bundleError(text, msg.location().url);
-    });
-    page.on('pageerror', (error) => bundleError(error.message, error.stack ?? ''));
-    await page.route('**/material-thermostat-card*.js*', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle }); served++;
-    });
-    await bounded(() => page.goto(`${auth.url}/${URL_PATH}/0`, { waitUntil: 'domcontentloaded', timeout: 60000 }), 'HA navigation', 60000);
-    requireHAOrigin(page.url());
-    await bounded(() => page.waitForFunction(() => document.querySelector('home-assistant')?.hass?.states && customElements.get('material-thermostat-card'), null, { timeout: TIMEOUT }), 'HA readiness');
-    assert(served > 0, 'Local dist route was never hit; refusing to test installed HACS bundle');
-    if (opts.lang !== 'en') {
-      await evaluate(page, async (language) => {
-        const ha = document.querySelector('home-assistant');
-        if (typeof ha._selectLanguage !== 'function') throw new Error('HA in-session language switching is unavailable');
-        // false is essential: never save a QA language to the real user's profile.
-        await ha._selectLanguage(language, false);
-      }, opts.lang);
-      // HA loads component translation chunks asynchronously after switching.
-      // This bounded settling window is separate from the language assertion.
-      await bounded(() => page.waitForTimeout(8000), 'HA translation settling', 10000);
+    page.on('console', (msg) => { if (msg.type() === 'error') report.consoleErrors.push(clean({ text: msg.text(), location: msg.location().url })); });
+    page.on('pageerror', (e) => report.consoleErrors.push(clean({ text: e.message, location: e.stack ?? '' })));
+    await bounded(() => page.goto(`${auth.url}/${URL_PATH}/${selectedViews[0]}`, { waitUntil: 'domcontentloaded' }), 'initial navigation', 60000);
+    requireOrigin(page.url());
+    await poll(() => evaluate(page, (S) => !!document.querySelector(S.ha)?.hass?.states, S), 'HA ready', TIMEOUT);
+    if (opts.lang) {
+      await evaluate(page, async ({ lang, S }) => {
+        const ha = document.querySelector(S.ha);
+        if (typeof ha._selectLanguage !== 'function') throw new Error('In-session language switch unavailable');
+        await ha._selectLanguage(lang, false); // Never save to the real user's profile.
+      }, { lang: opts.lang, S });
+      await poll(() => evaluate(page, ({ lang, S }) => document.querySelector(S.ha).hass.language === lang, { lang: opts.lang, S }), 'session language');
     }
-    const actualLanguage = await evaluate(page, () => document.querySelector('home-assistant').hass.language);
-    assert(actualLanguage === opts.lang, `HA language mismatch: requested ${opts.lang}, got ${actualLanguage}; refusing localization checks`);
-    report.checks.push({ name: 'HA session language', status: 'PASS', evidence: { requested: opts.lang, actual: actualLanguage, savedToProfile: false } });
+    report.language = await evaluate(page, (S) => document.querySelector(S.ha).hass.language, S);
+    assert(/^[a-zA-Z0-9-]+$/.test(report.language), 'Unsafe session language');
+    out = resolve(root, 'dev/qa/out', `${report.language}-${opts.scheme}`);
+    await mkdir(out, { recursive: true });
+    const theme = await evaluate(page, (S) => Object.keys(document.querySelector(S.ha).hass.themes?.themes ?? {})[0], S);
+    cases = buildCases({ theme }).filter((c) => selectedViews.includes(c.view));
+    report.cases = cases;
 
-    await check('dashboard: no error cards', async () => {
-      // Wait for all dashboard sections, even with --only; do not require healthy cards.
-      await poll(() => evaluate(page, (ids) => {
-        const headings = [];
-        function walk(root) {
-          for (const el of root.querySelectorAll('*')) {
-            if (el.localName === 'hui-heading-card') headings.push(el._config?.heading ?? el.shadowRoot?.textContent ?? el.textContent);
-            if (el.shadowRoot) walk(el.shadowRoot);
-          }
+    for (const view of selectedViews) {
+      currentView = view;
+      const vc = cases.filter((c) => c.view === view);
+      // Large matrix views get a finite budget proportional to their declared work.
+      const viewBudget = 120000 + vc.length * 12000 + vc.flatMap((c) => journeys(c, opts)).length * 120000;
+      await bounded(async () => {
+        if (new URL(page.url()).pathname !== `/${URL_PATH}/${view}`) {
+          // SPA navigation keeps the in-session language; a reload would reset it.
+          await evaluate(page, (path) => { history.pushState(null, '', path); window.dispatchEvent(new CustomEvent('location-changed')); }, `/${URL_PATH}/${view}`);
         }
-        walk(document);
-        return ids.every((id) => headings.some((heading) => heading?.trim() === `QA:${id}`));
-      }, CASES.map(({ id }) => id)), 'all dashboard headings ready', TIMEOUT);
-      const errors = await evaluate(page, async () => {
-        // Lit updates may create further shadow hosts; settle each before descending.
-        async function settle(root) {
-          for (const el of root.children) {
-            if (el.updateComplete) await el.updateComplete;
-            await settle(el);
-            if (el.shadowRoot) await settle(el.shadowRoot);
-          }
-        }
-        await settle(document);
-        function deep(root, selector) {
-          const found = [...root.querySelectorAll(selector)];
-          for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
-          return found;
-        }
-        return deep(document, 'hui-error-card').map((card) => {
-          let section = card;
-          while (section && !section.matches('hui-grid-section, hui-section')) section = section.parentElement ?? section.getRootNode().host;
-          const heading = section && deep(section.shadowRoot ?? section, 'hui-heading-card')[0];
-          const title = heading?._config?.heading ?? heading?.shadowRoot?.textContent ?? heading?.textContent ?? '';
-          return {
-            heading: title.match(/QA:[\w-]+/)?.[0] ?? '(outside QA section)',
-            message: String(card._config?.origConfig?.message ?? card._config?.error ?? card.textContent).trim(),
-          };
-        });
-      });
-      assert(errors.length === 0, clean(errors.map(({ heading, message }) => `${heading}: ${message}`).join('\n')));
-      return { errorCards: errors };
-    });
-
-    const state = (entity) => evaluate(page, (id) => document.querySelector('home-assistant').hass.states[id], entity);
-    const waitState = async (entity, key, value) => poll(async () => {
-      const s = await state(entity);
-      return (key === 'state' ? s?.state : s?.attributes?.[key]) === value && s;
-    }, `${entity}.${key}=${value}`);
-    const sections = new Map();
-    const card = (id) => {
-      assert(sections.has(id), `Section ${id} did not render`);
-      return sections.get(id).locator(S.card);
-    };
-    const dial = (id) => card(id).locator(S.dial);
-    const cardText = (id) => evaluate(card(id), (host) => {
-      const text = (node) => {
-        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
-        if (node.nodeType === Node.ELEMENT_NODE && ['STYLE', 'SCRIPT'].includes(node.tagName)) return '';
-        // Keep light DOM too: ha-card projects its content through a shadow slot.
-        return [...node.childNodes, ...(node.shadowRoot?.childNodes ?? [])].map(text).join(' ');
-      };
-      return text(host);
-    });
-    const increment = (id) => dial(id).locator(S.increase);
-    const entity = (id) => CASES.find((c) => c.id === id).entity;
-    const calls = (start, id, domain, service) => report.frames.slice(start).filter((f) => {
-      const target = f.target?.entity_id ?? f.service_data?.entity_id;
-      return f.domain === domain && f.service === service && (Array.isArray(target) ? target.includes(entity(id)) : target === entity(id));
-    });
-    const frame = async (start, id, domain, service, data = {}) => poll(() => calls(start, id, domain, service).find((f) => Object.entries(data).every(([k, v]) => f.service_data?.[k] === v)), `${id}: ${domain}.${service} ${JSON.stringify(data)}`);
-    const restore = async (id, domain, service, data, expected) => {
-      const start = report.frames.length;
-      await evaluate(page, ({ domain, service, data, entity_id }) => document.querySelector('home-assistant').hass.callService(domain, service, { ...data, entity_id }), { domain, service, data, entity_id: entity(id) });
-      await frame(start, id, domain, service, data);
-      for (const [key, value] of Object.entries(expected)) await waitState(entity(id), key, value);
-    };
-    // Select the rendered item by value, then click its localized title. No English-only journeys.
-    const rowFor = async (id, value, rowIndex) => {
-      const rows = card(id).locator(S.row);
-      const count = await rows.count();
-      for (let i = 0; i < count; i++) {
-        if (rowIndex !== undefined && rowIndex !== i) continue;
-        const item = await evaluate(rows.nth(i), (row, v) => row.items?.find((item) => item.value === v), value);
-        if (item) return { row: rows.nth(i), item };
-      }
-      throw new Error(`${id}: no selector item ${value}`);
-    };
-    const select = async (id, value, rowIndex) => {
-      const { row, item } = await rowFor(id, value, rowIndex);
-      // Use CSS title matching (shadow-piercing), not XPath into a shadow root.
-      const button = row.locator(`${S.chip}[title=${JSON.stringify(item.label)}]`);
-      await button.click();
-      return { value, title: item.label };
-    };
-    for (const c of cases) await check(`render:${c.id}`, async () => {
-      const heading = page.locator(S.heading).filter({ hasText: new RegExp(`QA:${c.id}(?![\\w-])`) });
-      await heading.waitFor({ state: 'visible' });
-      await evaluate(heading, (heading, { id, S }) => {
-        function deep(root, selector) {
-          const found = [...root.querySelectorAll(selector)];
-          for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
-          return found;
-        }
-        let el = heading;
-        while (el) {
-          if (deep(el, S.card).length === 1 && deep(el, S.stock).length === 1) { el.setAttribute('data-mtqa-section', id); return; }
-          el = el.parentElement ?? el.getRootNode().host;
-        }
-        throw new Error(`No paired section for QA:${id}`);
-      }, { id: c.id, S });
-      const section = page.locator(`[data-mtqa-section="${c.id}"]`);
-      sections.set(c.id, section);
-      await card(c.id).locator(S.shell).waitFor({ state: 'visible' });
-      await dial(c.id).waitFor({ state: 'visible' });
-      assert(!/Entity not found/i.test(await cardText(c.id)), 'Entity not found');
-      await poll(() => evaluate(card(c.id), (host) => {
-        function* walk(root) {
-          for (const element of root.querySelectorAll('*')) {
-            yield element;
-            if (element.shadowRoot) yield* walk(element.shadowRoot);
-          }
-        }
-        if (!host.shadowRoot) return false;
-        const elements = [...walk(host.shadowRoot)];
-        const icons = elements.filter((element) => element.tagName === 'HA-ICON');
-        const svgs = elements.filter((element) => element.tagName === 'HA-SVG-ICON');
-        return icons.every((icon) => icon.shadowRoot &&
-          [...walk(icon.shadowRoot)].some((element) => element.tagName === 'HA-SVG-ICON')) &&
-          svgs.every((svg) => svg.shadowRoot?.querySelector('path[d]'));
-      }), `${c.id}: screenshot icons ready`, TIMEOUT);
-      await section.screenshot({ path: resolve(out, `${c.id}.png`), timeout: TIMEOUT });
-      return { screenshot: `${c.id}.png`, entity: c.entity };
-    });
-
-    if (enabled('full-icons')) {
-      await check('J1: HVAC mode round trip', async () => {
-        const previous = (await state(entity('full-icons'))).state;
-        const start = report.frames.length;
-        try {
-          await select('full-icons', 'cool', 0);
-          const sent = await frame(start, 'full-icons', 'climate', 'set_hvac_mode', { hvac_mode: 'cool' });
-          await waitState(entity('full-icons'), 'state', 'cool'); return sent;
-        } finally {
-          await restore('full-icons', 'climate', 'set_hvac_mode', { hvac_mode: previous }, { state: previous });
-        }
-      });
-      for (const [index, value, key, service] of [[1, 'eco', 'preset_mode', 'set_preset_mode'], [2, 'high', 'fan_mode', 'set_fan_mode'], [3, 'both', 'swing_mode', 'set_swing_mode'], [4, 'left', 'swing_horizontal_mode', 'set_swing_horizontal_mode']]) {
-        await check(`J2: ${service}`, async () => {
-          const previous = (await state(entity('full-icons'))).attributes[key];
-          assert(typeof previous === 'string', `Cannot safely restore ${key}: original value is unset; initialize it before running J2`);
-          const start = report.frames.length;
-          try {
-            const selected = await select('full-icons', value, index);
-            const sent = await frame(start, 'full-icons', 'climate', service, { [key]: value });
-            await waitState(entity('full-icons'), key, value); return { previous, selected, sent };
-          } finally {
-            await restore('full-icons', 'climate', service, { [key]: previous }, { [key]: previous });
-          }
-        });
-      }
-      await check('J3: exactly one debounced increment', async () => {
-        const previous = Number((await state(entity('full-icons'))).attributes.temperature);
-        assert(Number.isFinite(previous), 'Initial temperature missing');
-        const start = report.frames.length;
-        try {
-          await increment('full-icons').click();
-          const sent = await frame(start, 'full-icons', 'climate', 'set_temperature', { temperature: previous + 0.5 });
-          await waitState(entity('full-icons'), 'temperature', previous + 0.5);
-          await observe(() => assert(calls(start, 'full-icons', 'climate', 'set_temperature').length === 1, 'Duplicate temperature call'));
-          return { previous, sent, observationMs: 1200 };
-        } finally {
-          await restore('full-icons', 'climate', 'set_temperature', { temperature: previous }, { temperature: previous });
-        }
-      });
-    }
-    if (enabled('range-mqtt')) await check('J4: range increment', async () => {
-      const previous = await state(entity('range-mqtt'));
-      const targets = { target_temp_low: previous.attributes.target_temp_low, target_temp_high: previous.attributes.target_temp_high };
-      assert(Object.values(targets).every(Number.isFinite), 'Initial range bounds missing');
-      try {
-        if (previous.state !== 'heat_cool') {
-          await select('range-mqtt', 'heat_cool', 0);
-          await waitState(entity('range-mqtt'), 'state', 'heat_cool');
-        }
-        const start = report.frames.length;
-        await increment('range-mqtt').click();
-        const sent = await frame(start, 'range-mqtt', 'climate', 'set_temperature');
-        assert(Number.isFinite(sent.service_data.target_temp_low) && Number.isFinite(sent.service_data.target_temp_high), 'Both range bounds required');
-        await waitState(entity('range-mqtt'), 'target_temp_low', sent.service_data.target_temp_low);
-        await waitState(entity('range-mqtt'), 'target_temp_high', sent.service_data.target_temp_high);
-        return sent;
-      } finally {
-        try { await restore('range-mqtt', 'climate', 'set_temperature', targets, targets); }
-        finally { await restore('range-mqtt', 'climate', 'set_hvac_mode', { hvac_mode: previous.state }, { state: previous.state }); }
-      }
-    });
-    if (enabled('range-auto')) await check('J5: auto has two sliders', async () => {
-      const count = await dial('range-auto').locator(S.slider).count(); assert(count === 2, `Expected two sliders, got ${count}`); return { count };
-    });
-    if (enabled('reject')) await check('J6: rejected target reverts', async () => {
-      const slider = dial('reject').locator(S.slider);
-      const previous = Number(await slider.getAttribute('aria-valuenow'));
-      const start = report.frames.length;
-      await increment('reject').click();
-      // Prove an optimistic change occurred: an unchanged value cannot falsely pass rollback.
-      await poll(async () => Number(await slider.getAttribute('aria-valuenow')) !== previous, 'optimistic display change', 2000);
-      const sent = await frame(start, 'reject', 'climate', 'set_temperature', { temperature: previous + 0.5 });
-      await poll(async () => Number(await slider.getAttribute('aria-valuenow')) === previous, 'server rollback', 8000);
-      return { previous, sent, returned: await slider.getAttribute('aria-valuenow') };
-    });
-    for (const id of ['fan-readonly', 'wh-readonly'].filter(enabled)) await check(`J7: ${id}`, async () => {
-      const buttons = await increment(id).count(), sliders = await dial(id).locator(S.slider).count();
-      assert(buttons === 0 && sliders === 0, `Read-only controls present: ${buttons} increment, ${sliders} sliders`); return { buttons, sliders };
-    });
-    if (enabled('wh-tank')) {
-      await check('J8: water heater increment', async () => {
-        const previous = Number((await state(entity('wh-tank'))).attributes.temperature);
-        assert(Number.isFinite(previous), 'Initial water temperature missing');
-        const start = report.frames.length;
-        try {
-          await increment('wh-tank').click();
-          const sent = await frame(start, 'wh-tank', 'water_heater', 'set_temperature', { temperature: previous + 0.5 });
-          await waitState(entity('wh-tank'), 'temperature', previous + 0.5);
-          return { previous, sent };
-        } finally {
-          await restore('wh-tank', 'water_heater', 'set_temperature', { temperature: previous }, { temperature: previous });
-        }
-      });
-      await check('J8: water heater operation', async () => {
-        const previous = (await state(entity('wh-tank'))).state;
-        const start = report.frames.length;
-        try {
-          await select('wh-tank', 'eco', 0);
-          const sent = await frame(start, 'wh-tank', 'water_heater', 'set_operation_mode', { operation_mode: 'eco' });
-          await waitState(entity('wh-tank'), 'state', 'eco'); return { previous, sent };
-        } finally {
-          await restore('wh-tank', 'water_heater', 'set_operation_mode', { operation_mode: previous }, { state: previous });
-        }
-      });
-    }
-    if (enabled('wh-away')) await check('J9: away off frame', async () => {
-      const previous = (await state(entity('wh-away'))).attributes.away_mode;
-      assert(previous === 'on', 'J9 requires initial away_mode on; no mutation performed');
-      const start = report.frames.length;
-      const row = card('wh-away').locator(S.row).last();
-      try {
-        await row.locator(S.chip).click();
-        return await frame(start, 'wh-away', 'water_heater', 'set_away_mode', { away_mode: false });
-      } finally {
-        // REST-only fixture has no service implementation; verify it remained unchanged.
-        await waitState(entity('wh-away'), 'away_mode', previous);
-      }
-    });
-    for (const id of ['climate-unavailable', 'wh-unavailable'].filter(enabled)) await check(`J10: ${id} inert`, async () => {
-      const unavailable = await evaluate(page, () => document.querySelector('home-assistant').hass.localize('state.default.unavailable'));
-      assert(unavailable, 'HA unavailable translation missing');
-      assert((await cardText(id)).includes(unavailable), `Missing localized label: ${unavailable}`);
-      const chips = card(id).locator(S.chip);
-      assert(await chips.count() > 0, 'No unavailable mode chips');
-      const start = report.frames.length;
-      for (let i = 0; i < await chips.count(); i++) {
-        const chip = chips.nth(i);
-        if (await chip.isDisabled()) await chip.dispatchEvent('click'); else await chip.click();
-      }
-      await observe(() => assert(report.frames.length === start, 'Unavailable interaction sent call_service'));
-      return { label: unavailable, serviceCalls: 0, observationMs: 1200 };
-    });
-    if (enabled('stock-yaml')) await check('J11: included HVAC modes only', async () => {
-      const row = card('stock-yaml').locator(S.row).first();
-      const values = await evaluate(row, (el) => el.items.map((item) => item.value));
-      assert(JSON.stringify([...values].sort()) === JSON.stringify(['cool', 'heat', 'off']), `Unexpected HVAC items ${values}`);
-      const dropdown = row.locator(S.dropdown);
-      await dropdown.locator(S.trigger).click();
-      const count = await dropdown.locator(S.option).count();
-      assert(count === 3, `Expected three rendered options, got ${count}`);
-      await page.keyboard.press('Escape'); return { values, renderedOptions: count };
-    });
-    for (const c of cases) await check(`J12: layout:${c.id}`, async () => {
-      const our = await card(c.id).boundingBox();
-      const stock = await sections.get(c.id)?.locator(S.stock).boundingBox();
-      assert(our && stock, 'Missing card bounds');
-      const overlap = Math.min(our.x + our.width, stock.x + stock.width) > Math.max(our.x, stock.x) && Math.min(our.y + our.height, stock.y + stock.height) > Math.max(our.y, stock.y);
-      assert(!overlap, 'Our card overlaps stock card');
-      const layout = await evaluate(card(c.id).locator(S.shell), (shell) => {
-        const bottom = shell.getBoundingClientRect().bottom;
-        const overflow = [];
-        let measured = 0;
-        function walk(root) {
-          for (const el of root.children) {
-            // Floating menus are allowed outside the card; exclude their subtree.
-            if (el.matches('[role="listbox"], [role="menu"], [role="dialog"], [popover], .menu, .popover')) continue;
-            const style = getComputedStyle(el);
-            if (style.display === 'none' || Number(style.opacity) === 0) continue;
-            const rect = el.getBoundingClientRect();
-            // Orbit boxes rotate around the full dial: only their children paint.
-            // Still descend so visible marker dots/labels remain checked.
-            if (!el.matches('.orbit') && style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0) {
-              measured++;
-              if (rect.bottom > bottom + 2) overflow.push({ tag: el.localName, class: el.getAttribute('class'), bottom: rect.bottom });
+        let ready = false;
+        await check(`view ${view}: all cases rendered`, async () => {
+          await poll(() => evaluate(page, ({ vc, S }) => {
+            function deep(root, selector) {
+              const found = [...root.querySelectorAll(selector)];
+              for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+              return found;
             }
-            walk(el);
-            if (el.shadowRoot) walk(el.shadowRoot);
+            const cards = deep(document, `${S.card}, ${S.stock}`);
+            // Surface a configuration error immediately instead of timing out on
+            // the missing card and losing its section/message evidence.
+            if (deep(document, S.error).length) return true;
+            for (const c of vc) {
+              const matches = cards.filter((el) => el._config?.qa_id === c.config.qa_id && el.matches(c.kind === 'ours' ? S.card : S.stock));
+              if (matches.length !== 1 || !deep(matches[0], S.shell).some((el) => el.getBoundingClientRect().width)) return false;
+              matches[0].setAttribute('data-mtqa-id', c.id);
+            }
+            return true;
+          }, { vc, S }), `${view}: every declared card`, TIMEOUT);
+          assert(report.bundleRouteHit > 0, 'Local dist route was never hit; refusing to test installed HACS bundle');
+          const errors = await evaluate(page, (S) => {
+            function deep(root, selector) {
+              const found = [...root.querySelectorAll(selector)];
+              for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+              return found;
+            }
+            return deep(document, S.error).map((el) => {
+              let section = el;
+              while (section && !section.matches?.(S.section)) section = section.parentElement ?? section.getRootNode().host;
+              const heading = section && deep(section, S.heading)[0];
+              return { section: heading?._config?.heading ?? '(unknown section)', message: el._config?.error ?? el.shadowRoot?.textContent ?? el.textContent };
+            });
+          }, S);
+          assert(!errors.length, JSON.stringify(errors));
+          await poll(() => evaluate(page, ({ ids, S }) => {
+            function deep(root, selector) {
+              const found = [...root.querySelectorAll(selector)];
+              for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+              return found;
+            }
+            return deep(document, `${S.card}, ${S.stock}`).filter((el) => ids.includes(el.getAttribute('data-mtqa-id'))).every((host) =>
+              deep(host, S.icon).every((icon) => deep(icon, S.svgIcon).length) &&
+              deep(host, S.svgIcon).every((svg) => deep(svg, S.path).length));
+          }, { ids: vc.map((c) => c.id), S }), `${view}: icons ready`, TIMEOUT);
+          ready = true;
+          return { cases: vc.length, errors };
+        });
+        if (!ready) return;
+        for (const section of [...new Set(vc.map((c) => c.section))]) await check(`view ${view}: screenshot ${section}`, async () => {
+          const first = vc.find((c) => c.section === section);
+          const tag = `${view}-${slug(section)}`;
+          const hasSection = await evaluate(card(first), (host, { tag, S }) => {
+            let el = host;
+            while (el && !el.matches?.(S.section)) el = el.parentElement ?? el.getRootNode().host;
+            if (!el) return false; // Masonry has no section element.
+            el.setAttribute('data-mtqa-section', tag);
+            return true;
+          }, { tag, S });
+          await mkdir(resolve(out, view), { recursive: true });
+          const path = `${view}/${slug(section)}.png`;
+          if (hasSection) await page.locator(`[data-mtqa-section=${JSON.stringify(tag)}]`).screenshot({ path: resolve(out, path), timeout: TIMEOUT });
+          else {
+            // The masonry view is one declared section. Full-page capture also
+            // preserves headings and avoids a viewport-clipped union rectangle.
+            await page.screenshot({ path: resolve(out, path), fullPage: true, timeout: TIMEOUT });
           }
-        }
-        walk(shell);
-        if (shell.shadowRoot) walk(shell.shadowRoot);
-        return { bottom, measured, overflow };
-      });
-      assert(layout.overflow.length === 0, `Content below ha-card: ${JSON.stringify(layout)}`);
-      return { our, stock, ...layout };
-    });
-    if (opts.lang === 'de') {
-      if (enabled('heat')) await check('J13: German target decimal', async () => {
-        const target = Number((await state(entity('heat'))).attributes.temperature);
-        assert(Number.isFinite(target) && target % 1 !== 0, 'Fractional heat target required; rerun seed (21.5)');
-        const text = await dial('heat').locator(S.slider).getAttribute('aria-valuetext');
-        assert(/\d,\d/.test(text ?? ''), `Slider aria-valuetext lacks comma decimal: ${text}`); return { target, text };
-      });
-      for (const [id, kind, values, english] of [
-        ['full-icons', 'HVAC', ['heat', 'off'], ['Heat', 'Off']],
-        ['wh-tank', 'water heater operation', ['electric', 'off'], ['Electric', 'Off']],
-      ]) if (enabled(id)) await check(`J13: German ${kind} titles`, async () => {
-        const stockLabels = await evaluate(sections.get(id).locator(S.stock), (host, values) => {
-          const labels = {};
-          const text = (el) => {
-            if (el.nodeType === Node.TEXT_NODE) return el.textContent;
-            if (['STYLE', 'SCRIPT', 'HA-ICON', 'HA-SVG-ICON'].includes(el.nodeName)) return '';
-            return [...el.childNodes, ...(el.shadowRoot?.childNodes ?? [])].map(text).join(' ');
-          };
-          function walk(root) {
-            for (const el of root.querySelectorAll('*')) {
-              const value = el.value ?? el.getAttribute('value');
-              if (values.includes(value) && el.matches('option, ha-dropdown-item, ha-list-item, mwc-list-item, [role="option"]')) {
-                const label = text(el).replace(/\s+/g, ' ').trim();
-                if (label) labels[value] = label;
+          return { screenshot: path };
+        });
+
+        for (const c of vc.filter((c) => c.kind === 'ours')) {
+          const e = c.expect, scenario = scenarioFor(c);
+          assert(e, `${c.id}: missing our expectations`);
+          await check(`${c.id}: sliders`, async () => { const a = await snapshot(c); assert(a.sliders.length === e.sliders, `Expected ${e.sliders}; got ${a.sliders.length}`); return a.sliders; });
+          await check(`${c.id}: plus-minus`, async () => { const a = await snapshot(c); assert(a.increase === Number(e.plusMinus) && a.decrease === Number(e.plusMinus), `Expected ± ${e.plusMinus}; got +${a.increase}/-${a.decrease}`); });
+          await check(`${c.id}: unavailable`, async () => {
+            const a = await snapshot(c); assert(a.dial && a.dial.disabled === e.unavailable, `Dial disabled ${a.dial?.disabled}; expected ${e.unavailable}`);
+            assert(a.controls.every((d) => d === e.unavailable), `Control disabled flags ${a.controls}`);
+          });
+          await check(`${c.id}: state-label`, async () => {
+            const a = await snapshot(c); assert(e.stateLabel ? a.stateLabels.length > 0 && a.stateLabels.every((s) => s.trim()) : a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
+          });
+          await check(`${c.id}: selectors`, async () => {
+            let a = await snapshot(c);
+            const expectedKinds = e.selectors.map((s) => kindOf(s.type));
+            assert(a.selectors.filter((s) => s.items.length).every((s) => expectedKinds.includes(s.kind)), 'Unexpected rendered selector');
+            for (const ex of e.selectors) {
+              const host = await selectorHost(c, ex.type);
+              const before = a.selectors.find((s) => s.kind === kindOf(ex.type));
+              assert(before && before.display === ex.display, `Missing/wrong display ${ex.type}`);
+              const disabled = ex.disabled;
+              // Disabled dropdowns cannot expose a menu. Their item model is checked,
+              // and the disabled trigger must prevent opening it (J-unavailable).
+              const open = ex.display !== 'icons' && !disabled;
+              if (open) await host.locator(S.trigger).click();
+              try {
+                a = await snapshot(c);
+                const actual = a.selectors.find((s) => s.kind === kindOf(ex.type));
+                const values = actual.items.map((i) => i.value);
+                assert(equal(ex.ordered ? values : [...values].sort(), ex.ordered ? ex.items : [...ex.items].sort()), `${ex.type}: values ${JSON.stringify(values)}; expected ${JSON.stringify(ex.items)}`);
+                const controls = actual.controls;
+                if (!disabled || ex.display === 'icons') assert(controls.length === ex.items.length, `${ex.type}: missing visible options`);
+                for (let i = 0; i < actual.items.length; i++) {
+                  const item = actual.items[i], rendered = controls[i];
+                  const active = ex.active === item.value && ex.items.includes(ex.active);
+                  assert(!!item.active === active && (!rendered || rendered.active === active), `${ex.type}/${item.value}: wrong active marker`);
+                  assert(!!item.disabled === disabled && (!rendered || rendered.disabled === disabled), `${ex.type}/${item.value}: wrong disabled state`);
+                  if (ex.labels[item.value] !== undefined) assert(item.label === ex.labels[item.value] && (!rendered || rendered.label === ex.labels[item.value]), `${item.value}: label override ignored`);
+                  if (rendered) assert(rendered.label === item.label, `${item.value}: DOM/model label mismatch`);
+                }
+                if (ex.display !== 'icons') assert(actual.triggerDisabled.every((d) => d === disabled), 'Wrong dropdown disabled state');
+              } finally { if (open) await host.locator(S.trigger).click(); }
+            }
+            return { selectors: a.selectors };
+          });
+          await check(`${c.id}: labels`, async () => {
+            const a = await snapshot(c);
+            for (const ex of e.selectors) for (const item of a.selectors.find((s) => s.kind === kindOf(ex.type))?.items ?? []) {
+              assert(ex.labels[item.value] !== undefined || !/^[a-z]+(?:_[a-z]+)*$/.test(item.label.trim()) || item.label.trim() !== item.value,
+                `Raw label ${ex.type}/${item.value}: ${item.label}`);
+            }
+          });
+          await check(`${c.id}: away`, async () => {
+            const a = await snapshot(c), rendered = a.away.filter((v) => v.buttons.length);
+            if (!e.away) assert(!rendered.length, 'Unexpected away control');
+            else {
+              assert(rendered.length === 1, 'Missing/duplicate away control');
+              const [away] = rendered;
+              assert(away.display === e.away.display && away.buttons.length === 1 && away.buttons[0].pressed === String(e.away.state === 'on') && away.buttons[0].disabled === e.away.disabled, `Wrong away state ${JSON.stringify(away)}`);
+              if (e.away.label) assert(away.text.includes(e.away.label), `Missing away label ${e.away.label}`);
+            }
+          });
+          await check(`${c.id}: aux`, async () => { const a = await snapshot(c); for (const type of e.aux) assert(a.aux[type]?.some(Boolean), `Missing/empty aux ${type}`); });
+          await check(`${c.id}: text`, async () => { const a = await snapshot(c); assert(!/NaN|undefined|\[object Object\]|\bnull\b/.test(a.text), 'Invalid deep text'); });
+          await check(`${c.id}: layout`, async () => {
+            const a = await snapshot(c); assert(a.bounds && !a.overflow.length, `Overflow: ${JSON.stringify(a.overflow)}`);
+            const neighbours = await evaluate(page, ({ id, S }) => {
+              function deep(root, selector) {
+                const found = [...root.querySelectorAll(selector)];
+                for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+                return found;
               }
-              if (el.shadowRoot) walk(el.shadowRoot);
+              return deep(document, `${S.card}, ${S.stock}`).filter((el) => el.getAttribute('data-mtqa-id') !== id).map((el) => el.getBoundingClientRect().toJSON());
+            }, { id: c.id, S });
+            assert(!neighbours.some((b) => Math.min(a.bounds.right, b.right) - Math.max(a.bounds.left, b.left) > 2 && Math.min(a.bounds.bottom, b.bottom) - Math.max(a.bounds.top, b.top) > 2), 'Card overlaps neighbour');
+            if (a.scroll.length) warn(`${c.id}: scrolling chip rows (known)`, a.scroll);
+            return { bounds: a.bounds, measuredNeighbours: neighbours.length };
+          });
+          await check(`${c.id}: values`, async () => {
+            const a = await snapshot(c), expected = scenario.expect;
+            const values = expected.model === 'single' ? [expected.target] : expected.model === 'dual' ? [expected.low, expected.high] : [];
+            assert(equal(a.sliders.map((s) => s.value), values), `Slider values ${JSON.stringify(a.sliders)}; expected ${JSON.stringify(values)}`);
+            assert((a.current.length > 0) === (expected.current !== null), `Current visibility ${JSON.stringify(a.current)}; expected ${expected.current}`);
+            if (expected.current !== null) {
+              const formats = [String(expected.current), new Intl.NumberFormat(report.language, { maximumFractionDigits: 1 }).format(expected.current), String(expected.current).replace('.', '')];
+              assert(a.current.some((t) => formats.some((v) => t.includes(v))), `Current temperature ${expected.current} not visible: ${a.current}`);
             }
-          }
-          walk(host);
-          if (host.shadowRoot) walk(host.shadowRoot);
-          return labels;
-        }, values);
-        const titles = {};
-        for (const value of values) {
-          const { row, item } = await rowFor(id, value, 0);
-          const title = await row.locator(`${S.chip}[title=${JSON.stringify(item.label)}]`).getAttribute('title');
-          assert(title && !english.some((word) => word.toLowerCase() === title.trim().toLowerCase()), `English or missing ${kind} title for ${value}: ${title}`);
-          if (stockLabels[value]) assert(title === stockLabels[value], `${kind} title for ${value}: ${title}; stock: ${stockLabels[value]}`);
-          titles[value] = { title, stock: stockLabels[value] ?? null, comparison: stockLabels[value] ? 'stock option' : 'non-English fallback' };
+          });
         }
-        return { titles };
-      });
+
+        for (const c of vc) for (const j of journeys(c, { ...opts, lang: report.language })) {
+          await check(`${c.id}: ${j.type}${j.selector ? ` ${j.selector.type}=${j.value}` : ''}${j.feature ? ` ${j.feature}` : ''}`, async () => {
+            const s = scenarioFor(c), id = s.entity_id;
+            if (j.type === 'J-select') {
+              const [domain, service, key, attribute] = SERVICES[kindOf(j.selector.type)] ?? [];
+              assert(domain, `Unknown selector service ${j.selector.type}`);
+              const original = stateValue(await state(id), attribute);
+              assert(typeof original === 'string', `Cannot restore unset ${attribute}; no mutation performed`);
+              const start = report.frames.length;
+              try {
+                const began = Date.now();
+                await pick(await selectorHost(c, j.selector.type), j.selector.display, j.value);
+                const sent = await exactFrame(start, id, domain, service, { [key]: j.value });
+                await waitState(id, attribute, j.value, 5000 - (Date.now() - began)); return sent;
+              } finally { await restore(id, domain, service, { [key]: original }, { [attribute]: original }); }
+            }
+            if (j.type === 'J-dial') {
+              const previous = await state(id), domain = s.domain;
+              const dual = s.expect.model === 'dual';
+              const original = dual ? { target_temp_low: previous.attributes.target_temp_low, target_temp_high: previous.attributes.target_temp_high } : { temperature: previous.attributes.temperature };
+              assert(Object.values(original).every(Number.isFinite), 'Cannot restore missing temperature');
+              const sliders = card(c).locator(S.dial).locator(S.slider);
+              try {
+                for (let handle = 0; handle < (dual ? 2 : 1); handle++) {
+                  for (const key of ['Increase', 'Decrease', 'ArrowUp', 'PageUp', 'Home', 'End']) {
+                    if (dual && ['Increase', 'Decrease'].includes(key)) {
+                      // Keyboard selection sets the handle used by +/-. Restore
+                      // immediately, leaving only selection (not a target edit).
+                      const prep = await snapshot(c), start = report.frames.length;
+                      const data = { ...original, [handle === 0 ? 'target_temp_low' : 'target_temp_high']: prep.sliders[handle].min };
+                      await sliders.nth(handle).press('Home');
+                      await exactFrame(start, id, domain, 'set_temperature', data);
+                      for (const [attribute, v] of Object.entries(data)) await waitState(id, attribute, v);
+                      await restore(id, domain, 'set_temperature', original, original);
+                    }
+                    const a = await snapshot(c), slider = a.sliders[handle], step = a.dial.step;
+                    assert(Number.isFinite(step) && step > 0, 'Missing positive dial step');
+                    // Home/End must respect the other handle as well as absolute limits.
+                    const min = dual && handle === 1 ? Math.max(slider.min, a.sliders[0].value) : slider.min;
+                    const max = dual && handle === 0 ? Math.min(slider.max, a.sliders[1].value) : slider.max;
+                    const value = key === 'Home' ? min : key === 'End' ? max : Math.min(max, Math.max(min, slider.value + step * (key === 'PageUp' ? 10 : key === 'Decrease' ? -1 : 1)));
+                    const data = dual ? { target_temp_low: handle === 0 ? value : a.sliders[0].value, target_temp_high: handle === 1 ? value : a.sliders[1].value } : { temperature: value };
+                    await sliders.nth(handle).focus();
+                    const start = report.frames.length;
+                    let began;
+                    if (key === 'Increase' || key === 'Decrease') {
+                      const button = card(c).locator(key === 'Increase' ? S.increase : S.decrease);
+                      await evaluate(button, (el) => el.addEventListener('click', () => el.setAttribute('data-mtqa-click-at', String(Date.now())), { capture: true, once: true }));
+                      await button.click();
+                      began = Number(await button.getAttribute('data-mtqa-click-at'));
+                      assert(Number.isFinite(began) && began > 0, 'Missing click timestamp');
+                    } else {
+                      began = Date.now();
+                      await sliders.nth(handle).press(key);
+                    }
+                    if (key === 'Increase' || key === 'Decrease') await observe(() => {
+                      const early = matching(start, id).filter((f) => f.at - began < 600);
+                      assert(!early.length, 'Temperature sent before 600 ms debounce');
+                    }, 600);
+                    await exactFrame(start, id, domain, 'set_temperature', data);
+                    for (const [attribute, v] of Object.entries(data)) await waitState(id, attribute, v);
+                    // Reset between keys so PageUp/Home/End each exercise a change.
+                    await restore(id, domain, 'set_temperature', original, original);
+                  }
+                }
+              } finally { await restore(id, domain, 'set_temperature', original, original); }
+              return { original, handles: dual ? 2 : 1, keys: ['Increase', 'Decrease', 'ArrowUp', 'PageUp', 'Home', 'End'] };
+            }
+            if (j.type === 'J-away') {
+              const original = (await state(id)).attributes.away_mode;
+              assert(['on', 'off'].includes(original), 'Cannot safely restore away mode');
+              const button = card(c).locator(S.away).locator(S.awayButton);
+              const start = report.frames.length;
+              try {
+                if (c.expect.away.disabled) {
+                  await button.dispatchEvent('click');
+                  await observe(() => assert(!matching(start, id).length, 'Disabled away sent a frame'));
+                } else {
+                  await button.click();
+                  await exactFrame(start, id, 'water_heater', 'set_away_mode', { away_mode: original !== 'on' });
+                }
+              } finally {
+                // REST fixtures have no service implementation. Assert unchanged;
+                // never issue a meaningless restore service to these entities.
+                await waitState(id, 'away_mode', original);
+              }
+              return { original, restFixture: true };
+            }
+            if (j.type === 'J-unavailable') {
+              const start = report.frames.length;
+              const controls = card(c).locator(S.controls);
+              for (let i = 0; i < await controls.count(); i++) await controls.nth(i).dispatchEvent('click');
+              await observe(() => assert(!matching(start, id).length, 'Unavailable control sent service frame'));
+              return { controls: await controls.count(), calls: 0 };
+            }
+            if (j.type === 'J-reject') {
+              const slider = card(c).locator(S.slider).first(), original = Number(await slider.getAttribute('aria-valuenow'));
+              const step = (await snapshot(c)).dial.step, start = report.frames.length;
+              const server = (await state(id)).attributes.temperature;
+              assert(Number.isFinite(server) && server === original, 'Reject fixture is not at its server value');
+              const began = Date.now();
+              try {
+                await card(c).locator(S.increase).click();
+                await poll(async () => Number(await slider.getAttribute('aria-valuenow')) !== original, 'optimistic change', 2000);
+                await exactFrame(start, id, s.domain, 'set_temperature', { temperature: original + step });
+                await poll(async () => Number(await slider.getAttribute('aria-valuenow')) === original, 'rejected target rollback', Math.max(1, 8000 - (Date.now() - began)));
+              } finally {
+                // Reject fixture cannot accept a restore command: server state
+                // must be unchanged even when the UI/frame assertion fails.
+                await waitState(id, 'temperature', server);
+              }
+              return { original, rollback: true };
+            }
+            if (j.type === 'J-aux') {
+              const host = card(c).locator(S.aux[j.feature]);
+              assert(await host.count() === 1, `Missing/duplicate ${j.feature}`);
+              const row = host.locator(S.row);
+              const items = await evaluate(row, (el) => el.items.map((i) => ({ value: i.value, active: !!i.active })));
+              const display = await evaluate(row, (el) => el.display);
+              if (j.feature === 'input-select') {
+                const entity = typeof AUX.input_select === 'string' ? AUX.input_select : AUX.input_select.entity_id;
+                const original = (await state(entity)).state;
+                const options = items.filter((i) => i.value !== original);
+                assert(options.length, 'No alternate input-select option');
+                try {
+                  for (const item of opts.quick ? options.slice(0, 1) : options) {
+                    const start = report.frames.length;
+                    await pick(host, display, item.value);
+                    await exactFrame(start, entity, 'input_select', 'select_option', { option: item.value });
+                    await waitState(entity, 'state', item.value);
+                  }
+                } finally { await restore(entity, 'input_select', 'select_option', { option: original }, { state: original }); }
+              } else if (j.feature === 'button-list') {
+                for (const item of items) {
+                  assert(AUX.buttons.some((b) => (typeof b === 'string' ? b : b.entity_id) === item.value), `Non-fixture button ${item.value}; refusing click`);
+                  const start = report.frames.length;
+                  await pick(host, display, item.value);
+                  await exactFrame(start, item.value, 'button', 'press');
+                }
+              } else {
+                const originals = {};
+                for (const item of items) {
+                  assert(AUX.switches.some((b) => (typeof b === 'string' ? b : b.entity_id) === item.value), `Non-fixture switch ${item.value}; refusing click`);
+                  originals[item.value] = (await state(item.value)).state;
+                  assert(['on', 'off'].includes(originals[item.value]), 'Cannot restore unavailable switch');
+                }
+                try {
+                  for (const item of items) {
+                    const before = Object.fromEntries(await Promise.all(items.map(async (i) => [i.value, (await state(i.value)).state])));
+                    const start = report.frames.length;
+                    await pick(host, display, item.value);
+                    const target = j.feature === 'switch-group' ? 'on' : before[item.value] === 'on' ? 'off' : 'on';
+                    await exactFrame(start, item.value, 'switch', `turn_${target}`);
+                    await waitState(item.value, 'state', target);
+                    if (j.feature === 'switch-group') for (const other of items.filter((i) => i.value !== item.value)) {
+                      if (before[other.value] === 'on') await exactFrame(start, other.value, 'switch', 'turn_off');
+                      await waitState(other.value, 'state', 'off');
+                    }
+                  }
+                } finally {
+                  // Attempt every restore even if an earlier switch fails.
+                  const errors = [];
+                  for (const [entity, original] of Object.entries(originals)) try { await restore(entity, 'switch', `turn_${original}`, {}, { state: original }); } catch (e) { errors.push(safeError(e)); }
+                  assert(!errors.length, `Switch restore failed: ${errors.join('; ')}`);
+                }
+              }
+              return { feature: j.feature, items };
+            }
+            if (j.type === 'J-locale') {
+              const a = await snapshot(c);
+              const decimal = new Intl.NumberFormat(report.language).formatToParts(1.5).find((p) => p.type === 'decimal')?.value;
+              for (const slider of a.sliders.filter((v) => v.value % 1 !== 0)) assert(slider.text?.includes(decimal), `Wrong locale decimal in ${slider.text}`);
+              const stock = vc.filter((other) => other.kind === 'stock' && scenarioFor(other).id === s.id);
+              const comparisons = [];
+              for (const ex of c.expect.selectors.filter((v) => ['hvac', 'operation'].includes(kindOf(v.type)))) {
+                const labels = {};
+                for (const other of stock) Object.assign(labels, await evaluate(card(other), (host, { S, values }) => {
+                  function deep(root, selector) {
+                    const found = [...root.querySelectorAll(selector)];
+                    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
+                    return found;
+                  }
+                  return Object.fromEntries(deep(host, S.stockOption).filter((el) => values.includes(el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'))).map((el) => [el.value ?? el.getAttribute('value') ?? el.getAttribute('data-value'), (el.getAttribute('title') || el.getAttribute('aria-label') || el.textContent).trim()]));
+                }, { S, values: ex.items }));
+                const actual = a.selectors.find((v) => v.kind === kindOf(ex.type));
+                // HA's localize has no locale argument: use stable English names only
+                // to identify values whose stock option actually differs in this locale.
+                const english = { heat: 'Heat', cool: 'Cool', off: 'Off', auto: 'Auto', heat_cool: 'Heat/Cool', electric: 'Electric', gas: 'Gas', performance: 'Performance', high_demand: 'High demand', heat_pump: 'Heat pump' };
+                for (const item of actual?.items ?? []) if (labels[item.value] && english[item.value] && labels[item.value] !== english[item.value] && ex.labels[item.value] === undefined) {
+                  assert(item.label === labels[item.value] && item.label !== english[item.value], `Locale title ${item.value}: ours ${item.label}; stock ${labels[item.value]}`);
+                  comparisons.push({ value: item.value, ours: item.label, stock: labels[item.value] });
+                }
+                if (ex.items.some((v) => english[v]) && stock.length) assert(comparisons.length, `No translated stock option evidence for ${ex.type}; cannot claim locale parity`);
+                assert(stock.length > 0, `${c.id}: cannot verify ${ex.type} locale parity: no stock counterpart for ${s.id} in view ${view}`);
+              }
+              return { decimal, fractionalSliders: a.sliders.filter((v) => v.value % 1 !== 0).length, stockComparisons: comparisons };
+            }
+          }, j.type === 'J-dial' ? 120000 : 60000);
+        }
+      }, `view ${view}`, viewBudget);
     }
   } catch (error) {
-    report.checks.push({ name: 'setup/runtime', status: 'FAIL', error: safeError(fatal ?? error) });
+    report.checks.push({ name: 'setup/runtime', view: currentView, status: 'FAIL', error: safeError(fatal ?? error) });
   } finally {
-    let closeTimer;
-    const closed = await Promise.race([
-      browser.close().then(() => true, (error) => {
-        report.checks.push({ name: 'browser shutdown', status: 'FAIL', error: safeError(error) });
-        return false;
-      }),
-      new Promise((resolve) => { closeTimer = setTimeout(() => resolve(false), 10000); }),
-    ]);
-    clearTimeout(closeTimer);
-    if (!closed) report.checks.push({ name: 'browser shutdown deadline', status: 'FAIL', error: 'Browser did not close cleanly; exiting to terminate Playwright' });
-    report.checks.push({ name: 'bundle route hit', status: served ? 'PASS' : 'FAIL', evidence: { served } });
-    report.checks.push({ name: 'bundle version', status: 'INFO', evidence: clean({ source: 'page console', versions: [...bundleVersions], detail: bundleVersions.size ? [...bundleVersions].map((version) => `MATERIAL-THERMOSTAT-CARD v${version}`).join(', ') : 'Version banner not observed' }) });
-    report.checks.push({ name: 'bundle console errors', status: report.consoleErrors.length ? 'FAIL' : 'PASS', evidence: { count: report.consoleErrors.length } });
+    let timer;
+    const closed = await Promise.race([browser.close().then(() => true, () => false), new Promise((r) => { timer = setTimeout(() => r(false), 10000); })]);
+    clearTimeout(timer);
+    if (!closed) report.checks.push({ name: 'browser shutdown', view: 'setup', status: 'FAIL', error: 'Shutdown deadline (10 s)' });
+    report.checks.push({ name: 'bundle route hit', view: 'setup', status: report.bundleRouteHit ? 'PASS' : 'FAIL', evidence: { served: report.bundleRouteHit } });
+    const bundleErrors = report.consoleErrors.filter((e) => /material-thermostat/i.test(`${e.text} ${e.location}`));
+    report.checks.push({ name: 'bundle console errors', view: 'setup', status: bundleErrors.length ? 'FAIL' : 'PASS', evidence: bundleErrors });
+    out ??= resolve(root, 'dev/qa/out', `${opts.lang ?? 'session'}-${opts.scheme}`);
+    await mkdir(out, { recursive: true });
     await writeFile(resolve(out, 'report.json'), JSON.stringify(clean(report), null, 2));
-    console.table(clean(report.checks.map(({ name, status, error, evidence }) => ({ check: name, result: status, error: error ?? (status === 'INFO' ? evidence.detail : '') }))));
-    const failures = report.checks.filter((c) => c.status === 'FAIL').length;
-    console.log(`${report.checks.filter((c) => c.status === 'PASS').length} PASS / ${failures} FAIL; dev/qa/out/${opts.lang}/report.json`);
-    if (failures) process.exitCode = 1;
+    for (const view of ['setup', ...selectedViews]) {
+      const checks = report.checks.filter((c) => c.view === view);
+      console.log(`${view}: ${checks.filter((c) => c.status === 'PASS').length} PASS / ${checks.filter((c) => c.status === 'FAIL').length} FAIL / ${checks.filter((c) => c.status === 'WARN').length} WARN`);
+    }
+    for (const failure of report.checks.filter((c) => c.status === 'FAIL')) console.log(safeError(`FAIL ${failure.name}: ${failure.error ?? JSON.stringify(failure.evidence)}`));
+    const counts = ['PASS', 'FAIL', 'WARN'].map((status) => `${report.checks.filter((c) => c.status === status).length} ${status}`).join(' / ');
+    console.log(`TOTAL: ${counts}; ${resolve(out, 'report.json')}`);
+    if (report.checks.some((c) => c.status === 'FAIL')) process.exitCode = 1;
     if (!closed) process.exit(1);
   }
 }

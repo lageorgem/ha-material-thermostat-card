@@ -1,8 +1,11 @@
 import { DISCOVERY, RETAINED_STATES, REST_ENTITIES, MQTT_ENTITIES, INITIAL_SERVICES } from './entities.mjs';
 import { credentials, flags, rest, safeError, TIMEOUT } from './ha-client.mjs';
+import { SCENARIOS, AUX, checkMatrix } from './matrix.mjs';
 
 async function main() {
   const args = flags(['--dry-run', '--cleanup']);
+  checkMatrix();
+  const auxCount = 1 + AUX.switches.length + AUX.buttons.length + Object.keys(AUX.sensors).length;
   const cleanup = args.has('--cleanup');
   const publications = [...DISCOVERY, ...RETAINED_STATES].map((p) => cleanup ? { ...p, payload: '' } : p);
   const plan = [
@@ -10,7 +13,14 @@ async function main() {
     ...REST_ENTITIES.map(({ entity_id, body }) => ({ method: cleanup ? 'DELETE' : 'POST', path: `/api/states/${entity_id}`, ...(!cleanup ? { body } : {}) })),
     ...(!cleanup ? INITIAL_SERVICES.map(({ domain, service, data }) => ({ method: 'POST', path: `/api/services/${domain}/${service}`, body: data })) : []),
   ];
-  if (args.has('--dry-run')) { console.log(JSON.stringify({ entities: 13, cleanup, requests: plan }, null, 2)); return; }
+  // Guard every write even if a future fixture accidentally escapes the namespace.
+  for (const { topic } of publications) {
+    if (!/^mtqa\/mtqa_[a-z0-9_]+\//.test(topic) && !/^homeassistant\/(climate|water_heater|switch|button|sensor)\/mtqa_[a-z0-9_]+\/config$/.test(topic)) throw new Error('Unsafe QA MQTT topic');
+  }
+  for (const { entity_id } of REST_ENTITIES) if (!/^(climate|water_heater|input_select)\.mtqa_[a-z0-9_]+$/.test(entity_id)) throw new Error('Unsafe QA REST entity');
+  for (const { data } of INITIAL_SERVICES) if (!/^(climate|water_heater|switch)\.mtqa_[a-z0-9_]+$/.test(data.entity_id)) throw new Error('Unsafe QA service entity');
+  const summary = cleanup ? `Removed ${SCENARIOS.length} scenarios + ${auxCount} aux entities` : `Seeded ${SCENARIOS.length} scenarios + ${auxCount} aux entities`;
+  if (args.has('--dry-run')) { console.log(JSON.stringify({ scenarios: SCENARIOS.length, aux: auxCount, cleanup, requests: plan }, null, 2)); console.log(summary); return; }
   const auth = credentials();
   for (const request of plan) {
     // Discovery is asynchronous: wait for all entities before initializing optimistic targets.
@@ -25,6 +35,6 @@ async function main() {
     }
     await rest(auth, request.path, request.method, request.body);
   }
-  console.log(cleanup ? 'Removed QA discovery, retained state topics and REST entities' : 'Seeded 13 QA entities');
+   console.log(summary);
 }
 main().catch((error) => { console.error(safeError(error)); process.exitCode = 1; });
