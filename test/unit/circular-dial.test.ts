@@ -103,6 +103,49 @@ function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void 
 
 describe('mt-circular-dial', () => {
   describe('stock parity', () => {
+    for (const expanded of [false, true]) {
+      for (const current of [22, 21.5]) {
+        it(`formats dual current-primary ${current} like single mode (${expanded ? 'expanded' : 'idle'})`, async () => {
+          const el = await mount();
+          el.dual = true;
+          el.mode = expanded ? 'cool' : 'auto';
+          el.lowValue = 20;
+          el.highValue = 24;
+          el.current = current;
+          el.step = 1; // Current precision remains one decimal, independent of step.
+          el.showCurrentAsPrimary = true;
+          (el as any)._showRangeTimer = expanded;
+          await el.updateComplete;
+          const primary = el.shadowRoot!.querySelector('.center .temp')!;
+          const number = primary.querySelector('.value-text')!;
+          expect([...number.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('')).to.equal(current === 22 ? '22' : '21');
+          expect(number.querySelector('sup')?.textContent ?? null).to.equal(current === 22 ? null : '5');
+          expect(number.textContent).not.to.include('.0');
+          expect(getComputedStyle(primary.querySelector('.unit')!).display).to.equal('none');
+          expect(getComputedStyle(number).position).to.equal('relative');
+          const range = el.shadowRoot!.querySelector('.secondary')!;
+          expect(range.textContent!.replace(/\s+/g, ' ').trim()).to.equal('20 – 24 °C');
+          expect(getComputedStyle(range.querySelector('.unit')!).display).not.to.equal('none');
+        });
+      }
+    }
+
+    it('localizes compact dual current-primary ranges and accessible current text', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'auto';
+      el.lowValue = 20.5;
+      el.highValue = 24;
+      el.current = 21.5;
+      el.showCurrentAsPrimary = true;
+      el.formatNumber = (value, decimals) => value.toFixed(decimals).replace('.', ',');
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.secondary')!.textContent!.replace(/\s+/g, ' ').trim()).to.equal('20,5 – 24 °C');
+      expect(el.shadowRoot!.querySelector('.center .sr-only')!.textContent).to.equal('Current temperature 21,5 °C');
+      expect(el.shadowRoot!.querySelector('.center .temp')!.getAttribute('aria-hidden')).to.equal('true');
+      expect(el.shadowRoot!.querySelector('.center .value-text sup')!.textContent).to.equal('5');
+    });
+
     it('suppresses in-flight drag events when switched to readonly', async () => {
       const el = await mount();
       const { svg, cx, cy, scale } = svgGeometry(el);

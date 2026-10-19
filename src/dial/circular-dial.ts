@@ -1162,11 +1162,12 @@ export class MtCircularDial extends LitElement {
       if (this.showCurrentAsPrimary && this.current != null) {
         return html`<div class=${classMap({ center: true, tight: this._centerTight })}>
           ${this._renderStatus()}
-          <div class="temp"><span class="value-text">${this._fmt(this.current, 1)}</span><span class="unit">${this.unit}</span></div>
+          <div class="temp current-primary" aria-hidden="true"><span class="value-text">${this._fmtCenter(this.current, 1)}</span><span class="unit">${this.unit}</span></div>
+          <span class="sr-only">Current temperature ${this._fmt(this.current, 1).replace(/\.0$/, '')} ${this.unit}</span>
           <div class="temp dual settled secondary">
-            <span class="value-text">${this._fmt(this._displayLow, this._precision)}</span>
+            <span class="value-text">${this._fmtCompact(this._displayLow)}</span>
             <span class="dash">–</span>
-            <span class="value-text">${this._fmt(this._displayHigh, this._precision)}</span>
+            <span class="value-text">${this._fmtCompact(this._displayHigh)}</span>
             <span class="unit">${this.unit}</span>
           </div>
         </div>`;
@@ -1589,8 +1590,9 @@ export class MtCircularDial extends LitElement {
         letter-spacing: -0.02em;
         color: var(--dial-color);
       }
-      /* Only the integer contributes to the single-mode number's layout box. */
-      .dial:not(.dual) .value-text {
+      /* Only the integer contributes to a superscript number's layout box. */
+      .dial:not(.dual) .value-text,
+      .current-primary .value-text {
         position: relative;
       }
       .value-text sup {
@@ -1610,7 +1612,8 @@ export class MtCircularDial extends LitElement {
       .dial:not(.dual) .center:not(.tight) .temp:not(.dual) .value-text {
         font-size: clamp(23px, 21.2cqi, 67.84px);
       }
-      .dial:not(.dual) .temp .unit {
+      .dial:not(.dual) .temp .unit,
+      .current-primary .unit {
         display: none;
       }
       .temp.dual .unit {
