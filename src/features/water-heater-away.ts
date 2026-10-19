@@ -54,7 +54,7 @@ export class MtWaterHeaterAway extends LitElement {
       >
         <span class="ic" aria-hidden="true"><ha-icon icon=${WATER_HEATER_AWAY_ICON}></ha-icon></span>
         <span class="text">
-          <span class="title">${formatAttributeName(this.hass, s, 'away_mode', 'Away mode')}</span>
+          <span class="title">${this.label ?? formatAttributeName(this.hass, s, 'away_mode', 'Away mode')}</span>
           <span class="value">${formatAttributeValue(this.hass, s, 'away_mode')}</span>
         </span>
       </button>`;

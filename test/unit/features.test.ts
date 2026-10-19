@@ -96,6 +96,21 @@ describe('stock selector parity', () => {
     }
   }
 
+  for (const label of ['Holiday', undefined]) {
+    it(`uses ${label ?? 'Away mode'} as the away tile title and button name`, async () => {
+      const hass = makeHass({ 'water_heater.test': waterHeaterState() });
+      const el = await fixture<MtWaterHeaterAway>(html`<mt-water-heater-away .hass=${hass} entityId="water_heater.test" display="tile" .label=${label}></mt-water-heater-away>`);
+      const button = el.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+      const title = label ?? 'Away mode';
+      expect(button.querySelector('.title')!.textContent).to.equal(title);
+      // Native buttons derive their accessible name from content unless overridden.
+      expect(button.hasAttribute('aria-label')).to.be.false;
+      expect(button.hasAttribute('aria-labelledby')).to.be.false;
+      expect(button.querySelector('.text')!.hasAttribute('aria-hidden')).to.be.false;
+      expect(button.textContent).to.contain(title);
+    });
+  }
+
   it('localizes the away tile state and title', async () => {
     const hass = Object.assign(makeHass({ 'water_heater.test': waterHeaterState() }), {
       formatEntityAttributeName: () => 'Vacation',
