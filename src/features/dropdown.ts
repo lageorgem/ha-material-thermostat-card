@@ -57,7 +57,7 @@ export class MtDropdown extends LitElement {
   };
 
   private get _active(): SelectorItem | undefined {
-    return this.items.find((i) => i.active) ?? this.items[0];
+    return this.items.find((i) => i.active);
   }
 
   /** Disable the trigger when no option is enabled. @param this dropdown instance */
@@ -72,7 +72,7 @@ export class MtDropdown extends LitElement {
    */
   private get _tileOn(): boolean {
     if (this.forceOff) return false;
-    const sel = this.items.find((i) => i.active);
+    const sel = this._active;
     if (!sel) return false;
     return !isOffValue(sel.value);
   }
@@ -119,7 +119,7 @@ export class MtDropdown extends LitElement {
 
   /**
    * The compact pill trigger: icon + current value + chevron.
-   * @param active the currently active (or first) item
+   * @param active the currently active item, if any
    */
   private _renderPill(active: SelectorItem | undefined): TemplateResult {
     return html`
@@ -130,10 +130,12 @@ export class MtDropdown extends LitElement {
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}
       >
-        ${active?.icon
+        ${!active
+          ? html`<ha-icon class="lead" icon="mdi:tune-variant"></ha-icon>`
+          : active.icon
           ? html`<ha-icon class="lead" icon=${active.icon}></ha-icon>`
           : html`<span class="dot"></span>`}
-        <span class="label">${active?.label ?? this.placeholder}</span>
+        <span class="label">${active?.label ?? '—'}</span>
         <ha-icon class="chev" icon="mdi:chevron-down"></ha-icon>
       </button>
     `;
@@ -143,7 +145,7 @@ export class MtDropdown extends LitElement {
    * The Google-Home-style tile trigger: an icon chip, the title, and the
    * current value. The `on` class drives the accent tint + extra-rounded
    * corners (see {@link _tileOn}).
-   * @param active the currently active (or first) item
+   * @param active the currently active item, if any
    */
   private _renderTile(active: SelectorItem | undefined): TemplateResult {
     // The active option's color tints the tile (via --mt-tile-accent); unset
@@ -159,13 +161,15 @@ export class MtDropdown extends LitElement {
         @click=${this._toggle}
       >
         <div class="ic">
-          ${active?.icon
+          ${!active
+            ? html`<ha-icon icon="mdi:tune-variant"></ha-icon>`
+            : active.icon
             ? html`<ha-icon icon=${active.icon}></ha-icon>`
             : html`<span class="dot"></span>`}
         </div>
         <div class="text">
           ${this.label ? html`<div class="title">${this.label}</div>` : nothing}
-          <div class="value">${active?.label ?? this.placeholder}</div>
+          <div class="value">${active?.label ?? '—'}</div>
         </div>
       </button>
     `;

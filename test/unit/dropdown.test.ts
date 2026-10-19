@@ -57,27 +57,43 @@ describe('mt-dropdown', () => {
       expect(el.shadowRoot!.querySelector('.trigger .chev')).to.not.equal(null);
     });
 
-    it('falls back to items[0] when no item is active', async () => {
+    it('shows a neutral empty selection when no item is active', async () => {
       const noActive: SelectorItem[] = [
-        { value: 'a', label: 'Alpha' }, // no icon -> dot
+        { value: 'a', label: 'Alpha', icon: 'mdi:a', color: '#ff8100' },
         { value: 'b', label: 'Beta', icon: 'mdi:b' },
       ];
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown .items=${noActive}></mt-dropdown>`
       );
-      // first item has no icon -> dot in the trigger
-      expect(el.shadowRoot!.querySelector('.trigger .dot')).to.not.equal(null);
-      expect(el.shadowRoot!.querySelector('.trigger .lead')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.trigger .label')!.textContent).to.equal('Alpha');
+      expect(el.shadowRoot!.querySelector('.trigger .dot')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.trigger .lead')!.getAttribute('icon')).to.equal('mdi:tune-variant');
+      expect(el.shadowRoot!.querySelector('.trigger .label')!.textContent).to.equal('—');
+      expect(trigger(el).textContent).not.to.contain('Alpha');
+      expect(trigger(el).getAttribute('style') ?? '').not.to.contain('--mt-tile-accent');
+      trigger(el).click();
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(2);
+      expect(el.shadowRoot!.querySelector('.opt.active, .opt[aria-selected="true"], .check')).to.equal(null);
+      const listener = oncePromise(el, 'item-selected');
+      el.shadowRoot!.querySelector<HTMLButtonElement>('.opt')!.click();
+      expect((await listener).detail).to.deep.equal({ value: 'a' });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
     });
 
-    it('shows placeholder + dot when there are no items', async () => {
+    it('shows an em dash and generic icon when there are no items', async () => {
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown .items=${[]} placeholder="Choose"></mt-dropdown>`
       );
-      expect(el.shadowRoot!.querySelector('.trigger .dot')).to.not.equal(null);
-      expect(el.shadowRoot!.querySelector('.trigger .lead')).to.equal(null);
-      expect(el.shadowRoot!.querySelector('.trigger .label')!.textContent).to.equal('Choose');
+      expect(el.shadowRoot!.querySelector('.trigger .dot')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.trigger .lead')!.getAttribute('icon')).to.equal('mdi:tune-variant');
+      expect(el.shadowRoot!.querySelector('.trigger .label')!.textContent).to.equal('—');
+    });
+
+    it('keeps the dot for an active item without an icon', async () => {
+      const el = await fixture<MtDropdown>(html`<mt-dropdown .items=${[{ value: 'b', label: 'Beta', active: true }]}></mt-dropdown>`);
+      expect(el.shadowRoot!.querySelector('.trigger .dot')).not.to.equal(null);
+      expect(el.shadowRoot!.querySelector('.trigger .label')!.textContent).to.equal('Beta');
     });
   });
 
@@ -314,17 +330,23 @@ describe('mt-dropdown', () => {
       expect(tile(el).classList.contains('on')).to.be.false;
     });
 
-    it('is not "on" when nothing is active (uses items[0] for display)', async () => {
+    it('shows a neutral empty selection when nothing is active', async () => {
       const noActive: SelectorItem[] = [
-        { value: 'a', label: 'Alpha', icon: 'mdi:a' },
+        { value: 'a', label: 'Alpha', icon: 'mdi:a', color: '#ff8100' },
         { value: 'b', label: 'Beta', icon: 'mdi:b' },
       ];
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown variant="tile" .items=${noActive} label="Mode"></mt-dropdown>`
       );
       expect(tile(el).classList.contains('on')).to.be.false;
-      // still shows the first item as the displayed value
-      expect(tile(el).querySelector('.value')!.textContent).to.equal('Alpha');
+      expect(tile(el).querySelector('.title')!.textContent).to.equal('Mode');
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('—');
+      expect(tile(el).querySelector('.ic ha-icon')!.getAttribute('icon')).to.equal('mdi:tune-variant');
+      expect(tile(el).getAttribute('style') ?? '').not.to.contain('--mt-tile-accent');
+      tile(el).click();
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelectorAll('.opt').length).to.equal(2);
+      expect(el.shadowRoot!.querySelector('.opt.active, .opt[aria-selected="true"], .check')).to.equal(null);
     });
 
     it('omits the title when no label is set, and shows a dot when the active item has no icon', async () => {
@@ -338,11 +360,11 @@ describe('mt-dropdown', () => {
       expect(tile(el).querySelector('.value')!.textContent).to.equal('Plain');
     });
 
-    it('shows the placeholder as the value when there are no items', async () => {
+    it('shows an em dash as the value when there are no items', async () => {
       const el = await fixture<MtDropdown>(
         html`<mt-dropdown variant="tile" .items=${[]} placeholder="Pick"></mt-dropdown>`
       );
-      expect(tile(el).querySelector('.value')!.textContent).to.equal('Pick');
+      expect(tile(el).querySelector('.value')!.textContent).to.equal('—');
       expect(tile(el).classList.contains('on')).to.be.false;
     });
 
