@@ -44,6 +44,78 @@ describe('card parity contracts', () => {
     return card.shadowRoot!.querySelector('mt-circular-dial')!;
   }
 
+  it('refreshes dial number formatting on a locale-only update', async () => {
+    card.hass = { ...card.hass, states: { 'climate.test': climateState({ temperature: 21.5 }) } };
+    await card.updateComplete;
+    await dial().updateComplete;
+    expect(dial().shadowRoot!.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).to.equal('21.5 °C');
+    card.hass = { ...card.hass, ...{ locale: { language: 'de', number_format: 'language' } } };
+    await card.updateComplete;
+    await dial().updateComplete;
+    expect(dial().shadowRoot!.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).to.equal('21,5 °C');
+  });
+
+  it('refreshes nested chip labels when only the state formatter finishes loading', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', font: 'theme', features: [{ type: 'climate-hvac-modes' }] });
+    await card.updateComplete;
+    const row = card.shadowRoot!.querySelector('mt-feature-row')!;
+    await row.updateComplete;
+    const selector = row.shadowRoot!.querySelector('mt-climate-selector')!;
+    await selector.updateComplete;
+    const chips = selector.shadowRoot!.querySelector('mt-selector-row')!;
+    await chips.updateComplete;
+    expect(chips.shadowRoot!.querySelector('[title="Heat"]')).not.to.equal(null);
+    card.hass = { ...card.hass, ...{ formatEntityState: (_state: unknown, value?: string) => value === 'heat' ? 'Heizbetrieb' : 'Aus' } };
+    await card.updateComplete;
+    await row.updateComplete;
+    await selector.updateComplete;
+    await chips.updateComplete;
+    expect(chips.shadowRoot!.querySelector('[title="Heizbetrieb"]')).not.to.equal(null);
+    expect(chips.shadowRoot!.querySelector('[title="Heat"]')).to.equal(null);
+    expect(dial().modeLabel).to.equal('Aus');
+  });
+
+  it('refreshes translated controls when only localize finishes loading', async () => {
+    card.hass = { ...card.hass, localize: () => 'Mehr Informationen' };
+    await card.updateComplete;
+    expect(card.shadowRoot!.querySelector('.more')!.getAttribute('aria-label')).to.equal('Mehr Informationen');
+  });
+
+  for (const key of ['language', 'locale', 'localize', 'formatEntityState', 'formatEntityAttributeValue', 'formatEntityAttributeName', 'formatEntityName'] as const) {
+    it(`renders when only ${key} changes identity`, async () => {
+      const updated = sinon.spy(card as unknown as { updated: (changed: unknown) => void }, 'updated');
+      const value = key === 'language' ? 'de' : key === 'locale' ? { language: 'de' } : () => 'Übersetzt';
+      card.hass = { ...card.hass, [key]: value };
+      await card.updateComplete;
+      expect(updated.calledOnce).to.equal(true);
+    });
+  }
+
+  it('renders when only the unit system identity changes, including absent config', async () => {
+    const updated = sinon.spy(card as unknown as { updated: (changed: unknown) => void }, 'updated');
+    card.hass = { ...card.hass, config: { ...card.hass.config, unit_system: { ...card.hass.config.unit_system, temperature: '°F' } } };
+    await card.updateComplete;
+    expect(updated.callCount).to.equal(1);
+    expect(dial().unit).to.equal('°F');
+    card.hass = { ...card.hass, config: undefined! };
+    await card.updateComplete;
+    expect(updated.callCount).to.equal(2);
+    expect(dial().unit).to.equal('°C');
+    card.hass = { ...card.hass };
+    await card.updateComplete;
+    expect(updated.callCount).to.equal(2);
+    card.hass = { ...card.hass, config: makeHass().config };
+    await card.updateComplete;
+    expect(updated.callCount).to.equal(3);
+  });
+
+  it('skips unrelated entity updates with unchanged presentation dependencies', async () => {
+    const updated = sinon.spy(card as unknown as { updated: (changed: unknown) => void }, 'updated');
+    card.hass = { ...card.hass, states: { ...card.hass.states, 'climate.other': { ...climateState(), entity_id: 'climate.other' } } };
+    await card.updateComplete;
+    expect(updated.called).to.equal(false);
+  });
+
   for (const mode of ['eco', 'off', 'electric']) {
     for (const options of [undefined, [], [{ value: 'other', color: '#123456' }], [{ value: mode }], [{ value: mode, color: '#123456' }]]) {
       it(`colours the water heater ${mode} dial and card from operation options ${JSON.stringify(options)}`, async () => {

@@ -64,6 +64,12 @@ console.info(
 
 const SERVICE_DEBOUNCE_MS = 600;
 const RESYNC_MS = 3000;
+/** HA presentation dependencies, including frontend APIs absent from older helper types. */
+const HASS_PRESENTATION_KEYS = [
+  'language', 'locale', 'localize', 'formatEntityState',
+  'formatEntityAttributeValue', 'formatEntityAttributeName', 'formatEntityName',
+] as const;
+type PresentationHass = HomeAssistant & Partial<Record<typeof HASS_PRESENTATION_KEYS[number], unknown>>;
 let nextNameId = 0;
 /** Fraction of halo/minimal dial height safe to crop below +/- (bottom edge ~93.5%). */
 const DIAL_BOTTOM_GAP = 0.065;
@@ -185,7 +191,9 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     return fromCelsius(feelsLikeC(tC, rh), systemTempUnit(this.hass));
   }
 
-  /** Update for tracked entities, local state, or the configured theme.
+  /** Update for tracked entities, local state, the configured theme, or changed
+   * HA language, locale, translation/formatter functions, and unit-system identities.
+   * Unrelated entity updates with unchanged presentation dependencies stay skipped.
    * @param changed previous reactive property values
    */
   protected shouldUpdate(changed: PropertyValues): boolean {
@@ -201,6 +209,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     if (changed.has('hass')) {
       const old = changed.get('hass') as HomeAssistant | undefined;
       if (!old) return true;
+      if (HASS_PRESENTATION_KEYS.some((key) => (old as PresentationHass)[key] !== (this.hass as PresentationHass)[key])) return true;
+      if (old.config?.unit_system !== this.hass.config?.unit_system) return true;
       if (this._config.theme && old.themes !== this.hass.themes) return true;
       return this._trackedEntityIds().some((id) => old.states[id] !== this.hass.states[id]);
     }

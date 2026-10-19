@@ -1258,7 +1258,8 @@ describe('material-thermostat-card', () => {
     it('shouldUpdate false when the tracked entity state is unchanged (===)', async () => {
       const el = track(await mount(baseConfig()));
       const same = el.hass.states[ENTITY];
-      const newHass = makeHass({ [ENTITY]: same });
+      // Same presentation members (localize/locale/formatters/config); only states is new.
+      const newHass = { ...el.hass, states: { [ENTITY]: same } } as typeof el.hass;
       const changed = new Map<string, unknown>([['hass', el.hass]]);
       // simulate Lit handing us the new value as `this.hass`
       el.hass = newHass;
