@@ -10,6 +10,9 @@ export type FeatureType =
   | 'climate-hvac-modes'
   | 'climate-fan-modes'
   | 'climate-swing-modes'
+  | 'climate-swing-horizontal-modes'
+  | 'water-heater-operation-modes'
+  | 'water-heater-away-mode'
   | 'climate-preset-modes'
   | 'input-select'
   | 'switch-group'
@@ -55,6 +58,8 @@ interface OrderedOptions {
   options?: OptionOverride[];
   /** Explicit order of option values; unlisted values follow in their natural order. */
   order?: string[];
+  /** Allow-list: only these option values are shown, in this order (stock-card `hvac_modes`/`fan_modes`/… compatibility). Unset = all values. */
+  include?: string[];
 }
 
 export interface ClimateModesFeatureConfig extends BaseSelectorFeature, OrderedOptions {
@@ -67,6 +72,25 @@ export interface ClimateFanFeatureConfig extends BaseSelectorFeature, OrderedOpt
 
 export interface ClimateSwingFeatureConfig extends BaseSelectorFeature, OrderedOptions {
   type: 'climate-swing-modes';
+}
+
+/** Horizontal swing selector configuration. */
+export interface ClimateSwingHorizontalFeatureConfig extends BaseSelectorFeature, OrderedOptions {
+  type: 'climate-swing-horizontal-modes';
+}
+
+/** Water heater operation selector configuration. */
+export interface WaterHeaterOperationFeatureConfig extends BaseSelectorFeature, OrderedOptions {
+  type: 'water-heater-operation-modes';
+}
+
+/** Water heater away-mode toggle configuration. */
+export interface WaterHeaterAwayFeatureConfig {
+  type: 'water-heater-away-mode';
+  display?: 'icons' | 'tile';
+  label?: string;
+  /** Width % (10–100, steps of 10). Unset = full width. */
+  width?: number;
 }
 
 export interface ClimatePresetFeatureConfig extends BaseSelectorFeature, OrderedOptions {
@@ -151,6 +175,9 @@ export type FeatureConfig =
   | ClimateModesFeatureConfig
   | ClimateFanFeatureConfig
   | ClimateSwingFeatureConfig
+  | ClimateSwingHorizontalFeatureConfig
+  | WaterHeaterOperationFeatureConfig
+  | WaterHeaterAwayFeatureConfig
   | ClimatePresetFeatureConfig
   | InputSelectFeatureConfig
   | SwitchGroupFeatureConfig
@@ -174,10 +201,14 @@ export interface FeelsLikeConfig {
   show_as_current?: boolean;
 }
 
+/** A literal name, a structured HA name config, or a sequence of either. */
+export type EntityNameConfig = string | Record<string, unknown> | Array<string | Record<string, unknown>>;
+
 export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   type: string;
+  /** Primary climate.* or water_heater.* entity id. */
   entity: string;
-  name?: string;
+  name?: EntityNameConfig;
   theme?: string;
   /** Dial appearance. Default: 'halo'. */
   dial_style?: 'halo' | 'minimal' | 'google';
@@ -188,6 +219,8 @@ export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   font?: 'rounded' | 'theme';
   /** Show the current room temperature as the large primary number. */
   show_current_as_primary?: boolean;
+  /** Show the localized HVAC action / state text above the dial number, like HA's stock card. Default false. */
+  show_state_label?: boolean;
   /** "Feels-like" temperature/humidity sensors (shared by the comfort feature). */
   feels_like?: FeelsLikeConfig;
   features?: FeatureConfig[];

@@ -76,6 +76,59 @@ export const HVAC_MODE_ICONS: Record<string, string> = {
   fan_only: 'mdi:fan',
 };
 
+/** HA's canonical water heater operation modes, in HA frontend display order. */
+export const WATER_HEATER_OPERATION_ORDER = [
+  'electric', 'gas', 'heat_pump', 'eco', 'performance', 'high_demand', 'off',
+] as const;
+
+/** Default MDI icons for water heater operation modes. */
+export const WATER_HEATER_MODE_ICONS: Record<string, string> = {
+  electric: 'mdi:lightning-bolt',
+  gas: 'mdi:fire-circle',
+  heat_pump: 'mdi:heat-pump',
+  eco: 'mdi:leaf',
+  performance: 'mdi:rocket-launch',
+  high_demand: 'mdi:finance',
+  off: 'mdi:power',
+  on: 'mdi:power',
+};
+
+/** Icon for the water heater away-mode toggle. */
+export const WATER_HEATER_AWAY_ICON = 'mdi:account-arrow-right';
+
+/**
+ * Icon for an operation mode; unknown modes use the water boiler icon.
+ * @param mode the water heater operation mode
+ */
+export function waterHeaterModeIcon(mode: string): string {
+  return Object.prototype.hasOwnProperty.call(WATER_HEATER_MODE_ICONS, mode)
+    ? WATER_HEATER_MODE_ICONS[mode]
+    : 'mdi:water-boiler';
+}
+
+/**
+ * Accent colour for an operation mode, reusing climate and preset tokens.
+ * @param mode the water heater operation mode
+ */
+export function waterHeaterModeColor(mode: string): string {
+  if (mode === 'off') return climateModeColor('off');
+  if (mode === 'eco') return presetColor('eco')!;
+  return climateModeColor('heat');
+}
+
+/**
+ * Stable sort of canonical modes first, then unknown modes in their original order.
+ * Always returns a new array.
+ * @param modes the available water heater operation modes
+ */
+export function sortOperationModes(modes: readonly string[]): string[] {
+  const rank = (mode: string): number => {
+    const index = (WATER_HEATER_OPERATION_ORDER as readonly string[]).indexOf(mode);
+    return index === -1 ? Infinity : index;
+  };
+  return [...modes].sort((a, b) => rank(a) - rank(b));
+}
+
 /** Color expression (CSS) for a climate HVAC mode. */
 export function climateModeColor(mode: string | undefined): string {
   switch (mode) {
@@ -145,13 +198,32 @@ export function swingIcon(value: string): string {
 }
 
 /**
+ * Case-insensitive heuristic icon for a horizontal swing mode.
+ * @param mode the horizontal swing mode value
+ */
+export function swingHorizontalIcon(mode: string): string {
+  const v = mode.toLowerCase();
+  if (v === 'off') return 'mdi:arrow-collapse-horizontal';
+  if (v === 'on' || v === 'both' || v === 'swing' || v.includes('auto')) return 'mdi:arrow-left-right';
+  if (v.includes('left')) return 'mdi:arrow-left';
+  if (v.includes('right')) return 'mdi:arrow-right';
+  if (v.includes('center') || v.includes('middle')) return 'mdi:format-horizontal-align-center';
+  return 'mdi:arrow-left-right';
+}
+
+/**
  * Order a list of values by an optional explicit order: values listed in `order`
  * come first (in that order, ignoring any no-longer-present), then the remaining
  * values in their original order.
  * @param all the available values (natural order)
  * @param order the desired explicit order, if any
+ * @param include optional non-empty allow-list, applied in its order before explicit ordering
  */
-export function orderValues(all: string[], order?: string[]): string[] {
+export function orderValues(all: string[], order?: string[], include?: readonly string[]): string[] {
+  if (include?.length) {
+    const available = new Set(all);
+    all = include.filter((v) => available.has(v));
+  }
   if (!order?.length) return all;
   const available = new Set(all);
   const ordered = order.filter((v) => available.has(v));
