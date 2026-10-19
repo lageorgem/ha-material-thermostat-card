@@ -12,7 +12,7 @@ const S = {
   row: 'mt-selector-row', chip: '.chip', dropdown: 'mt-dropdown', trigger: '.trigger', option: '.opt',
 };
 const JOURNEYS = [
-  ['J1', ['full-icons'], 'HVAC cool frame + live state, restore heat'],
+  ['J1', ['full-icons'], 'HVAC cool frame + live state, restore original mode'],
   ['J2', ['full-icons'], 'Preset/fan/swing/horizontal frames + live attributes'],
   ['J3', ['full-icons'], 'One debounced temperature frame, previous + 0.5'],
   ['J4', ['range-mqtt'], 'Range temperature frame includes low and high'],
@@ -44,7 +44,7 @@ function options() {
   return opts;
 }
 function assert(ok, message) { if (!ok) throw new Error(message); }
-async function poll(fn, description, timeout = 5000) {
+async function pollUntil(fn, description, timeout = 5000) {
   const end = Date.now() + timeout;
   do {
     const value = await fn();
@@ -54,7 +54,7 @@ async function poll(fn, description, timeout = 5000) {
   } while (Date.now() < end);
   throw new Error(`Timeout: ${description} (${timeout} ms)`);
 }
-async function observe(fn, duration = 1200) {
+async function observeFor(fn, duration = 1200) {
   const end = Date.now() + duration;
   do {
     await fn();
@@ -87,25 +87,75 @@ async function main() {
   const browser = await chromium.launch({ channel: 'chrome', headless: !opts.headed, timeout: TIMEOUT });
   const report = { language: opts.lang, cases: cases.map(({ id, entity }) => ({ id, entity })), checks: [], frames: [], consoleErrors: [] };
   const clean = (value) => JSON.parse(JSON.stringify(value).split(auth.token).join('[REDACTED]'));
+  let context, fatal;
+  const abort = (error) => {
+    fatal ??= error;
+    // Closing the context cancels evaluations/actions, including a wedged renderer.
+    void context?.close().catch(() => {});
+    return fatal;
+  };
+  const bounded = async (fn, description, timeout = TIMEOUT) => {
+    if (fatal) throw fatal;
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(fn),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(abort(new Error(`Deadline: ${description} (${timeout} ms); context closed`))), timeout);
+        }),
+      ]);
+    } finally { clearTimeout(timer); }
+  };
+  const evaluate = (target, fn, arg) => bounded(() => target.evaluate(fn, arg), 'frontend evaluation');
+  const poll = (fn, description, timeout = 5000) => bounded(async () => {
+    try { return await pollUntil(fn, description, timeout); }
+    catch (error) {
+      if (String(error.message).startsWith('Timeout:')) throw abort(error);
+      throw error;
+    }
+  }, description, timeout);
+  const observe = (fn, duration = 1200) => bounded(() => observeFor(fn, duration), 'negative observation', duration + 1000);
   const check = async (name, fn) => {
     const start = report.frames.length;
     try {
-      const evidence = await fn();
+      const evidence = await bounded(fn, name, 120000);
       report.checks.push({ name, status: 'PASS', evidence: clean(evidence ?? {}), frames: [start, report.frames.length] });
     } catch (error) {
       report.checks.push({ name, status: 'FAIL', error: safeError(error), frames: [start, report.frames.length] });
+      if (fatal) throw fatal;
     }
   };
   let served = 0;
   try {
-    const context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block' });
+    context = await browser.newContext({ viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block' });
     context.setDefaultTimeout(TIMEOUT);
     context.setDefaultNavigationTimeout(TIMEOUT);
     await context.addInitScript(({ url, token, lang }) => {
+      if (window !== window.top || location.origin !== new URL(url).origin) return;
       localStorage.setItem('selectedLanguage', JSON.stringify(lang));
       localStorage.setItem('hassTokens', JSON.stringify({ hassUrl: url, clientId: `${url}/`, access_token: token, token_type: 'Bearer', expires_in: 315360000, expires: Date.now() + 315360000000, refresh_token: 'x' }));
     }, { ...auth, lang: opts.lang });
     const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(60000);
+    const requireHAOrigin = (url) => {
+      if (new URL(url).origin !== new URL(auth.url).origin) {
+        // Do not include the redirect URL: an SSO URL may contain credentials.
+        throw abort(new Error('Unexpected top-level origin; only the HA origin is allowed; context closed'));
+      }
+    };
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) {
+        try { requireHAOrigin(frame.url()); } catch { /* abort recorded; pending work is cancelled. */ }
+      }
+    });
+    await page.route('**/*', async (route) => {
+      const request = route.request();
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+        try { requireHAOrigin(request.url()); } catch { await route.abort().catch(() => {}); return; }
+      }
+      await route.continue();
+    });
     page.on('websocket', (ws) => ws.on('framesent', ({ payload }) => {
       try {
         const msg = JSON.parse(String(payload));
@@ -120,11 +170,12 @@ async function main() {
     await page.route('**/material-thermostat-card*.js*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle }); served++;
     });
-    await page.goto(`${auth.url}/${URL_PATH}/0`, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-    await page.waitForFunction(() => document.querySelector('home-assistant')?.hass?.states && customElements.get('material-thermostat-card'), null, { timeout: TIMEOUT });
+    await bounded(() => page.goto(`${auth.url}/${URL_PATH}/0`, { waitUntil: 'domcontentloaded', timeout: 60000 }), 'HA navigation', 60000);
+    requireHAOrigin(page.url());
+    await bounded(() => page.waitForFunction(() => document.querySelector('home-assistant')?.hass?.states && customElements.get('material-thermostat-card'), null, { timeout: TIMEOUT }), 'HA readiness');
     assert(served > 0, 'Local dist route was never hit; refusing to test installed HACS bundle');
 
-    const state = (entity) => page.evaluate((id) => document.querySelector('home-assistant').hass.states[id], entity);
+    const state = (entity) => evaluate(page, (id) => document.querySelector('home-assistant').hass.states[id], entity);
     const waitState = async (entity, key, value) => poll(async () => {
       const s = await state(entity);
       return (key === 'state' ? s?.state : s?.attributes?.[key]) === value && s;
@@ -135,7 +186,7 @@ async function main() {
       return sections.get(id).locator(S.card);
     };
     const dial = (id) => card(id).locator(S.dial);
-    const cardText = (id) => card(id).evaluate((host) => {
+    const cardText = (id) => evaluate(card(id), (host) => {
       const text = (node) => {
         if (node.nodeType === Node.TEXT_NODE) return node.textContent;
         if (node.nodeType === Node.ELEMENT_NODE && ['STYLE', 'SCRIPT'].includes(node.tagName)) return '';
@@ -150,13 +201,19 @@ async function main() {
       return f.domain === domain && f.service === service && (Array.isArray(target) ? target.includes(entity(id)) : target === entity(id));
     });
     const frame = async (start, id, domain, service, data = {}) => poll(() => calls(start, id, domain, service).find((f) => Object.entries(data).every(([k, v]) => f.service_data?.[k] === v)), `${id}: ${domain}.${service} ${JSON.stringify(data)}`);
+    const restore = async (id, domain, service, data, expected) => {
+      const start = report.frames.length;
+      await evaluate(page, ({ domain, service, data, entity_id }) => document.querySelector('home-assistant').hass.callService(domain, service, { ...data, entity_id }), { domain, service, data, entity_id: entity(id) });
+      await frame(start, id, domain, service, data);
+      for (const [key, value] of Object.entries(expected)) await waitState(entity(id), key, value);
+    };
     // Select the rendered item by value, then click its localized title. No English-only journeys.
     const rowFor = async (id, value, rowIndex) => {
       const rows = card(id).locator(S.row);
       const count = await rows.count();
       for (let i = 0; i < count; i++) {
         if (rowIndex !== undefined && rowIndex !== i) continue;
-        const item = await rows.nth(i).evaluate((row, v) => row.items?.find((item) => item.value === v), value);
+        const item = await evaluate(rows.nth(i), (row, v) => row.items?.find((item) => item.value === v), value);
         if (item) return { row: rows.nth(i), item };
       }
       throw new Error(`${id}: no selector item ${value}`);
@@ -171,7 +228,7 @@ async function main() {
     for (const c of cases) await check(`render:${c.id}`, async () => {
       const heading = page.locator(S.heading).filter({ hasText: new RegExp(`^QA:${c.id}$`) });
       await heading.waitFor({ state: 'visible' });
-      await heading.evaluate((heading, { id, S }) => {
+      await evaluate(heading, (heading, { id, S }) => {
         function deep(root, selector) {
           const found = [...root.querySelectorAll(selector)];
           for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...deep(el.shadowRoot, selector));
@@ -195,47 +252,65 @@ async function main() {
 
     if (enabled('full-icons')) {
       await check('J1: HVAC mode round trip', async () => {
-        let start = report.frames.length;
+        const previous = (await state(entity('full-icons'))).state;
+        const start = report.frames.length;
         try {
           await select('full-icons', 'cool', 0);
           const sent = await frame(start, 'full-icons', 'climate', 'set_hvac_mode', { hvac_mode: 'cool' });
           await waitState(entity('full-icons'), 'state', 'cool'); return sent;
         } finally {
-          start = report.frames.length;
-          await select('full-icons', 'heat', 0);
-          await frame(start, 'full-icons', 'climate', 'set_hvac_mode', { hvac_mode: 'heat' });
-          await waitState(entity('full-icons'), 'state', 'heat');
+          await restore('full-icons', 'climate', 'set_hvac_mode', { hvac_mode: previous }, { state: previous });
         }
       });
       for (const [index, value, key, service] of [[1, 'eco', 'preset_mode', 'set_preset_mode'], [2, 'high', 'fan_mode', 'set_fan_mode'], [3, 'both', 'swing_mode', 'set_swing_mode'], [4, 'left', 'swing_horizontal_mode', 'set_swing_horizontal_mode']]) {
         await check(`J2: ${service}`, async () => {
+          const previous = (await state(entity('full-icons'))).attributes[key];
+          assert(typeof previous === 'string', `Cannot safely restore ${key}: original value is unset; initialize it before running J2`);
           const start = report.frames.length;
-          const selected = await select('full-icons', value, index);
-          const sent = await frame(start, 'full-icons', 'climate', service, { [key]: value });
-          await waitState(entity('full-icons'), key, value); return { selected, sent };
+          try {
+            const selected = await select('full-icons', value, index);
+            const sent = await frame(start, 'full-icons', 'climate', service, { [key]: value });
+            await waitState(entity('full-icons'), key, value); return { previous, selected, sent };
+          } finally {
+            await restore('full-icons', 'climate', service, { [key]: previous }, { [key]: previous });
+          }
         });
       }
       await check('J3: exactly one debounced increment', async () => {
         const previous = Number((await state(entity('full-icons'))).attributes.temperature);
         assert(Number.isFinite(previous), 'Initial temperature missing');
         const start = report.frames.length;
-        await increment('full-icons').click();
-        const sent = await frame(start, 'full-icons', 'climate', 'set_temperature', { temperature: previous + 0.5 });
-        await waitState(entity('full-icons'), 'temperature', previous + 0.5);
-        await observe(() => assert(calls(start, 'full-icons', 'climate', 'set_temperature').length === 1, 'Duplicate temperature call'));
-        return { previous, sent, observationMs: 1200 };
+        try {
+          await increment('full-icons').click();
+          const sent = await frame(start, 'full-icons', 'climate', 'set_temperature', { temperature: previous + 0.5 });
+          await waitState(entity('full-icons'), 'temperature', previous + 0.5);
+          await observe(() => assert(calls(start, 'full-icons', 'climate', 'set_temperature').length === 1, 'Duplicate temperature call'));
+          return { previous, sent, observationMs: 1200 };
+        } finally {
+          await restore('full-icons', 'climate', 'set_temperature', { temperature: previous }, { temperature: previous });
+        }
       });
     }
     if (enabled('range-mqtt')) await check('J4: range increment', async () => {
-      if ((await state(entity('range-mqtt'))).state !== 'heat_cool') {
-        await select('range-mqtt', 'heat_cool', 0);
-        await waitState(entity('range-mqtt'), 'state', 'heat_cool');
+      const previous = await state(entity('range-mqtt'));
+      const targets = { target_temp_low: previous.attributes.target_temp_low, target_temp_high: previous.attributes.target_temp_high };
+      assert(Object.values(targets).every(Number.isFinite), 'Initial range bounds missing');
+      try {
+        if (previous.state !== 'heat_cool') {
+          await select('range-mqtt', 'heat_cool', 0);
+          await waitState(entity('range-mqtt'), 'state', 'heat_cool');
+        }
+        const start = report.frames.length;
+        await increment('range-mqtt').click();
+        const sent = await frame(start, 'range-mqtt', 'climate', 'set_temperature');
+        assert(Number.isFinite(sent.service_data.target_temp_low) && Number.isFinite(sent.service_data.target_temp_high), 'Both range bounds required');
+        await waitState(entity('range-mqtt'), 'target_temp_low', sent.service_data.target_temp_low);
+        await waitState(entity('range-mqtt'), 'target_temp_high', sent.service_data.target_temp_high);
+        return sent;
+      } finally {
+        try { await restore('range-mqtt', 'climate', 'set_temperature', targets, targets); }
+        finally { await restore('range-mqtt', 'climate', 'set_hvac_mode', { hvac_mode: previous.state }, { state: previous.state }); }
       }
-      const start = report.frames.length;
-      await increment('range-mqtt').click();
-      const sent = await frame(start, 'range-mqtt', 'climate', 'set_temperature');
-      assert(Number.isFinite(sent.service_data.target_temp_low) && Number.isFinite(sent.service_data.target_temp_high), 'Both range bounds required');
-      return sent;
     });
     if (enabled('range-auto')) await check('J5: auto has two sliders', async () => {
       const count = await dial('range-auto').locator(S.slider).count(); assert(count === 2, `Expected two sliders, got ${count}`); return { count };
@@ -260,24 +335,42 @@ async function main() {
         const previous = Number((await state(entity('wh-tank'))).attributes.temperature);
         assert(Number.isFinite(previous), 'Initial water temperature missing');
         const start = report.frames.length;
-        await increment('wh-tank').click();
-        return { previous, sent: await frame(start, 'wh-tank', 'water_heater', 'set_temperature', { temperature: previous + 0.5 }) };
+        try {
+          await increment('wh-tank').click();
+          const sent = await frame(start, 'wh-tank', 'water_heater', 'set_temperature', { temperature: previous + 0.5 });
+          await waitState(entity('wh-tank'), 'temperature', previous + 0.5);
+          return { previous, sent };
+        } finally {
+          await restore('wh-tank', 'water_heater', 'set_temperature', { temperature: previous }, { temperature: previous });
+        }
       });
       await check('J8: water heater operation', async () => {
+        const previous = (await state(entity('wh-tank'))).state;
         const start = report.frames.length;
-        await select('wh-tank', 'eco', 0);
-        const sent = await frame(start, 'wh-tank', 'water_heater', 'set_operation_mode', { operation_mode: 'eco' });
-        await waitState(entity('wh-tank'), 'state', 'eco'); return sent;
+        try {
+          await select('wh-tank', 'eco', 0);
+          const sent = await frame(start, 'wh-tank', 'water_heater', 'set_operation_mode', { operation_mode: 'eco' });
+          await waitState(entity('wh-tank'), 'state', 'eco'); return { previous, sent };
+        } finally {
+          await restore('wh-tank', 'water_heater', 'set_operation_mode', { operation_mode: previous }, { state: previous });
+        }
       });
     }
     if (enabled('wh-away')) await check('J9: away off frame', async () => {
+      const previous = (await state(entity('wh-away'))).attributes.away_mode;
+      assert(previous === 'on', 'J9 requires initial away_mode on; no mutation performed');
       const start = report.frames.length;
       const row = card('wh-away').locator(S.row).last();
-      await row.locator(S.chip).click();
-      return frame(start, 'wh-away', 'water_heater', 'set_away_mode', { away_mode: false });
+      try {
+        await row.locator(S.chip).click();
+        return await frame(start, 'wh-away', 'water_heater', 'set_away_mode', { away_mode: false });
+      } finally {
+        // REST-only fixture has no service implementation; verify it remained unchanged.
+        await waitState(entity('wh-away'), 'away_mode', previous);
+      }
     });
     for (const id of ['climate-unavailable', 'wh-unavailable'].filter(enabled)) await check(`J10: ${id} inert`, async () => {
-      const unavailable = await page.evaluate(() => document.querySelector('home-assistant').hass.localize('state.default.unavailable'));
+      const unavailable = await evaluate(page, () => document.querySelector('home-assistant').hass.localize('state.default.unavailable'));
       assert(unavailable, 'HA unavailable translation missing');
       assert((await cardText(id)).includes(unavailable), `Missing localized label: ${unavailable}`);
       const chips = card(id).locator(S.chip);
@@ -292,7 +385,7 @@ async function main() {
     });
     if (enabled('stock-yaml')) await check('J11: included HVAC modes only', async () => {
       const row = card('stock-yaml').locator(S.row).first();
-      const values = await row.evaluate((el) => el.items.map((item) => item.value));
+      const values = await evaluate(row, (el) => el.items.map((item) => item.value));
       assert(JSON.stringify([...values].sort()) === JSON.stringify(['cool', 'heat', 'off']), `Unexpected HVAC items ${values}`);
       const dropdown = row.locator(S.dropdown);
       await dropdown.locator(S.trigger).click();
@@ -306,7 +399,7 @@ async function main() {
       assert(our && stock, 'Missing card bounds');
       const overlap = Math.min(our.x + our.width, stock.x + stock.width) > Math.max(our.x, stock.x) && Math.min(our.y + our.height, stock.y + stock.height) > Math.max(our.y, stock.y);
       assert(!overlap, 'Our card overlaps stock card');
-      const size = await card(c.id).locator(S.shell).evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+      const size = await evaluate(card(c.id).locator(S.shell), (el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
       assert(size.scrollHeight <= size.clientHeight + 1, `Clipped ha-card: ${JSON.stringify(size)}`); return { our, stock, ...size };
     });
     if (opts.lang === 'de') {
@@ -323,9 +416,18 @@ async function main() {
       });
     }
   } catch (error) {
-    report.checks.push({ name: 'setup/runtime', status: 'FAIL', error: safeError(error) });
+    report.checks.push({ name: 'setup/runtime', status: 'FAIL', error: safeError(fatal ?? error) });
   } finally {
-    await browser.close();
+    let closeTimer;
+    const closed = await Promise.race([
+      browser.close().then(() => true, (error) => {
+        report.checks.push({ name: 'browser shutdown', status: 'FAIL', error: safeError(error) });
+        return false;
+      }),
+      new Promise((resolve) => { closeTimer = setTimeout(() => resolve(false), 10000); }),
+    ]);
+    clearTimeout(closeTimer);
+    if (!closed) report.checks.push({ name: 'browser shutdown deadline', status: 'FAIL', error: 'Browser did not close cleanly; exiting to terminate Playwright' });
     report.checks.push({ name: 'bundle route hit', status: served ? 'PASS' : 'FAIL', evidence: { served } });
     report.checks.push({ name: 'bundle console errors', status: report.consoleErrors.length ? 'FAIL' : 'PASS', evidence: { count: report.consoleErrors.length } });
     await writeFile(resolve(out, 'report.json'), JSON.stringify(clean(report), null, 2));
@@ -333,6 +435,7 @@ async function main() {
     const failures = report.checks.filter((c) => c.status === 'FAIL').length;
     console.log(`${report.checks.length - failures} PASS / ${failures} FAIL; dev/qa/out/${opts.lang}/report.json`);
     if (failures) process.exitCode = 1;
+    if (!closed) process.exit(1);
   }
 }
 main().catch((error) => { console.error(safeError(error)); process.exitCode = 1; });
