@@ -4,23 +4,30 @@ A "feature" is one configurable control rendered below/beside the dial. The
 config schema is in `src/types.ts` (the source of truth). `mt-feature-row`
 dispatches a `FeatureConfig` to the right element and applies grid placement.
 
-## The 9 feature types
+## The 14 feature types
 
 | `type` | Element | Renders via | Binds to | Selection behavior |
 | --- | --- | --- | --- | --- |
 | `climate-hvac-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_hvac_mode` |
 | `climate-fan-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_fan_mode` |
 | `climate-swing-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_swing_mode` |
+| `climate-swing-horizontal-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_swing_horizontal_mode` |
+| `climate-preset-modes` | `mt-climate-selector` | `selector-row` | the card's climate entity | `climate.set_preset_mode` |
+| `water-heater-operation-modes` | `mt-climate-selector` | `selector-row` | the card's water heater | `water_heater.set_operation_mode` |
+| `water-heater-away-mode` | `mt-water-heater-away` | `selector-row` | the card's water heater | `water_heater.set_away_mode` (boolean payload) |
 | `input-select` | `mt-input-select` | `selector-row` | an `input_select` | `input_select.select_option` |
 | `switch-group` | `mt-switch-group` | `selector-row` | a list of switchables | **mutually exclusive**: turn others off, then selected on |
 | `switch-list` | `mt-switch-list` | icon chips | a list of switchables | each toggles independently |
 | `button-list` | `mt-button-list` | icon chips | buttons/scenes/scripts | each pressed independently |
 | `entity-tile` | `mt-entity-tile` | rounded tile | one entity | `tap_action`, else natural action |
+| `sensor-list` | `mt-sensor-list` | sensor rows | `items` sensor entities | read-only |
 | `comfort` | `mt-comfort` | status line | the card's feels‑like sensors | read‑only; forecasts from history (**add once**) |
 
 ### Shared config (`BaseSelectorFeature`)
 `display?: 'icons' | 'dropdown' | 'tile'` and `width?: number` — but **only the
-selector-style types** extend it (`climate-*`, `input-select`, `switch-group`).
+selector-style types** extend it (`climate-*`, `water-heater-operation-modes`,
+`input-select`, `switch-group`). `water-heater-away-mode` has its own
+`display?: 'icons' | 'tile'`, `label?` and `width?`; no dropdown or option overrides.
 `switch-list`/`button-list` have **`width` but no `display`** (always icon rows).
 `entity-tile` has its **own** `display?: 'icon' | 'tile'` (`EntityTileDisplay`,
 default `tile`) — a *two*-value axis, not the selector's three. Don't assume the
@@ -45,13 +52,36 @@ The features attach `color` to each `SelectorItem` (`climate-selector`/`input-se
 build it from override+default; `switch-group` from `entity.color`).
 
 ### Per-option overrides (`OptionOverride`) + order
-`{ value, label?, icon?, hide?, color? }` — supported by the three `climate-*` selectors
-and `input-select`. `value` keys to an underlying option; `hide:true` removes it.
+`{ value, label?, icon?, hide?, color? }` — supported by all five `climate-*` selectors,
+`water-heater-operation-modes` and `input-select`. `value` keys to an underlying
+option; `hide:true` removes it.
 Those features also accept **`order?: string[]`** (an explicit display order of
 option values). The selectors apply it via `orderValues(all, order)` in
 `theme.ts` (listed values first in order, the rest in natural order — robust to
 the entity adding/removing options). The editors persist it by drag-reordering
 the option rows (`ha-sortable` + a `.handle`, `_moveOption` → emit `{ order }`).
+
+These ordered-option selectors also accept `include?: string[]`: only available
+values in the allow-list are shown, in its order. Unlisted values do not follow
+(unlike `order`). `config/normalize.ts` translates stock `style: icons|dropdown`
+and the corresponding `hvac_modes`/`preset_modes`/`fan_modes`/`swing_modes`/
+`swing_horizontal_modes`/`operation_modes` list to `display`/`include`, without
+mutating the input. Explicit custom keys win.
+
+### Domain-specific controls and localization
+
+`entity/adapter.ts` defines primary domains and capabilities. Climate selectors,
+comfort and feels-like are ignored for water heaters; operation/away controls are
+water-heater-only. Auxiliary controls work for either domain. Operation selectors
+use HA canonical ordering and per-mode icons. Away renders only with away support
+and a known `away_mode: on|off`; selection sends the opposite boolean. Missing
+numeric capability metadata retains legacy attribute-based behavior.
+
+`localize.ts` supplies HA state/attribute translations for mode values and tile
+titles, with English fallbacks. Explicit option labels win. Entity selectors
+disable items and guard service calls while unavailable. Card state text and
+“Unavailable” are localized; numbers follow HA number-format preferences.
+The editor's own strings remain English.
 
 ### List items (`EntityItem`)
 `{ entity, label?, icon?, color? }` — `switch-group.entities`, `switch-list.entities`,
@@ -230,7 +260,9 @@ document-level `mt-dropdown-open` event.
 ## The visual editor (`editor.ts`)
 
 - Base `ha-form` keeps entity/name/theme at top level; expandable **Style** groups
-  dial_style (halo/minimal/google), show_current_as_primary, and font (rounded/theme).
+   dial_style (halo/minimal/google), show_current_as_primary, show_state_label,
+   and font (rounded/theme). Structured `name` configs are YAML-only and preserved
+   when the base form changes; rendering delegates them to HA where supported.
   Defaults halo/rounded/false are omitted from saved YAML. Font helper discloses Google Fonts loading.
 - Outlined **Feels-like temperature** expansion uses labelled sensor-only
   `mt-entity-picker`s and a boolean form; edits preserve sibling fields and an empty config is pruned.
@@ -241,9 +273,11 @@ document-level `mt-dropdown-open` event.
   each row expands to its sub-editor; an "Add feature" menu appends a
   `defaultFeature(type)` and opens it.
 - **Add-menu filtering** (`_addableFeatures()`): climate selectors are offered
-  only when the entity exposes the matching attribute (`CLIMATE_FEATURE_ATTR`:
-  hvac_modes/fan_modes/swing_modes) AND aren't already added (each climate
-  selector is unique). Custom features (input_select, lists, tile) are always
+   only for climate entities exposing the matching attribute (`CLIMATE_FEATURE_ATTR`:
+   hvac_modes/fan_modes/preset_modes/swing_modes/swing_horizontal_modes) AND aren't
+   already added. Water heaters offer operation modes when operation_list exists
+   and away mode when supported; each is add-once. Comfort/feels-like are climate-only.
+   Custom features (input_select, lists, tile) are always
   offered and repeatable — **except** types in `SINGLETON_FEATURES` (currently
   `comfort`), which are add‑once: offered only while not already present.
 - ⚠️ HA lazily registers its form components — `ensureHaComponents()`

@@ -4,6 +4,58 @@ All notable changes to the **Material Thermostat Card** are documented here. Thi
 project adheres to [Semantic Versioning](https://semver.org/) and the format of
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.10.0] — 2026-10-19
+
+### Added
+
+- **Water heaters** as primary entities (`water_heater.*`), using
+  `water_heater.set_temperature`. Climate-only selectors, comfort and feels-like
+  settings are ignored for water heaters; custom-entity controls still work.
+- **Horizontal swing** (`climate-swing-horizontal-modes`) via
+  `climate.set_swing_horizontal_mode`.
+- **Water heater operation modes** (`water-heater-operation-modes`) via
+  `water_heater.set_operation_mode`, with HA's canonical ordering and mode icons.
+- **Water heater away toggle** (`water-heater-away-mode`) via
+  `water_heater.set_away_mode`, with `display: icons|tile`; shown only when the
+  entity supports away mode and reports a known on/off away state.
+- **Selector allow-lists** (`include: [...]`): only listed available values are
+  shown, in order, on climate/operation/input-select selectors.
+- **Stock thermostat YAML compatibility**: change the card type to
+  `custom:material-thermostat-card`; stock `style: icons|dropdown` and
+  `hvac_modes`, `preset_modes`, `fan_modes`, `swing_modes`,
+  `swing_horizontal_modes`, `operation_modes` are translated to `display` and
+  `include`. Explicit custom keys take precedence.
+- **Structured HA names** in `name:` (for example,
+  `[{type: entity}, {type: device}]`), rendered through HA where supported;
+  YAML-only, preserved by the visual editor, with entity-name fallback.
+- **Optional state label** (`show_state_label: true`, default `false`) above the
+  dial number: localized HVAC action or state. Deliberate stock differences remain:
+  the arc fills from current to target rather than by mode, and the label is opt-in.
+- **Sections sizing** via `getGridOptions`: 12 columns, minimum 6, auto rows.
+- **Live-HA stock-parity QA harness** in `dev/qa/`, with paired stock/custom
+  fixtures, service journeys and English/German checks; opt-in, not a CI gate.
+
+### Changed
+
+- **Capability-driven targets**: `TARGET_TEMPERATURE` and
+  `TARGET_TEMPERATURE_RANGE` determine single versus dual controls, including
+  dual setpoints in `auto`. A single target wins when both are available; entities
+  without a settable target have a read-only dial.
+- **HA-backed localization** for mode/preset/fan/swing/operation labels, state
+  text and “Unavailable”; user label overrides still win. Numbers follow HA's
+  number-format setting (including decimal commas). Editor strings remain English.
+- **Domain-aware visual editor** accepts climate and water heater entities and
+  offers their supported controls, including the state-label option.
+- **Accessibility**: labelled card group, PageUp/PageDown/Home/End dial keys, and
+  independently keyboard-operable dual handles.
+- **Default step** is 1 °F or 0.5 °C when the entity reports no valid step.
+
+### Fixed
+
+- Entity selectors are disabled while their entity is unavailable.
+- Rejected or ignored setpoint changes revert to the device value after about 3 s.
+- Theme-only changes now apply without requiring an entity state update.
+
 ## [1.0.0] — 2026-06-28
 
 First stable release. A Material 3 Expressive thermostat card for Home Assistant —
@@ -81,4 +133,5 @@ to degrade gracefully under any Home Assistant theme.
   across a real‑Chrome unit/component suite plus Playwright e2e against the built
   bundle.
 
+[1.10.0]: https://github.com/lageorgem/ha-material-thermostat-card/releases/tag/v1.10.0
 [1.0.0]: https://github.com/lageorgem/ha-material-thermostat-card/releases/tag/v1.0.0

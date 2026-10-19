@@ -27,6 +27,8 @@ gracefully under any Home Assistant theme.
 - [Highlights](#highlights)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Supported entities](#supported-entities)
+- [Migrating from the stock thermostat card](#migrating-from-the-stock-thermostat-card)
 - [Card options](#card-options)
   - [Theme font](#theme-font)
 - [The dial](#the-dial)
@@ -39,6 +41,7 @@ gracefully under any Home Assistant theme.
   - [Climate selectors](#climate-selectors-hvac--fan--swing--preset)
     - [Fan, swing and preset modes](#fan-swing-and-preset-modes)
   - [Option overrides](#option-overrides)
+  - [Water heater controls](#water-heater-controls)
   - [`input-select`](#input-select)
   - [`switch-group`](#switch-group)
   - [`switch-list`](#switch-list)
@@ -55,13 +58,14 @@ gracefully under any Home Assistant theme.
 ## Highlights
 
 - 🎯 **Draggable circular dial** (custom SVG) — drag, tap, `+/−`, or keyboard; themed by HVAC mode/action.
-- 🔀 **Dual setpoint** for `heat_cool` (two handles) with **+/− buttons** that adjust the selected setpoint (tap a handle to select; defaults to the one nearest the current temperature).
+- 🔀 **Capability-driven single or dual setpoints**, including dual handles in `auto` and `heat_cool`, with **+/− buttons** that adjust the selected setpoint (tap a handle to select; defaults to the one nearest the current temperature).
+- 🚿 **Water heater support** — target temperature, operation modes and an away-mode toggle, when supported by the entity.
 - 🌡️ Current‑temperature marker, with an optional **"show current as primary"** big number.
 - 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
 - ✨ **Animated** mode‑color cross‑fade and a sliding temperature segment.
 - 🏠 **Google‑Home‑style dial**: no mode label cluttering the number (the HVAC chips show the mode), and the active **preset icon** (e.g. the eco leaf) under the temperature when the preset‑modes feature is added.
-- 🧩 Climate **HVAC / fan / swing / preset** selectors as an **icon row**, a **dropdown**, or a **Google‑Home‑style tile** (icon + title + current value), each with an optional **title**.
+- 🧩 Climate **HVAC / fan / swing / horizontal swing / preset** selectors as an **icon row**, a **dropdown**, or a **Google‑Home‑style tile** (icon + title + current value), each with an optional **title**.
 - ✏️ Per‑option **label / icon / color / hide** overrides, and **drag‑to‑reorder** options & list items — from a compact visual editor (an icon **pill**: pick an icon or disable it, a **color pill** that defaults to the theme/mode color, plus a custom title).
 - 🎛️ Custom‑entity controls: **`input_select`**, **switch group**, **switch list**, **button list**, **entity tiles**, **sensor list**.
 - 💡 **Suggested for climate entities** in the card picker (Home Assistant 2026.6+).
@@ -83,11 +87,11 @@ gracefully under any Home Assistant theme.
 
 ### Manual
 
-| Step | Action |
-| --- | --- |
-| 1 | Download `material-thermostat-card.js` from the [latest release](https://github.com/lageorgem/ha-material-thermostat-card/releases). |
-| 2 | Copy it to `config/www/`. |
-| 3 | Add a dashboard resource: **Settings → Dashboards → ⋮ → Resources → Add**, URL `/local/material-thermostat-card.js`, type **JavaScript Module**. |
+| Step | Action                                                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Download `material-thermostat-card.js` from the [latest release](https://github.com/lageorgem/ha-material-thermostat-card/releases).             |
+| 2    | Copy it to `config/www/`.                                                                                                                        |
+| 3    | Add a dashboard resource: **Settings → Dashboards → ⋮ → Resources → Add**, URL `/local/material-thermostat-card.js`, type **JavaScript Module**. |
 
 ```yaml
 # or as YAML, under lovelace.resources:
@@ -110,19 +114,75 @@ features:
 Add the card from the dashboard's **"Add card"** picker (it shows a live preview) and configure it
 visually, or write the YAML directly.
 
+## Supported entities
+
+The primary `entity` is required and must be `climate.*` or `water_heater.*`.
+Climate selectors require the corresponding entity mode lists (`hvac_modes`, `fan_modes`,
+`preset_modes`, `swing_modes`, or `swing_horizontal_modes`). Temperature controls follow
+`supported_features` and the reported target values: a single target takes precedence over
+a low/high range when both are available. Climate ranges also work in `auto`. An entity with
+no settable target gets a read-only dial.
+
+Water heaters use `water_heater.set_temperature` instead of `climate.set_temperature`.
+Climate-only selectors, `comfort`, and `feels_like` are ignored for water heaters; auxiliary
+controls such as sensor lists and entity tiles remain available.
+
+```yaml
+type: custom:material-thermostat-card
+entity: water_heater.tank
+name: Hot water
+features:
+  - type: water-heater-operation-modes
+    display: dropdown
+  - type: water-heater-away-mode
+    display: tile
+```
+
+## Migrating from the stock thermostat card
+
+Change `type: thermostat` to `type: custom:material-thermostat-card`; keep the entity and
+stock feature syntax. For example:
+
+```yaml
+type: custom:material-thermostat-card # was: thermostat
+entity: climate.living_room
+show_state_label: true
+features:
+  - type: climate-hvac-modes
+    style: dropdown
+    hvac_modes: [heat, cool, 'off']
+  - type: climate-preset-modes
+    style: icons
+    preset_modes: [eco, comfort]
+```
+
+Stock `style: icons|dropdown` maps to `display`. The lists `hvac_modes`, `preset_modes`,
+`fan_modes`, `swing_modes`, `swing_horizontal_modes`, and `operation_modes` map to `include`
+on their corresponding selector feature. Explicit `display` and `include` take precedence.
+Only values offered by the entity are shown.
+
+Two deliberate visual differences remain: our arc fills from **current to target** rather
+than by mode, and the state label is **opt-in** (`show_state_label: true`).
+
+**Localization.** Mode, preset, fan, swing and operation labels, state text and “Unavailable”
+use Home Assistant's translations. Numbers follow your Home Assistant number-format setting
+(for example, a decimal comma with German formatting). User label overrides take precedence.
+The visual editor's own strings remain English.
+
 ## Card options
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `type` | string | — | `custom:material-thermostat-card` **(required)** |
-| `entity` | string | — | A `climate.*` entity **(required)** |
-| `name` | string | entity name | Card title |
-| `theme` | string | — | A Home Assistant theme to apply to this card |
-| `dial_style` | `halo` \| `minimal` \| `google` | `halo` | `halo`: mode‑coloured glow, dimmed when idle/off; `minimal`: no glow; `google`: flat Google Home look with a background disc and no glow |
-| `font` | `rounded` \| `theme` | `rounded` | `rounded`: Google Sans Flex with its rounded axis; `theme`: use the Home Assistant theme's font without requesting a font from Google |
-| `show_current_as_primary` | boolean | `false` | Show the **current** temperature as the large centre number. The target then labels the setpoint marker on the ring and the current dot is left unlabelled (no duplicate reading) |
-| `feels_like` | object | — | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature) |
-| `features` | list | `[]` | Controls rendered below / beside the dial — see [Features](#features) |
+| Option                    | Type                            | Default     | Description                                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                    | string                          | —           | `custom:material-thermostat-card` **(required)**                                                                                                                                                                                |
+| `entity`                  | string                          | —           | A `climate.*` or `water_heater.*` entity **(required)**                                                                                                                                                                         |
+| `name`                    | string, object or list          | entity name | Card title; HA structured names (e.g. `[{type: entity}, {type: device}]`) are rendered by HA on versions that support them; otherwise falls back to the entity name. Structured names are YAML-only and preserved by the editor |
+| `theme`                   | string                          | —           | A Home Assistant theme to apply to this card                                                                                                                                                                                    |
+| `dial_style`              | `halo` \| `minimal` \| `google` | `halo`      | `halo`: mode‑coloured glow, dimmed when idle/off; `minimal`: no glow; `google`: flat Google Home look with a background disc and no glow                                                                                        |
+| `font`                    | `rounded` \| `theme`            | `rounded`   | `rounded`: Google Sans Flex with its rounded axis; `theme`: use the Home Assistant theme's font without requesting a font from Google                                                                                           |
+| `show_current_as_primary` | boolean                         | `false`     | Show the **current** temperature as the large centre number. The target then labels the setpoint marker on the ring and the current dot is left unlabelled (no duplicate reading)                                               |
+| `show_state_label`        | boolean                         | `false`     | Show the localized HVAC action (e.g. “Heating”) or entity state above the number                                                                                                                                                |
+| `feels_like`              | object                          | —           | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature)                                                                                                                               |
+| `features`                | list                            | `[]`        | Controls rendered below / beside the dial — see [Features](#features)                                                                                                                                                           |
 
 > **Font privacy & offline use.** With `font: rounded`, each browser fetches Google Sans Flex from
 > Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). If Google Fonts is unreachable, the
@@ -150,14 +210,15 @@ also appear on the dial.
   <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/show-current.png" alt="Heating dial with current temperature as the large primary number" width="280">
 </p>
 
-| Interaction | Behavior |
-| --- | --- |
-| **Drag** the ring | Set the target temperature; markers follow smoothly |
-| **Tap** a point on the ring | Jump the setpoint there |
-| **`+` / `−`** | Step by the entity's `target_temp_step` |
-| **Arrow keys** (when focused) | Step the setpoint (single‑setpoint modes) |
-| **`heat_cool`** | Two draggable handles for the low/high setpoints |
-| **⋮** (top‑right) | Open the entity's more‑info dialog |
+| Interaction                        | Behavior                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Drag** the ring                  | Set the target temperature; markers follow smoothly                                                           |
+| **Tap** a point on the ring        | Jump the setpoint there                                                                                       |
+| **`+` / `−`**                      | Step by the entity's `target_temp_step`; defaults to 1 °F or 0.5 °C when none is reported                     |
+| **Arrow keys** (when focused)      | Step the setpoint; each dual handle is independently keyboard-operable                                        |
+| **PageUp / PageDown / Home / End** | Larger steps / jump to the allowed minimum or maximum                                                         |
+| **Low/high range**                 | Two draggable handles when the entity supports a range and no single target is available, including in `auto` |
+| **⋮** (top‑right)                  | Open the entity's more‑info dialog                                                                            |
 
 In **heat/cool** modes, the dial and big number only light up in the mode colour while actively
 heating/cooling: the card uses `hvac_action` when available, otherwise infers activity from the
@@ -169,7 +230,7 @@ icon use the full mode colour whenever heating/cooling is demanded or reported, 
 It is hidden when heating with the setpoint below room temperature, or cooling with the setpoint
 above room temperature.
 
-For **`heat_cool`**, the active sub‑mode uses the reported heating/cooling action, falling back to
+For **dual setpoints**, the active sub‑mode uses the reported heating/cooling action, falling back to
 the current temperature versus the range: it fills **blue**
 from the high setpoint up to the current temp when **cooling** (current above the range), **orange**
 from the low setpoint down when **heating**. The band between the two setpoints uses the heat/cool
@@ -177,8 +238,10 @@ colour while idle and muted gray while active. The centre shows the **Heat/Cool 
 dragging, for 5 seconds after a setpoint change, and while idle within the range; otherwise it
 collapses to the single setpoint it's targeting, with the active mode icon on the ring.
 
-Changes are **optimistic** (the UI updates immediately) and the `climate.set_temperature` call is
-debounced so dragging doesn't spam the backend. Color changes **cross‑fade**, and the temperature
+Changes are **optimistic** (the UI updates immediately) and the domain's `set_temperature` call is
+debounced so dragging doesn't spam the backend. Rejected or ignored changes revert to the device's
+value after about **3 seconds**. The card is a labelled group for screen readers.
+Color changes **cross‑fade**, and the temperature
 segment **slides in/out** on power changes and when switching between modes.
 
 ### Dial styles
@@ -238,15 +301,15 @@ While dragging, the band thickens inward without moving its outer edge, and dot 
 
 ## Feels‑like temperature
 
-Many climate entities only report dry‑bulb temperature, which ignores how humid air *feels*. Point
+Many climate entities only report dry‑bulb temperature, which ignores how humid air _feels_. Point
 the card at a **temperature** and a **humidity** sensor and it computes the **heat index** ("feels
 like"), and — with `show_as_current` — shows that in place of the climate entity's current
 temperature on the dial. These same two sensors power the [`comfort`](#comfort) feature.
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `temperature` | string | — | A temperature `sensor.*` |
-| `humidity` | string | — | A relative‑humidity `sensor.*` (%) |
+| Option            | Type    | Default | Description                                                          |
+| ----------------- | ------- | ------- | -------------------------------------------------------------------- |
+| `temperature`     | string  | —       | A temperature `sensor.*`                                             |
+| `humidity`        | string  | —       | A relative‑humidity `sensor.*` (%)                                   |
 | `show_as_current` | boolean | `false` | Show the computed feels‑like value as the dial's current temperature |
 
 ```yaml
@@ -271,32 +334,39 @@ feels_like:
 
 Add any number of rows under `features:`. Each entry has a `type` and type‑specific options.
 
-| `type` | Controls | Selection behavior |
-| --- | --- | --- |
-| `climate-hvac-modes` | the card's climate entity | sets the **HVAC mode** |
-| `climate-fan-modes` | the card's climate entity | sets the **fan mode** |
-| `climate-swing-modes` | the card's climate entity | sets the **swing mode** |
-| `climate-preset-modes` | the card's climate entity | sets the **preset** (eco / away / …) |
-| `input-select` | an `input_select` entity | selects an option |
-| `switch-group` | a list of switches | **mutually exclusive** — turns the others **off**, then the chosen one **on** |
-| `switch-list` | a list of switches | each toggles **independently** (several can be on) |
-| `button-list` | buttons / scenes / scripts | each **pressed** independently |
-| `entity-tile` | one sensor / switch / button | a rounded tile that runs a tap action |
-| `sensor-list` | a list of sensors | read‑only rows of icon + title + value (à la the Google Home app) |
-| `comfort` | the feels‑like sensors | a status line: comfort + time‑to‑comfortable / time‑to‑target (**add once in the visual editor**) |
+| `type`                           | Controls                     | Selection behavior                                                                                |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| `climate-hvac-modes`             | the card's climate entity    | sets the **HVAC mode**                                                                            |
+| `climate-fan-modes`              | the card's climate entity    | sets the **fan mode**                                                                             |
+| `climate-swing-modes`            | the card's climate entity    | sets the **swing mode**                                                                           |
+| `climate-swing-horizontal-modes` | the card's climate entity    | calls `climate.set_swing_horizontal_mode`                                                         |
+| `climate-preset-modes`           | the card's climate entity    | sets the **preset** (eco / away / …)                                                              |
+| `water-heater-operation-modes`   | the card's water heater      | calls `water_heater.set_operation_mode`                                                           |
+| `water-heater-away-mode`         | the card's water heater      | toggles `water_heater.set_away_mode` when supported                                               |
+| `input-select`                   | an `input_select` entity     | selects an option                                                                                 |
+| `switch-group`                   | a list of switches           | **mutually exclusive** — turns the others **off**, then the chosen one **on**                     |
+| `switch-list`                    | a list of switches           | each toggles **independently** (several can be on)                                                |
+| `button-list`                    | buttons / scenes / scripts   | each **pressed** independently                                                                    |
+| `entity-tile`                    | one sensor / switch / button | a rounded tile that runs a tap action                                                             |
+| `sensor-list`                    | a list of sensors            | read‑only rows of icon + title + value (à la the Google Home app)                                 |
+| `comfort`                        | the feels‑like sensors       | a status line: comfort + time‑to‑comfortable / time‑to‑target (**add once in the visual editor**) |
 
 ### Common feature options
 
-| Option | Applies to | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `display` | `climate-*`, `input-select`, `switch-group` | `icons` \| `dropdown` \| `tile` | `icons` | Render the selector as an icon row, a dropdown, or a Google‑Home‑style **tile** |
-| `label` | `climate-*`, `input-select`, `switch-group/list`, `button-list` | string | — | Optional **title** — rendered above the control in `icons`/`dropdown` modes, and as the **tile's title line** in `tile` mode (climate selectors fall back to `Mode`/`Fan`/`Swing`/`Preset`) |
-| `width` | **all** feature types | positive number | `50` (`entity-tile`, including `icon`) · `100` (all others, including selector tiles) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses the type's default — see [Layout](#layout--responsiveness) |
+| Option    | Applies to                                                                        | Type                            | Default                                                                               | Description                                                                                                                                                                                          |
+| --------- | --------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `display` | `climate-*`, `water-heater-operation-modes`, `input-select`, `switch-group`       | `icons` \| `dropdown` \| `tile` | `icons`                                                                               | Render the selector as an icon row, a dropdown, or a Google‑Home‑style **tile**                                                                                                                      |
+| `display` | `water-heater-away-mode`                                                          | `icons` \| `tile`               | `icons`                                                                               | Render the away toggle as an icon or tile; no dropdown                                                                                                                                               |
+| `include` | `climate-*`, `water-heater-operation-modes`, `input-select`                       | list of strings                 | all available values                                                                  | Allow-list: show only these available values, in this order                                                                                                                                          |
+| `label`   | `climate-*`, `water-heater-*`, `input-select`, `switch-group/list`, `button-list` | string                          | —                                                                                     | Optional **title** — rendered above the control in `icons`/`dropdown` modes, and as the **tile's title line** in `tile` mode; mode-selector tile titles fall back to HA's translated attribute label |
+| `width`   | **all** feature types                                                             | positive number                 | `50` (`entity-tile`, including `icon`) · `100` (all others, including selector tiles) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses the type's default — see [Layout](#layout--responsiveness)                          |
 
 ### Climate selectors (HVAC / fan / swing / preset)
 
 Every climate selector renders in three display modes. `climate-fan-modes`, `climate-swing-modes`
-and `climate-preset-modes` behave identically — shown here with `climate-hvac-modes`:
+and `climate-preset-modes` behave identically, as does `climate-swing-horizontal-modes`
+for horizontal swing — shown here with `climate-hvac-modes`. Entity selectors are disabled
+while their entity is unavailable:
 
 <table>
   <tr>
@@ -324,7 +394,7 @@ features:
 
   - type: climate-fan-modes
     display: dropdown
-    label: Fan speed   # optional title shown above the control
+    label: Fan speed # optional title shown above the control
     options:
       - value: high
         label: Turbo
@@ -342,8 +412,8 @@ features:
         icon: mt:swing-vertical-full
 
   - type: climate-hvac-modes
-    display: tile         # Google-Home-style tile showing the current mode
-    label: Mode           # optional — defaults to "Mode" for HVAC
+    display: tile # Google-Home-style tile showing the current mode
+    label: Mode # optional — defaults to "Mode" for HVAC
 ```
 
 > **Tile display.** `display: tile` renders the selector as a Google‑Home‑style card — an icon, the
@@ -372,14 +442,26 @@ The same display options apply to fan, swing and preset selectors; these example
   </tr>
 </table>
 
+### Water heater controls
+
+`water-heater-operation-modes` uses the same display, label, width, include, order and
+per-option overrides as climate selectors. Its default order follows Home Assistant's
+canonical operation-mode order, with an icon for each mode.
+
+`water-heater-away-mode` accepts only `display: icons|tile`, `label` and `width`.
+It appears only when away mode is supported and `away_mode` is a known `on`/`off` value;
+selection toggles that value using a boolean `away_mode` service payload. It is not an
+operation-mode selector and does not accept `include`, `order` or `options`.
+
 ### Option overrides
 
-`climate-*` and `input-select` accept an `options:` list to customize how each underlying value is
+`climate-*`, `water-heater-operation-modes` and `input-select` accept an `options:` list to customize how each underlying value is
 shown. Unlisted values keep their Home Assistant defaults.
 
-| Feature key | Type | Description |
-| --- | --- | --- |
-| `order` | list of strings | Optional, e.g. `[heat, cool, 'off']`. Available values listed here come first in this order; unlisted values follow in their natural order. Unknown values are ignored. The visual editor saves this key when you drag options to reorder them |
+| Feature key | Type            | Description                                                                                                                                                                                                                                    |
+| ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order`     | list of strings | Optional, e.g. `[heat, cool, 'off']`. Available values listed here come first in this order; unlisted values follow in their natural order. Unknown values are ignored. The visual editor saves this key when you drag options to reorder them |
+| `include`   | list of strings | Only show these available values, in this order; unlike `order`, unlisted values are excluded                                                                                                                                                  |
 
 ```yaml
 - type: climate-hvac-modes
@@ -390,18 +472,19 @@ shown. Unlisted values keep their Home Assistant defaults.
       color: '#ff8100'
 ```
 
-| Key | Type | Description |
-| --- | --- | --- |
-| `value` | string | The underlying option value to override **(required)** |
-| `label` | string | Replacement display label |
-| `icon` | string | Replacement icon (`mdi:…` or `mt:…`) |
-| `hide` | boolean | Remove this option from the row |
-| `color` | string | Optional CSS accent color, e.g. `'#ff8100'` — see **Colors** below. Unset uses the theme/default color |
+| Key     | Type    | Description                                                                                            |
+| ------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `value` | string  | The underlying option value to override **(required)**                                                 |
+| `label` | string  | Replacement display label                                                                              |
+| `icon`  | string  | Replacement icon (`mdi:…` or `mt:…`)                                                                   |
+| `hide`  | boolean | Remove this option from the row                                                                        |
+| `color` | string  | Optional CSS accent color, e.g. `'#ff8100'` — see **Colors** below. Unset uses the theme/default color |
 
 > **Colors.** In the visual editor a **color pill** attaches to the left of each option's title. It
 > defaults to the color the theme would use — the **HVAC mode colors** (heat→orange, cool→blue…) are
 > pre‑picked for HVAC modes, and **`eco`‑like presets are green / `sleep`‑like presets blue** — and
 > can be reset back to that default at any time. Where a chosen color shows up:
+>
 > - **HVAC modes** — feeds the **dial** (halo, temperature, mode icon) for the active mode, and the tile tint in `tile` display.
 > - **Preset modes** — feeds the **preset icon under the dial number**, and the tile tint in `tile` display.
 > - **Any other selector** (fan/swing/`input-select`/`switch-group`) — applies to the **tile tint in `tile` display** only.
@@ -541,12 +624,12 @@ when you just want to read several values. Uses `items` (not `entities`).
 
 Used by `switch-group.entities`, `switch-list.entities`, `button-list.items`, and `sensor-list.items`:
 
-| Key | Type | Default | Description |
-| --- | --- | --- | --- |
-| `entity` | string | — | Entity id **(required)** |
-| `label` | string | friendly name | Display label |
-| `icon` | string | varies by feature | Optional, e.g. `mdi:leaf`. `sensor-list`: no icon unless set; `switch-group`: explicit or entity icon; `switch-list`/`button-list`: explicit → entity icon → fixed `mdi:toggle-switch-variant` / `mdi:gesture-tap-button` |
-| `color` | string | theme accent | Optional CSS color, e.g. `'#4caf50'`; accent of the selected switch in `switch-group` with `display: tile`. Ignored by `switch-list`, `button-list`, and `sensor-list` |
+| Key      | Type   | Default           | Description                                                                                                                                                                                                               |
+| -------- | ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entity` | string | —                 | Entity id **(required)**                                                                                                                                                                                                  |
+| `label`  | string | friendly name     | Display label                                                                                                                                                                                                             |
+| `icon`   | string | varies by feature | Optional, e.g. `mdi:leaf`. `sensor-list`: no icon unless set; `switch-group`: explicit or entity icon; `switch-list`/`button-list`: explicit → entity icon → fixed `mdi:toggle-switch-variant` / `mdi:gesture-tap-button` |
+| `color`  | string | theme accent      | Optional CSS color, e.g. `'#4caf50'`; accent of the selected switch in `switch-group` with `display: tile`. Ignored by `switch-list`, `button-list`, and `sensor-list`                                                    |
 
 ### `entity-tile`
 
@@ -568,27 +651,27 @@ A rounded tile (à la Google Home) showing an icon, title, and a secondary line 
   </tr>
 </table>
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `entity` | string | — | The entity **(required)** |
-| `name` | string | friendly name | Tile title |
-| `icon` | string | entity / domain icon | Tile icon |
-| `color` | string | theme / on‑accent | Optional CSS color, e.g. `'#8e24aa'`; **on-state** accent only in `tile` display. Does not change the off look or `display: icon` |
-| `display` | `tile` \| `icon` | `tile` | `tile` shows icon + title + value; `icon` shows just a centered icon at the same height |
-| `tap_action` | object | natural action | Optional, e.g. `{ action: toggle }`; supported actions below (YAML-only) |
-| `width` | positive number | `50` (both displays) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses `50` |
+| Option       | Type             | Default              | Description                                                                                                                       |
+| ------------ | ---------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `entity`     | string           | —                    | The entity **(required)**                                                                                                         |
+| `name`       | string           | friendly name        | Tile title                                                                                                                        |
+| `icon`       | string           | entity / domain icon | Tile icon                                                                                                                         |
+| `color`      | string           | theme / on‑accent    | Optional CSS color, e.g. `'#8e24aa'`; **on-state** accent only in `tile` display. Does not change the off look or `display: icon` |
+| `display`    | `tile` \| `icon` | `tile`               | `tile` shows icon + title + value; `icon` shows just a centered icon at the same height                                           |
+| `tap_action` | object           | natural action       | Optional, e.g. `{ action: toggle }`; supported actions below (YAML-only)                                                          |
+| `width`      | positive number  | `50` (both displays) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses `50`             |
 
 > The legacy `compact: true` flag still works and maps to `display: icon`.
 
-| `tap_action.action` | Supported fields / behavior |
-| --- | --- |
-| `none` | No action |
-| `more-info` | Open more-info; optional `entity` (string, e.g. `sensor.living_humidity`) opens a different entity |
-| `toggle` | Toggle the tile's entity |
-| `url` | `url_path` (string, required to open a URL, e.g. `https://www.home-assistant.io`) |
-| `navigate` | `navigation_path` (string, required to navigate, e.g. `/lovelace/climate`) |
+| `tap_action.action`                      | Supported fields / behavior                                                                                                                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`                                   | No action                                                                                                                                                                                                                   |
+| `more-info`                              | Open more-info; optional `entity` (string, e.g. `sensor.living_humidity`) opens a different entity                                                                                                                          |
+| `toggle`                                 | Toggle the tile's entity                                                                                                                                                                                                    |
+| `url`                                    | `url_path` (string, required to open a URL, e.g. `https://www.home-assistant.io`)                                                                                                                                           |
+| `navigate`                               | `navigation_path` (string, required to navigate, e.g. `/lovelace/climate`)                                                                                                                                                  |
 | `perform-action` / legacy `call-service` | `perform_action` or legacy `service` (string, required, e.g. `light.turn_on`); optional `data` or legacy `service_data` (object, e.g. `{ brightness: 128 }`) and `target` (object, e.g. `{ entity_id: light.living_room }`) |
-| `default` / omitted `tap_action` | The entity's natural action below |
+| `default` / omitted `tap_action`         | The entity's natural action below                                                                                                                                                                                           |
 
 > `tap_action` is YAML-only, not available in the visual editor. `confirmation`, `url_target`,
 > `navigation_replace`, hold actions, and double-tap actions are not supported.
@@ -632,7 +715,7 @@ be added **only once in the visual editor**. YAML does not enforce uniqueness.
 #### How comfort is determined
 
 Comfort is **calculated, not configured** — there's no `comfort_min`/`comfort_max`. The card uses the
-building‑science standard, the **ASHRAE 55 / ISO 7730 PMV model** (Fanger's *Predicted Mean Vote*),
+building‑science standard, the **ASHRAE 55 / ISO 7730 PMV model** (Fanger's _Predicted Mean Vote_),
 which folds **temperature, humidity, clothing, and activity** into one number on the −3 (cold) … 0
 (neutral) … +3 (hot) scale. The room is comfortable when **−0.5 < PMV < +0.5** (≈ 80% of people
 satisfied).
@@ -690,10 +773,10 @@ Example lines across the lifecycle:
 - `34m until cooled to 16°C` — comfortable, heading to the setpoint
 - `won't go below 24°C` — comfortable, but the room plateaus short of the setpoint
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `show_target_eta` | boolean | `false` | When comfortable, also show the time until the target temperature is reached |
-| `width` | positive number | `100` | Optional percentage, e.g. `100`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses `100` |
+| Option            | Type            | Default | Description                                                                                                             |
+| ----------------- | --------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `show_target_eta` | boolean         | `false` | When comfortable, also show the time until the target temperature is reached                                            |
+| `width`           | positive number | `100`   | Optional percentage, e.g. `100`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses `100` |
 
 ```yaml
 feels_like:
@@ -721,18 +804,21 @@ features:
 
 ## Layout & responsiveness
 
+In Sections view the card reports `getGridOptions`: **12 columns**, **6 minimum columns**,
+and **auto rows**.
+
 Feature `width` is a **percentage of the card**. YAML accepts any positive number, rounds it to the
 nearest 10, then clamps it to 10–100 (e.g. `width: 46` becomes `50`). Non-positive/non-numeric
 values use the type's default. The same config works
 in both **sections** and **masonry** views, since sizing is measured from the card's actual width.
 
-| Concept | Behavior |
-| --- | --- |
-| **Width = % of the card** | `width: 50` is half the card; unset = `50` for `entity-tile` (including `icon`), `100` for all others (including selector `display: tile`). |
-| **Rows fill, and wrap by width** | Features pack left to right; two `width: 50` fill a row **50/50**, and the next feature **wraps** to a new row when it doesn't fit (e.g. `50 + 60` → the `60` drops down). |
-| **A narrow feature stays narrow** | A `width: 30` feature is 30% of the card — it doesn't stretch to fill its row. |
-| **Side‑by‑side (wide)** | On a wide card where every feature is **< 100%**, the feature area takes the **widest feature's %** on the right and the **fixed‑size dial is centered** in the space on the left. Otherwise the card **stacks** (dial on top). Give your features explicit `width < 100` to get the side‑by‑side layout. |
-| **Icon overflow** | Icon rows keep their icon size and **scroll horizontally** instead of squishing. |
+| Concept                           | Behavior                                                                                                                                                                                                                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Width = % of the card**         | `width: 50` is half the card; unset = `50` for `entity-tile` (including `icon`), `100` for all others (including selector `display: tile`).                                                                                                                                                               |
+| **Rows fill, and wrap by width**  | Features pack left to right; two `width: 50` fill a row **50/50**, and the next feature **wraps** to a new row when it doesn't fit (e.g. `50 + 60` → the `60` drops down).                                                                                                                                |
+| **A narrow feature stays narrow** | A `width: 30` feature is 30% of the card — it doesn't stretch to fill its row.                                                                                                                                                                                                                            |
+| **Side‑by‑side (wide)**           | On a wide card where every feature is **< 100%**, the feature area takes the **widest feature's %** on the right and the **fixed‑size dial is centered** in the space on the left. Otherwise the card **stacks** (dial on top). Give your features explicit `width < 100` to get the side‑by‑side layout. |
+| **Icon overflow**                 | Icon rows keep their icon size and **scroll horizontally** instead of squishing.                                                                                                                                                                                                                          |
 
 The `width` control in the visual editor is a slider (**10–100%**, dots on the tens). Leave it unset
 for full width (all types except `entity-tile`) or the 50% default (`entity-tile`, both displays).
@@ -753,12 +839,12 @@ Each icon shows **five positions** (vertical cones top→bottom, or horizontal r
 positions are drawn solid (**dark**); the rest are dimmed (**gray**) for context — a **fixed**
 position selects one, a **partial swing** selects three, and **full swing** selects all five.
 
-| Group | Names |
-| --- | --- |
-| **Vertical — fixed** | `swing-vertical-fixed-top`, `swing-vertical-fixed-upper-middle`, `swing-vertical-fixed-middle`, `swing-vertical-fixed-lower-middle`, `swing-vertical-fixed-bottom` |
-| **Vertical — swing** | `swing-vertical-top` (top 3), `swing-vertical-middle` (mid 3), `swing-vertical-bottom` (bottom 3), `swing-vertical-full` |
+| Group                  | Names                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vertical — fixed**   | `swing-vertical-fixed-top`, `swing-vertical-fixed-upper-middle`, `swing-vertical-fixed-middle`, `swing-vertical-fixed-lower-middle`, `swing-vertical-fixed-bottom`          |
+| **Vertical — swing**   | `swing-vertical-top` (top 3), `swing-vertical-middle` (mid 3), `swing-vertical-bottom` (bottom 3), `swing-vertical-full`                                                    |
 | **Horizontal — fixed** | `swing-horizontal-fixed-left`, `swing-horizontal-fixed-left-middle`, `swing-horizontal-fixed-middle`, `swing-horizontal-fixed-right-middle`, `swing-horizontal-fixed-right` |
-| **Horizontal — swing** | `swing-horizontal-left` (left 3), `swing-horizontal-middle` (mid 3), `swing-horizontal-right` (right 3), `swing-horizontal-full` |
+| **Horizontal — swing** | `swing-horizontal-left` (left 3), `swing-horizontal-middle` (mid 3), `swing-horizontal-right` (right 3), `swing-horizontal-full`                                            |
 
 ```yaml
 - type: climate-swing-modes
@@ -776,48 +862,51 @@ position selects one, a **partial swing** selects three, and **full swing** sele
 
 The card reads Material 3 system tokens and falls back to standard Home Assistant theme variables,
 so it looks native under `material-you-theme` and remains usable under any theme.
+Theme-only changes apply even when no entity state changes.
 
-| Token (read) | Falls back to | Used for |
-| --- | --- | --- |
-| `--md-sys-color-primary` | `--primary-color` | Selected chips / accents |
-| `--md-sys-color-on-primary` | `#fff` | Selected chip foreground |
-| `--md-sys-color-surface-container` | 8% on-surface mixed into card background¹ | Chip & tile backgrounds |
-| `--md-sys-color-surface-container-high` | 11% on-surface mixed into card background¹ | Dropdown menus |
-| `--md-sys-color-secondary-container` | `rgba(103, 80, 164, 0.14)` | Selected dropdown option background |
-| `--md-sys-color-on-secondary-container` | `--primary-text-color` → `#1d192b` | Selected dropdown option foreground |
-| `--md-sys-color-on-surface` | `--primary-text-color` | Primary text |
-| `--md-sys-color-on-surface-variant` | `--secondary-text-color` | Secondary text & icons |
-| `--md-sys-color-error` | `--error-color` → `#b3261e` | Error color |
-| `--md-sys-shape-corner-extra-large` | `28px` | Card corner radius |
-| `--md-sys-shape-corner-large` | `16px` | Off-tile corners |
-| `--md-sys-shape-corner-full` | `9999px` | Pills / chips |
-| `--md-sys-typescale-title-large-size` | `20px` (card title); `22px` (dial temperature unit max) | Card title / dial temperature unit |
-| `--md-sys-typescale-title-medium-size` | `16px` | Dial mode label / marker & range labels (maximum size) |
-| `--md-sys-typescale-display-large-size` | `64px` | Dial number (maximum size) |
-| `--md-sys-typescale-label-large-size` | `13px` (section labels); `14px` (chips) | Selector / sensor-list headings and chip text |
-| `--md-sys-typescale-label-medium-size` | `13px` | Tile title |
-| `--md-sys-typescale-body-large-size` | `16px` | Tile value / dropdown text |
-| `--md-sys-typescale-body-medium-size` | `14px` | Sensor list / comfort text |
-| `--md-sys-motion-*` | M3 defaults | Animation timing / easing |
-| `--state-climate-*-color` | `cool`: `#2b9af9`; `heat`: `#ff8100`; `heat_cool`: `#009688`; `auto`: `#e5c454`; `dry`: `#efbd07`; `fan_only`: `#8a8a8a`; `off`: on-surface-variant | Dial color per HVAC mode |
+| Token (read)                            | Falls back to                                                                                                                                       | Used for                                               |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `--md-sys-color-primary`                | `--primary-color`                                                                                                                                   | Selected chips / accents                               |
+| `--md-sys-color-on-primary`             | `#fff`                                                                                                                                              | Selected chip foreground                               |
+| `--md-sys-color-surface-container`      | 8% on-surface mixed into card background¹                                                                                                           | Chip & tile backgrounds                                |
+| `--md-sys-color-surface-container-high` | 11% on-surface mixed into card background¹                                                                                                          | Dropdown menus                                         |
+| `--md-sys-color-secondary-container`    | `rgba(103, 80, 164, 0.14)`                                                                                                                          | Selected dropdown option background                    |
+| `--md-sys-color-on-secondary-container` | `--primary-text-color` → `#1d192b`                                                                                                                  | Selected dropdown option foreground                    |
+| `--md-sys-color-on-surface`             | `--primary-text-color`                                                                                                                              | Primary text                                           |
+| `--md-sys-color-on-surface-variant`     | `--secondary-text-color`                                                                                                                            | Secondary text & icons                                 |
+| `--md-sys-color-error`                  | `--error-color` → `#b3261e`                                                                                                                         | Error color                                            |
+| `--md-sys-shape-corner-extra-large`     | `28px`                                                                                                                                              | Card corner radius                                     |
+| `--md-sys-shape-corner-large`           | `16px`                                                                                                                                              | Off-tile corners                                       |
+| `--md-sys-shape-corner-full`            | `9999px`                                                                                                                                            | Pills / chips                                          |
+| `--md-sys-typescale-title-large-size`   | `20px` (card title); `22px` (dial temperature unit max)                                                                                             | Card title / dial temperature unit                     |
+| `--md-sys-typescale-title-medium-size`  | `16px`                                                                                                                                              | Dial mode label / marker & range labels (maximum size) |
+| `--md-sys-typescale-display-large-size` | `64px`                                                                                                                                              | Dial number (maximum size)                             |
+| `--md-sys-typescale-label-large-size`   | `13px` (section labels); `14px` (chips)                                                                                                             | Selector / sensor-list headings and chip text          |
+| `--md-sys-typescale-label-medium-size`  | `13px`                                                                                                                                              | Tile title                                             |
+| `--md-sys-typescale-body-large-size`    | `16px`                                                                                                                                              | Tile value / dropdown text                             |
+| `--md-sys-typescale-body-medium-size`   | `14px`                                                                                                                                              | Sensor list / comfort text                             |
+| `--md-sys-motion-*`                     | M3 defaults                                                                                                                                         | Animation timing / easing                              |
+| `--state-climate-*-color`               | `cool`: `#2b9af9`; `heat`: `#ff8100`; `heat_cool`: `#009688`; `auto`: `#e5c454`; `dry`: `#efbd07`; `fan_only`: `#8a8a8a`; `off`: on-surface-variant | Dial color per HVAC mode                               |
 
 > ¹ Card background: `--ha-card-background` → `--card-background-color` → `#f3edf7`.
 > On-surface: `--md-sys-color-on-surface` → `--primary-text-color` → `#1c1b1f`.
 
 ## Visual editor
 
-Most options above are editable from the card's **visual editor** (`tap_action` is YAML-only): a base
+Most options above are editable from the card's **visual editor** (`tap_action` and structured names are YAML-only): a base
 form (entity, name, theme), two collapsible sections, and a **drag‑sortable list of features**:
 
-- **Style** — dial style, "show current temperature as primary", and font.
+- **Style** — dial style, "show current temperature as primary", state label, and font.
 - **Feels-like temperature** — labelled, clearable temperature and humidity sensor pickers, plus
   the option to show the computed [feels‑like](#feels-like-temperature) value as the current temperature.
 
 Each feature row expands to its own editor — per‑option **label / icon / color / hide** for selectors,
 entity pickers for lists, a `width` slider, and an icons / dropdown / tile display toggle. **Options and list items are
 drag‑to‑reorder** too (the order is saved to the config), so you control the order icons appear in. The **"Add
-feature"** menu only offers the climate selectors the entity actually exposes, and each climate selector can be added
-once. These uniqueness limits (including `comfort`) apply only to the visual editor, not YAML.
+feature"** menu offers controls for the selected domain: climate selectors the entity exposes,
+or water-heater operation/away controls when supported. Each domain-specific control can be added
+once. `comfort` and feels-like settings are climate-only. These uniqueness limits (including
+`comfort`) apply only to the visual editor, not YAML. Existing structured names are preserved.
 
 The editor uses **custom rounded search pickers** that match the card's aesthetic rather than Home Assistant's stock
 combobox:
@@ -830,20 +919,20 @@ combobox:
 
 ## Development
 
-| Command | Description |
-| --- | --- |
-| `npm install` | Install dependencies |
-| `npm run build` | Bundle to `dist/material-thermostat-card.js` |
-| `npm run watch` | Rebuild on change |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` / `npm run lint:fix` | ESLint |
-| `npm run format` | Prettier |
-| `npm test` | Unit/component tests (real Chrome) with coverage |
-| `npm run test:watch` | Unit tests in watch mode |
-| `npm run test:e2e` | End-to-end tests against the built bundle (run `npm run build` first) |
-| `node tools/gen-icons.mjs` | Regenerate the `mt:` icon set into `src/icons.generated.ts` |
-| `node dev/push-dashboard.mjs` | Publish the showcase cards (`dev/showcase.mjs`) to a `material-thermostat` dashboard on your HA (needs `HA_URL`, `HA_TOKEN`; `--dry-run` prints the config) |
-| `node dev/ha-shots.mjs` | Regenerate README screenshots from `dev/showcase.mjs` (needs `npm run build`, `HA_URL`, `HA_TOKEN`) |
+| Command                             | Description                                                                                                                                                 |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm install`                       | Install dependencies                                                                                                                                        |
+| `npm run build`                     | Bundle to `dist/material-thermostat-card.js`                                                                                                                |
+| `npm run watch`                     | Rebuild on change                                                                                                                                           |
+| `npm run typecheck`                 | `tsc --noEmit`                                                                                                                                              |
+| `npm run lint` / `npm run lint:fix` | ESLint                                                                                                                                                      |
+| `npm run format`                    | Prettier                                                                                                                                                    |
+| `npm test`                          | Unit/component tests (real Chrome) with coverage                                                                                                            |
+| `npm run test:watch`                | Unit tests in watch mode                                                                                                                                    |
+| `npm run test:e2e`                  | End-to-end tests against the built bundle (run `npm run build` first)                                                                                       |
+| `node tools/gen-icons.mjs`          | Regenerate the `mt:` icon set into `src/icons.generated.ts`                                                                                                 |
+| `node dev/push-dashboard.mjs`       | Publish the showcase cards (`dev/showcase.mjs`) to a `material-thermostat` dashboard on your HA (needs `HA_URL`, `HA_TOKEN`; `--dry-run` prints the config) |
+| `node dev/ha-shots.mjs`             | Regenerate README screenshots from `dev/showcase.mjs` (needs `npm run build`, `HA_URL`, `HA_TOKEN`)                                                         |
 
 ### Testing
 
@@ -851,8 +940,8 @@ The suite runs in a real browser (Chrome) — web components need a real DOM (sh
 pointer capture, SVG, the Web Animations API, `ResizeObserver`).
 
 - **Unit / component tests** (`test/unit/`) use [`@web/test-runner`](https://modern-web.dev/docs/test-runner/overview/)
-  + [`@open-wc/testing`](https://open-wc.org/docs/testing/testing-package/), with V8 coverage mapped back
-  to the TypeScript sources. Coverage is gated at **100%** (statements / branches / functions / lines).
+  - [`@open-wc/testing`](https://open-wc.org/docs/testing/testing-package/), with V8 coverage mapped back
+    to the TypeScript sources. Coverage is gated at **100%** (statements / branches / functions / lines).
 - **End-to-end tests** (`e2e/`) use [Playwright](https://playwright.dev/) to drive the **built bundle**
   (`dist/material-thermostat-card.js`) against a mock `hass`, exercising full user journeys (mode
   selection, dropdowns, the temperature dial, the switch group, more-info).

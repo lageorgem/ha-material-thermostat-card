@@ -51,6 +51,33 @@ e2e/
 - Playwright CSS locators **pierce open shadow roots**, so `page.locator('.chip[title="Heat"]')`
   finds nodes across the nested shadow DOM.
 
+## Live stock-parity QA — opt-in, not CI
+
+[`dev/qa/README.md`](../dev/qa/README.md) is the runbook for the real-HA harness:
+`seed.mjs` creates reserved MQTT/REST fixtures, `push-dashboard.mjs` pairs stock
+and custom cards, and `run-qa.mjs` records service journeys and section PNGs.
+Use that runbook's prerequisites, reset and cleanup steps; this is not the mock
+e2e harness and must not control physical devices.
+
+- Reserved scope: device `mtqa`, `climate.mtqa_*` / `water_heater.mtqa_*`, topics
+  `mtqa/*`, dashboard `/mt-parity-qa/0`. Verify IDs are unused before seeding.
+- Requires Node 24, project dependencies, system Chrome, MQTT and a real admin HA
+  session via `HA_URL`/`HA_TOKEN`. Never track tokens or expose them to PR builds.
+- Coverage includes horizontal/preset/fan/HVAC round trips; water-heater target,
+  operation and away payloads; stock YAML normalization; `auto` ranges; read-only
+  and unavailable entities; rejected-target rollback; structured names/themes;
+  English/German HA labels and decimal formatting. These exercise
+  `entity/adapter.ts`, `localize.ts`, `config/normalize.ts` and new feature wiring
+  against the real frontend rather than formatter stubs.
+- Seed before each full run. J2 requires initialized string mode attributes;
+  see the runbook before running. Mutating MQTT journeys restore changed fields;
+  interruption can prevent restoration, so reseed after failure. REST fixtures
+  validate outgoing frames, not device convergence.
+- Evidence: ignored `dev/qa/out/<lang>/report.json` plus paired section PNGs.
+  FAIL exits 1. Screenshots support review, not a pixel-perfect visual-diff claim.
+- All three CLIs support `--dry-run` without credentials/network/browser/dist.
+  Use the runbook's offline checks before attempting live QA.
+
 ## Browser selection (local vs CI)
 
 Both runners use the **system Chrome channel locally** (no download) and **Playwright's bundled

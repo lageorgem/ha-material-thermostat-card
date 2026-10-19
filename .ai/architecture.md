@@ -40,6 +40,9 @@ src/
   material-thermostat-card.ts  ROOT card: config, state, layout, dial wiring, renders <mt-feature-row>s
   const.ts                     CARD_VERSION (bump on release!), type/name strings
   types.ts                     ALL config interfaces — the source of truth for the YAML schema
+  localize.ts                  HA state/attribute/name formatters, number-format preferences, English fallbacks
+  config/normalize.ts          immutable stock feature syntax → display/include normalization
+  entity/adapter.ts            primary domains, capability bits, target model, temperature service payloads
   theme.ts                     CSS token aliases (--mt-*), climateModeColor(), icon/label helpers
   grid.ts                      layout constants (width %s, GRID_COLUMNS=10, dial px) + pctToSpan()
   actions.ts                   performTap()/pressOrToggle() — entity-tile tap handling
@@ -54,7 +57,8 @@ src/
     feature-row.ts             dispatches one FeatureConfig to its renderer + sets grid placement
     selector-row.ts            SHARED: renders SelectorItem[] as icon chips OR a dropdown
     dropdown.ts                self-contained M3 dropdown (mt-dropdown) — no HA ha-select dependency
-    climate-selector.ts        hvac/fan/swing selector -> selector-row
+    climate-selector.ts        hvac/fan/preset/swing/horizontal/operation selector -> selector-row
+    water-heater-away.ts       capability-gated away toggle -> selector-row
     input-select.ts            input_select selector -> selector-row
     switch-group.ts            mutually-exclusive switches -> selector-row (off-others-then-on)
     switch-list.ts             independent toggles (icon row)
@@ -90,7 +94,8 @@ material-thermostat-card                 (ha-card, header, .body[.stacked|.wide]
    └─ mt-feature-row × N                  thin dispatcher; sets its own grid-row/grid-column
       └─ one of:
          mt-climate-selector ┐
-         mt-input-select     ├─ all wrap → mt-selector-row → (icon chips | mt-dropdown)
+         mt-input-select     ├─ all wrap → mt-selector-row → (icon chips | mt-dropdown | tile)
+         mt-water-heater-away│  (icons or toggle tile only)
          mt-switch-group     ┘
          mt-switch-list       (icon chips directly)
          mt-button-list       (icon chips directly)
@@ -110,21 +115,51 @@ The card is a **controlled component over HA state** with **optimistic** local
 overrides for temperature:
 
 1. Lovelace sets `.hass` (every state tick) and `.setConfig(config)` once.
+   `config/normalize.ts` copies stock selector `style`/mode-list keys to
+   `display`/`include` without mutating the input; explicit custom keys win.
 2. `shouldUpdate()` gates re-renders: it returns true only when `_config`, a
-   tracked optimistic `@state`, `_widthPx`, **or a tracked entity's state object**
-   changed (`_trackedEntityIds()` collects the climate entity + every feature
+   tracked optimistic `@state`, `_widthPx`, theme data, **or a tracked entity's state object**
+   changed (`_trackedEntityIds()` collects the primary entity + every feature
    entity). ⚠️ A custom `shouldUpdate` must whitelist **every** `@state` that
    affects render or those updates silently no-op — this bit us hard (see
    [`gotchas.md`](gotchas.md)).
 3. `render()` computes the layout (`_layout()` → see [`layout.md`](layout.md)),
-   builds the dial bindings from the climate entity's attributes, and maps each
+   builds the dial bindings through the primary-entity adapter, and maps each
    `FeatureConfig` to an `<mt-feature-row>` with computed `row/colStart/span`.
 4. The dial emits `value-changing` (live drag) and `value-changed` (commit). The
    card stores optimistic `_selectedTemp/_selectedLow/_selectedHigh`, then
-   debounces (`SERVICE_DEBOUNCE_MS = 600`) a `climate.set_temperature` call.
-   `updated()` clears each optimistic value once HA echoes it back.
+   debounces (`SERVICE_DEBOUNCE_MS = 600`) a domain-specific `set_temperature` call.
+   `updated()` clears each optimistic value once HA echoes it back; rejected or
+   ignored changes revert to device values after about 3 s.
 5. Features call `hass.callService(...)` directly on selection (no optimistic
    layer — they reflect HA state on the next tick).
+
+## Primary entity boundary and stock parity
+
+`entity/adapter.ts` accepts `climate.*` and `water_heater.*`. Keep domain checks,
+capability bits, target limits/step and temperature service payloads here rather
+than duplicating them in the dial. `targetModel()` chooses single first when its
+capability and value exist, then climate low/high range, else `none` (read-only).
+It is not restricted to `heat_cool`: dual works in `auto`. Missing numeric
+`supported_features` permits legacy attribute-based detection. Default step:
+1 °F / 0.5 °C. Water heaters have no HVAC action and use their own service domain.
+
+Climate selectors, comfort and feels-like are ignored for water heaters; auxiliary
+entity controls remain usable. Operation and away controls are water-heater-only.
+The editor filters its catalogue by domain, available attributes and away capability.
+
+`localize.ts` delegates state/attribute labels and structured names to HA's frontend
+formatters, with English/entity-name fallbacks for older frontends. Literal names
+and option label overrides win. Numbers use HA's number-format preference via Intl;
+editor UI strings remain English. Structured `name` configs are YAML-only and the
+editor preserves them. `show_state_label` defaults false and displays localized
+HVAC action/state when enabled. Deliberate stock differences: current-to-target arc
+fill and opt-in state label.
+
+The card is a labelled screen-reader group; the dial supports PageUp/PageDown/Home/End
+and independent keyboard dual handles. Entity selectors reject unavailable-state
+interaction. Sections `getGridOptions` reports 12 columns, min 6, auto rows (not
+the card's internal 10-column feature grid).
 
 ## Width measurement
 
@@ -142,7 +177,8 @@ aliases Material 3 system tokens with HA fallbacks, e.g.
 CSS custom properties inherit across shadow boundaries, so defining them on each
 host cascades them into nested feature components. `climateModeColor(mode)` maps
 HVAC modes to `--state-climate-*-color` vars (with hex fallbacks). The card also
-honors a per-card `theme:` config via `applyThemesOnElement`.
+honors a per-card `theme:` config via `applyThemesOnElement`. Theme-only HA updates
+must trigger application even when tracked entity objects have not changed.
 
 ## Release / CI
 
@@ -152,7 +188,8 @@ honors a per-card `theme:` config via `applyThemesOnElement`.
 - **`release.yml`** (on GitHub release published): builds and attaches
   `dist/material-thermostat-card.js` to the release.
 - **Release procedure**: bump `CARD_VERSION` (`src/const.ts`) and `version`
-  (`package.json`), `npm run build`, commit `src` + `dist` + version, push. Tags
+  (`package.json` and both root version fields in `package-lock.json`) together,
+  `npm run build`, commit `src` + `dist` + version, push. Tags
   are created via the GitHub release UI (not `git tag` in this flow).
 - `hacs.json` declares `render_readme: true` and `homeassistant: 2024.8.0` (min
   HA version). Installed via HACS as a **Lovelace/plugin** resource.
