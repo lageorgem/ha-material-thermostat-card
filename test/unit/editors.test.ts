@@ -480,6 +480,25 @@ describe('material-thermostat-card-editor', () => {
     expect((unknown as any)._addableFeatures().map((f: any) => f.type)).to.deep.equal(aux);
   });
 
+  for (const [label, state, offered] of [
+    ['missing entity', undefined, false],
+    ['missing capability attribute', entityState('water_heater.test', 'eco'), false],
+    ['undefined capabilities', waterHeaterState({ supported_features: undefined }), false],
+    ['string capabilities', waterHeaterState({ supported_features: '4' }), false],
+    ['null capabilities', waterHeaterState({ supported_features: null }), false],
+    ['AWAY_MODE bit only', waterHeaterState({ supported_features: 4 }), true],
+    ['AWAY_MODE with other bits', waterHeaterState({ supported_features: 15 }), true],
+    ['other capability bits', waterHeaterState({ supported_features: 11 }), false],
+  ] as const) {
+    it(`requires a numeric AWAY_MODE capability in the catalogue: ${label}`, async () => {
+      const el = await mount({ entity: 'water_heater.test' }, makeHass(
+        state ? { 'water_heater.test': state } : {}
+      ));
+      const types = (el as any)._addableFeatures().map((feature: { type: FeatureType }) => feature.type);
+      expect(types.includes('water-heater-away-mode')).to.equal(offered);
+    });
+  }
+
   it('adds and edits new primary features with labelled rows and catalogue icons', async () => {
     for (const [type, label, icon, kind] of [
       ['climate-swing-horizontal-modes', 'Climate horizontal swing modes', 'mdi:arrow-left-right', 'swing-horizontal'],

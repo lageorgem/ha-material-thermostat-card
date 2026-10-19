@@ -11,7 +11,7 @@ import './editors/comfort-editor';
 import { ensureHaComponents } from './editors/load-ha';
 import './editors/entity-picker';
 import { tokens } from './theme';
-import { primaryDomain, supportsFeature, WaterHeaterEntityFeature } from './entity/adapter';
+import { primaryDomain, WaterHeaterEntityFeature } from './entity/adapter';
 
 interface FormSchemaItem {
   name: string;
@@ -284,6 +284,7 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
 
   /**
    * Offer domain-specific features only when supported and not already added.
+   * Water heater away mode requires an explicit numeric capability bit.
    * Auxiliary features remain repeatable for either primary domain.
    * @param none No parameters; reads the configured entity and features.
    */
@@ -295,7 +296,9 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
     return ADDABLE_FEATURES.filter(({ type }) => {
       if (SINGLETON_FEATURES.has(type)) return domain === 'climate' && !existing.has(type);
       if (type === 'water-heater-away-mode') {
-        return domain === 'water_heater' && !existing.has(type) && supportsFeature(stateObj, WaterHeaterEntityFeature.AWAY_MODE);
+        return domain === 'water_heater' && !existing.has(type)
+          && typeof attrs.supported_features === 'number'
+          && (attrs.supported_features & WaterHeaterEntityFeature.AWAY_MODE) !== 0;
       }
       if (type === 'water-heater-operation-modes') {
         return domain === 'water_heater' && !existing.has(type) && Array.isArray(attrs.operation_list) && attrs.operation_list.length > 0;
