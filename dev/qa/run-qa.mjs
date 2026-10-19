@@ -190,7 +190,8 @@ async function main() {
       const text = (node) => {
         if (node.nodeType === Node.TEXT_NODE) return node.textContent;
         if (node.nodeType === Node.ELEMENT_NODE && ['STYLE', 'SCRIPT'].includes(node.tagName)) return '';
-        return [...(node.shadowRoot ?? node).childNodes].map(text).join(' ');
+        // Keep light DOM too: ha-card projects its content through a shadow slot.
+        return [...node.childNodes, ...(node.shadowRoot?.childNodes ?? [])].map(text).join(' ');
       };
       return text(host);
     });
@@ -246,6 +247,21 @@ async function main() {
       await card(c.id).locator(S.shell).waitFor({ state: 'visible' });
       await dial(c.id).waitFor({ state: 'visible' });
       assert(!/Entity not found/i.test(await cardText(c.id)), 'Entity not found');
+      await poll(() => evaluate(card(c.id), (host) => {
+        function* walk(root) {
+          for (const element of root.querySelectorAll('*')) {
+            yield element;
+            if (element.shadowRoot) yield* walk(element.shadowRoot);
+          }
+        }
+        if (!host.shadowRoot) return false;
+        const elements = [...walk(host.shadowRoot)];
+        const icons = elements.filter((element) => element.tagName === 'HA-ICON');
+        const svgs = elements.filter((element) => element.tagName === 'HA-SVG-ICON');
+        return icons.every((icon) => icon.shadowRoot &&
+          [...walk(icon.shadowRoot)].some((element) => element.tagName === 'HA-SVG-ICON')) &&
+          svgs.every((svg) => svg.shadowRoot?.querySelector('path[d]'));
+      }), `${c.id}: screenshot icons ready`, TIMEOUT);
       await section.screenshot({ path: resolve(out, `${c.id}.png`), timeout: TIMEOUT });
       return { screenshot: `${c.id}.png`, entity: c.entity };
     });
@@ -399,8 +415,31 @@ async function main() {
       assert(our && stock, 'Missing card bounds');
       const overlap = Math.min(our.x + our.width, stock.x + stock.width) > Math.max(our.x, stock.x) && Math.min(our.y + our.height, stock.y + stock.height) > Math.max(our.y, stock.y);
       assert(!overlap, 'Our card overlaps stock card');
-      const size = await evaluate(card(c.id).locator(S.shell), (el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
-      assert(size.scrollHeight <= size.clientHeight + 1, `Clipped ha-card: ${JSON.stringify(size)}`); return { our, stock, ...size };
+      const layout = await evaluate(card(c.id).locator(S.shell), (shell) => {
+        const bottom = shell.getBoundingClientRect().bottom;
+        const overflow = [];
+        let measured = 0;
+        function walk(root) {
+          for (const el of root.children) {
+            // Floating menus are allowed outside the card; exclude their subtree.
+            if (el.matches('[role="listbox"], [role="menu"], [role="dialog"], [popover], .menu, .popover')) continue;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.opacity === '0') continue;
+            const rect = el.getBoundingClientRect();
+            if (style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0) {
+              measured++;
+              if (rect.bottom > bottom + 2) overflow.push({ tag: el.localName, class: el.getAttribute('class'), bottom: rect.bottom });
+            }
+            walk(el);
+            if (el.shadowRoot) walk(el.shadowRoot);
+          }
+        }
+        walk(shell);
+        if (shell.shadowRoot) walk(shell.shadowRoot);
+        return { bottom, measured, overflow };
+      });
+      assert(layout.overflow.length === 0, `Content below ha-card: ${JSON.stringify(layout)}`);
+      return { our, stock, ...layout };
     });
     if (opts.lang === 'de') {
       if (enabled('heat')) await check('J13: German target decimal', async () => {

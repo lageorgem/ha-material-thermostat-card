@@ -71,10 +71,15 @@ Browser shutdown is bounded to 10 seconds; failed shutdown exits nonzero.
 | wh-unavailable | J10 localized unavailable label and inert operation chips |
 | wh-with-aux | Water heater plus existing `sensor.tmp_1_temperature` sensor-list |
 
-Every case: visible ha-card + dial, no missing-entity text, paired section PNG,
-J12 bounds don't overlap stock and ha-card isn't vertically clipped. Each section
+Every case: visible ha-card + dial, no missing-entity text, paired section PNG
+after all rendered HA icons have SVG paths (bounded by the 30-second deadline).
+J10 text includes nested open shadow roots and slotted light DOM. J12 bounds don't
+overlap stock, and every visible, sized descendant ends within ha-card's bottom
++ 2 px; floating menus/popovers are excluded. Scroll metrics are not clipping
+evidence: the dial deliberately uses a negative bottom margin. Each section
 has `QA:<case-id>` heading; no card_mod. Stock tile equivalent is dropdown (stock
-has no tile style); sensor-list is custom-only and omitted from stock config.
+has no tile style); sensor-list and water-heater-away-mode are custom-only and
+omitted from stock config.
 There are **five** climate selector types in the supplied schema (HVAC, preset,
 fan, swing, horizontal swing); all five are included in full cases.
 

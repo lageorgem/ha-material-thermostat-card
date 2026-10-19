@@ -30,7 +30,7 @@ export function buildDashboard(theme) {
   return { title: 'MT Parity QA', views: [{ title: 'Parity', path: '0', type: 'sections', max_columns: 2,
     sections: CASES.map(({ id, entity, config }) => {
       const { features: rows = [], ...options } = config;
-      const stockFeatures = rows.filter((f) => f.type !== 'sensor-list').map(({ display, include, ...f }) => ({
+      const stockFeatures = rows.filter((f) => !['sensor-list', 'water-heater-away-mode'].includes(f.type)).map(({ display, include, ...f }) => ({
         ...f, ...(display ? { style: display === 'tile' ? 'dropdown' : display } : {}), ...(include ? { [listKey[f.type]]: include } : {}),
       }));
       return { type: 'grid', column_span: 2, cards: [
