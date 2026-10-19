@@ -59,6 +59,17 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
   main entity is unavailable; auxiliary controls such as `input-select` are not.
 - Rejected or ignored setpoint changes revert to the device value after about 3 s.
 - Theme-only changes now apply without requiring an entity state update.
+- The per-card `theme:` option now actually applies its CSS variables (including
+  light/dark `modes`); previously it had no effect.
+- Labels HA has no translation for (e.g. MQTT horizontal swing "left") show in
+  Title Case instead of raw lowercase.
+- Labels, numbers and names refresh when HA's language, locale or translations
+  change, not only on entity updates.
+- A pending setpoint is never sent to a different entity, or as a different
+  single/dual target kind, and is dropped when the card is detached.
+- Malformed (non-numeric) temperature attributes no longer break the dial.
+- Dropdowns show an empty value instead of the first option when the active
+  mode isn't listed.
 
 ## [1.0.0] — 2026-06-28
 
