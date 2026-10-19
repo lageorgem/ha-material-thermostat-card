@@ -152,8 +152,6 @@ export class MtSelectorRow extends LitElement {
         container-type: inline-size;
         border: none;
         border-radius: var(--mt-shape-full);
-        /* Keep the native focus-visible outline inside the scrolling row. */
-        outline-offset: -2px;
         background: transparent;
         color: var(--mt-on-surface-variant);
         cursor: pointer;
@@ -162,6 +160,11 @@ export class MtSelectorRow extends LitElement {
           background-color 180ms cubic-bezier(0.2, 0, 0, 1),
           color 180ms cubic-bezier(0.2, 0, 0, 1);
         -webkit-tap-highlight-color: transparent;
+      }
+      .chip:focus-visible {
+        /* Use the contrasting chip foreground; keep the outline inside the scrolling row. */
+        outline: 2px solid currentColor;
+        outline-offset: -2px;
       }
       .chip ha-icon {
         --mdc-icon-size: clamp(18px, 100cqi, 24px);

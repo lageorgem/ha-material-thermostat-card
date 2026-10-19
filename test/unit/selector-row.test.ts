@@ -1,4 +1,5 @@
 import { fixture, html, expect, oneEvent } from '@open-wc/testing';
+import { sendKeys } from '@web/test-runner-commands';
 import { oncePromise } from '../helpers';
 import '../../src/features/selector-row';
 import type { MtSelectorRow } from '../../src/features/selector-row';
@@ -110,7 +111,7 @@ describe('mt-selector-row', () => {
       expect(group.scrollLeft).to.be.greaterThan(0);
     });
 
-    it('fits seven chips at the exact 22px floor and keeps focus outlines inset', async () => {
+    it('fits seven chips at the exact 22px floor', async () => {
       const container = await fixture<HTMLDivElement>(html`
         <div style="width: 154px"><mt-selector-row .items=${iconItems}></mt-selector-row></div>
       `);
@@ -122,13 +123,39 @@ describe('mt-selector-row', () => {
       for (const chip of chips) {
         expect(chip.getBoundingClientRect().width).to.equal(22);
       }
-      chips[0].focus();
-      expect(row.shadowRoot!.activeElement).to.equal(chips[0]);
-      expect(chips[0].matches(':focus-visible')).to.be.true;
-      const style = getComputedStyle(chips[0]);
-      expect(style.outlineStyle).to.not.equal('none');
-      expect(parseFloat(style.outlineWidth)).to.be.greaterThan(0);
-      expect(parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)).to.be.at.most(0);
+    });
+
+    it('shows foreground-coloured inset keyboard focus on inactive, active and last chips', async () => {
+      const focusItems = iconItems.map((item, index) => ({ ...item, active: index === 1 }));
+      const container = await fixture<HTMLDivElement>(html`
+        <div style="width: 167px">
+          <button>Before chips</button>
+          <mt-selector-row .items=${focusItems}></mt-selector-row>
+        </div>
+      `);
+      const row = container.querySelector('mt-selector-row')!;
+      await row.updateComplete;
+      const group = row.shadowRoot!.querySelector<HTMLElement>('.chips')!;
+      const chips = [...row.shadowRoot!.querySelectorAll<HTMLButtonElement>('.chip')];
+      container.querySelector('button')!.focus();
+      for (const chip of chips) {
+        await sendKeys({ press: 'Tab' });
+        expect(row.shadowRoot!.activeElement).to.equal(chip);
+        expect(chip.matches(':focus-visible')).to.be.true;
+        const style = getComputedStyle(chip);
+        expect(style.outlineStyle).to.equal('solid');
+        expect(style.outlineWidth).to.equal('2px');
+        expect(style.outlineColor).to.equal(style.color);
+        expect(style.outlineColor).to.not.equal(style.backgroundColor);
+        expect(style.outlineOffset).to.equal('-2px');
+        const outset = parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+        const bounds = group.getBoundingClientRect();
+        const rect = chip.getBoundingClientRect();
+        expect(rect.left - outset).to.be.at.least(bounds.left);
+        expect(rect.right + outset).to.be.at.most(bounds.right);
+        expect(rect.top - outset).to.be.at.least(bounds.top);
+        expect(rect.bottom + outset).to.be.at.most(bounds.bottom);
+      }
     });
 
     const items: SelectorItem[] = [
