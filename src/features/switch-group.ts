@@ -25,7 +25,7 @@ export class MtSwitchGroup extends LitElement {
         return {
           value: e.entity,
           label: e.label ?? state?.attributes.friendly_name ?? e.entity,
-          icon: e.icon ?? state?.attributes.icon,
+          icon: e.icon ?? state?.attributes.icon ?? 'mdi:toggle-switch-variant',
           active: state?.state === 'on',
           disabled: !state || state.state === 'unavailable',
           color: e.color,

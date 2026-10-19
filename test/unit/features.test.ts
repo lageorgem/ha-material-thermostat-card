@@ -1069,6 +1069,39 @@ describe('mt-input-select', () => {
 });
 
 describe('mt-switch-group', () => {
+  for (const display of ['icons', 'dropdown', 'tile']) {
+    it(`uses fallback icons without replacing friendly labels in ${display} display`, async () => {
+      const labels = ['MT Parity QA mtqa_sw_1', 'MT Parity QA mtqa_sw_2'];
+      const hass = makeHass({
+        'switch.a': entityState('switch.a', 'on', { friendly_name: labels[0] }),
+        'switch.b': entityState('switch.b', 'off', { friendly_name: labels[1] }),
+      });
+      const el = await fixture<MtSwitchGroup>(
+        html`<mt-switch-group
+          .hass=${hass}
+          .entities=${[{ entity: 'switch.a' }, { entity: 'switch.b' }]}
+          display=${display}
+        ></mt-switch-group>`
+      );
+      expect(rowItems(el).map((item) => item.icon)).to.deep.equal([
+        'mdi:toggle-switch-variant',
+        'mdi:toggle-switch-variant',
+      ]);
+      expect(rowItems(el).map((item) => item.label)).to.deep.equal(labels);
+      if (display === 'icons') {
+        expect(chips(el)).to.have.lengthOf(2);
+        chips(el).forEach((chip, index) => {
+          expect(chip.title).to.equal(labels[index]);
+          expect(chip.getAttribute('aria-label')).to.equal(labels[index]);
+          expect(chip.querySelector('ha-icon')!.getAttribute('icon')).to.equal(
+            'mdi:toggle-switch-variant'
+          );
+          expect(chip.querySelector('.chip-text')).to.equal(null);
+        });
+      }
+    });
+  }
+
   it('renders nothing when entities is empty', async () => {
     const hass = makeHass({});
     const el = await fixture<MtSwitchGroup>(
@@ -1156,7 +1189,7 @@ describe('mt-switch-group', () => {
     expect(items[1].icon).to.equal('mdi:attr-icon');
     // [2] no friendly_name -> entity id; no icon -> undefined
     expect(items[2].label).to.equal('switch.nofriendly');
-    expect(items[2].icon).to.equal(undefined);
+    expect(items[2].icon).to.equal('mdi:toggle-switch-variant');
   });
 
   it('falls back to entity id label when there is no state at all', async () => {
@@ -1169,7 +1202,7 @@ describe('mt-switch-group', () => {
     );
     const items = rowItems(el);
     expect(items[0].label).to.equal('switch.ghost');
-    expect(items[0].icon).to.equal(undefined);
+    expect(items[0].icon).to.equal('mdi:toggle-switch-variant');
     expect(items[0].disabled).to.be.true;
   });
 
