@@ -48,6 +48,13 @@ const SIDE_GUARD_DEG = 26; // a numeric marker this close to 3/9 o'clock crowds 
 const TAP_SLOP_PX = 10; // movement past this turns a ring press from a tap into a scroll/scrub
 const LABEL_SEP_DEG = 24; // min angular gap kept between orbiting labels (slide along the arc)
 
+/** Accept integration temperatures without coercing strings or objects.
+ * @param value untrusted temperature
+ */
+function isTemperature(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
  * Convert a polar angle (0° = top, increasing clockwise) to an SVG point.
  * @param angleDeg angle in degrees
@@ -161,7 +168,7 @@ export class MtCircularDial extends LitElement {
     // reflects what it's actually doing even when the temp sits inside the band.
     if (this.mode === 'cool') return 'cool';
     if (this.mode === 'heat') return 'heat';
-    if (this.current == null) return null;
+    if (!isTemperature(this.current) || !isTemperature(this._displayLow) || !isTemperature(this._displayHigh)) return null;
     if (this.current > this._displayHigh) return 'cool';
     if (this.current < this._displayLow) return 'heat';
     return null;
@@ -173,7 +180,7 @@ export class MtCircularDial extends LitElement {
    */
   private get _selSide(): 'low' | 'high' {
     if (this._selected) return this._selected;
-    if (this.current == null) return 'low';
+    if (!isTemperature(this.current)) return 'low';
     return Math.abs(this.current - this._displayLow) <= Math.abs(this.current - this._displayHigh)
       ? 'low'
       : 'high';
@@ -191,7 +198,7 @@ export class MtCircularDial extends LitElement {
    * for single mode when the device does not report an HVAC action.
    */
   private get _demandSensible(): boolean {
-    if (this.current == null) return false;
+    if (!isTemperature(this.current) || !isTemperature(this._displayValue)) return false;
     if (this.mode === 'cool') return this.current > this._displayValue;
     if (this.mode === 'heat') return this.current < this._displayValue;
     return true; // auto / dry / fan_only keep their own color
@@ -248,7 +255,8 @@ export class MtCircularDial extends LitElement {
   private get _singleSegVisible(): boolean {
     return (
       !this.dual &&
-      this.current != null &&
+      isTemperature(this.current) &&
+      isTemperature(this._displayValue) &&
       this.current >= this.min &&
       this.current <= this.max &&
       COLORED_MODES.includes(this.mode) &&
@@ -270,7 +278,7 @@ export class MtCircularDial extends LitElement {
    */
   private get _centerTight(): boolean {
     const near = (v?: number): boolean => {
-      if (v == null) return false;
+      if (!isTemperature(v)) return false;
       const a = ((this._angleOf(v) % 360) + 360) % 360;
       return Math.min(Math.abs(a - 90), Math.abs(a - (360 - 90))) <= SIDE_GUARD_DEG;
     };
@@ -381,21 +389,25 @@ export class MtCircularDial extends LitElement {
 
   /** Value shown for single mode (drag value while dragging). */
   private get _displayValue(): number {
-    return this._dragging ? this._dragValue : this.value;
+    const value = this._dragging ? this._dragValue : this.value;
+    return isTemperature(value) ? value : NaN;
   }
 
   /** Low setpoint shown (drag value while dragging). */
   private get _displayLow(): number {
-    return this._dragging ? this._dragLow : (this.lowValue ?? this.min);
+    const value = this._dragging ? this._dragLow : (this.lowValue ?? this.min);
+    return isTemperature(value) ? value : NaN;
   }
 
   /** High setpoint shown (drag value while dragging). */
   private get _displayHigh(): number {
-    return this._dragging ? this._dragHigh : (this.highValue ?? this.max);
+    const value = this._dragging ? this._dragHigh : (this.highValue ?? this.max);
+    return isTemperature(value) ? value : NaN;
   }
 
   /** Map a value to its angle on the arc. */
   private _angleOf(value: number): number {
+    if (!isTemperature(value)) return NaN;
     const frac = (value - this.min) / (this.max - this.min || 1);
     return ARC_START + Math.min(1, Math.max(0, frac)) * SWEEP;
   }
@@ -691,7 +703,7 @@ export class MtCircularDial extends LitElement {
    * @param localize use locale formatting for separator-bearing text
    */
   private _fmt(value: number | undefined, precision: number, localize = true): string {
-    if (value === undefined || value === null || Number.isNaN(value)) return '—';
+    if (!isTemperature(value)) return '—';
     return localize && this.formatNumber ? this.formatNumber(value, precision) : value.toFixed(precision);
   }
 
@@ -700,7 +712,7 @@ export class MtCircularDial extends LitElement {
    * @param value the temperature
    */
   private _fmtCompact(value: number | undefined): string {
-    if (value == null || Number.isNaN(value)) return '—';
+    if (!isTemperature(value)) return '—';
     if (this.formatNumber) return this.formatNumber(value, Number.isInteger(value) ? 0 : 1);
     return Number.isInteger(value) ? String(value) : value.toFixed(1);
   }
@@ -732,7 +744,8 @@ export class MtCircularDial extends LitElement {
    * @param angle angle in degrees
    * @param cls extra dot class (setpoint|current)
    */
-  private _dotOrbit(angle: number, cls: string): TemplateResult {
+  private _dotOrbit(angle: number, cls: string): TemplateResult | typeof nothing {
+    if (!Number.isFinite(angle)) return nothing;
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
       <div class="o-dot ${cls}"></div>
     </div>`;
@@ -747,7 +760,8 @@ export class MtCircularDial extends LitElement {
    * @param content the label content
    * @param iconLabel whether the label contains only a setpoint mode icon
    */
-  private _labelOrbit(angle: number, content: TemplateResult, iconLabel = false): TemplateResult {
+  private _labelOrbit(angle: number, content: TemplateResult, iconLabel = false): TemplateResult | typeof nothing {
+    if (!Number.isFinite(angle)) return nothing;
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
       <div class=${classMap({ 'o-label': true, 'icon-label': iconLabel })} data-angle=${angle} style=${`transform: translate(-50%, -50%) rotate(${-angle}deg)`}>
         ${content}
@@ -763,7 +777,8 @@ export class MtCircularDial extends LitElement {
    * @param angle angle in degrees
    * @param handle the dual setpoint this grabs (null in single mode)
    */
-  private _handleOrbit(angle: number, handle: 'low' | 'high' | null): TemplateResult {
+  private _handleOrbit(angle: number, handle: 'low' | 'high' | null): TemplateResult | typeof nothing {
+    if (!Number.isFinite(angle)) return nothing;
     return html`<div class="orbit" style=${`transform: rotate(${angle}deg)`}>
       <div
         class="handle"
@@ -884,7 +899,7 @@ export class MtCircularDial extends LitElement {
     const modeIcon = this._modeIcon(this.mode);
 
     const showCurrent =
-      this.current != null && this.current >= this.min && this.current <= this.max;
+      isTemperature(this.current) && this.current >= this.min && this.current <= this.max;
     const spAngle = this._angleOf(this._displayValue);
     const curAngle = showCurrent ? this._angleOf(this.current!) : 0;
     const overlap = !this.dual && showCurrent && !isOff && Math.abs(spAngle - curAngle) < OVERLAP_DEG;
@@ -904,7 +919,7 @@ export class MtCircularDial extends LitElement {
     let segE = 0;
     let showSeg = false;
     let segColor = color;
-    if (!this.dual && showCurrent && !isOff) {
+    if (!this.dual && showCurrent && !isOff && isTemperature(this._displayValue)) {
       segS = Math.min(this._fracOf(this._displayValue), this._fracOf(this.current!));
       segE = Math.max(this._fracOf(this._displayValue), this._fracOf(this.current!));
       showSeg = this._singleSegVisible;
@@ -918,7 +933,7 @@ export class MtCircularDial extends LitElement {
     // when idle) so they cross-fade as the sub-mode changes instead of popping.
     const dualSegs: Array<{ from: number; to: number; color: string; opacity: number; cls: string }> =
       [];
-    if (this.dual) {
+    if (this.dual && isTemperature(this._displayLow) && isTemperature(this._displayHigh)) {
       const lo = this._fracOf(this._displayLow);
       const hi = this._fracOf(this._displayHigh);
       const active = this._dualActive;
@@ -937,12 +952,12 @@ export class MtCircularDial extends LitElement {
       // opacity cross-fades it cleanly instead of popping in/out.
       const cur = showCurrent ? this._fracOf(this.current!) : hi;
       const coolSide =
-        this.current != null && this.current >= (this._displayLow + this._displayHigh) / 2;
+        isTemperature(this.current) && this.current >= (this._displayLow + this._displayHigh) / 2;
       dualSegs.push({
         from: coolSide ? hi : Math.min(lo, cur),
         to: coolSide ? Math.max(hi, cur) : lo,
         color: coolSide ? this._modeColor('cool') : this._modeColor('heat'),
-        opacity: active === null ? 0 : 1,
+        opacity: active === null || !isTemperature(this.current) ? 0 : 1,
         cls: 'demand',
       });
     }
@@ -1002,7 +1017,7 @@ export class MtCircularDial extends LitElement {
           tabindex=${this.readonly || this.dual ? nothing : this.disabled ? -1 : 0}
           aria-valuemin=${this.readonly || this.dual ? nothing : this.min}
           aria-valuemax=${this.readonly || this.dual ? nothing : this.max}
-          aria-valuenow=${this.readonly || this.dual ? nothing : this._displayValue}
+           aria-valuenow=${this.readonly || this.dual || !isTemperature(this._displayValue) ? nothing : this._displayValue}
           aria-valuetext=${this.readonly || this.dual ? nothing : `${this._fmt(this._displayValue, this._precision)} ${this.unit}`}
           aria-label=${this.readonly || this.dual ? nothing : 'Target temperature'}
           @pointerdown=${this._onPointerDown}

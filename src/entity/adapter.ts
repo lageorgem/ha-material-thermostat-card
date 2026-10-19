@@ -85,24 +85,24 @@ export function targetModel(stateObj: HassEntity, unit: string): TargetModel {
   const defaultMin = waterHeater ? (fahrenheit ? 110 : 43) : fahrenheit ? 45 : 7;
   const defaultMax = waterHeater ? (fahrenheit ? 140 : 60) : fahrenheit ? 95 : 35;
   const limits = {
-    min: typeof a.min_temp === 'number' ? a.min_temp : defaultMin,
-    max: typeof a.max_temp === 'number' ? a.max_temp : defaultMax,
+    min: typeof a.min_temp === 'number' && Number.isFinite(a.min_temp) ? a.min_temp : defaultMin,
+    max: typeof a.max_temp === 'number' && Number.isFinite(a.max_temp) ? a.max_temp : defaultMax,
     step:
-      typeof a.target_temp_step === 'number' && a.target_temp_step > 0
+      typeof a.target_temp_step === 'number' && Number.isFinite(a.target_temp_step) && a.target_temp_step > 0
         ? a.target_temp_step
         : fahrenheit
           ? 1
           : 0.5,
   };
   // Both domains use bit 1 for their single target temperature capability.
-  if (supportsFeature(stateObj, ClimateEntityFeature.TARGET_TEMPERATURE) && a.temperature != null) {
+  if (supportsFeature(stateObj, ClimateEntityFeature.TARGET_TEMPERATURE) && typeof a.temperature === 'number' && Number.isFinite(a.temperature)) {
     return { kind: 'single', value: a.temperature, ...limits };
   }
   if (
     !waterHeater &&
     supportsFeature(stateObj, ClimateEntityFeature.TARGET_TEMPERATURE_RANGE) &&
-    a.target_temp_low != null &&
-    a.target_temp_high != null
+    typeof a.target_temp_low === 'number' && Number.isFinite(a.target_temp_low) &&
+    typeof a.target_temp_high === 'number' && Number.isFinite(a.target_temp_high)
   ) {
     return { kind: 'dual', low: a.target_temp_low, high: a.target_temp_high, ...limits };
   }

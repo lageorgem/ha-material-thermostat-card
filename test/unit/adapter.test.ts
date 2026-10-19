@@ -17,6 +17,23 @@ import { climateState, waterHeaterState } from '../helpers';
 const entity = (state: ReturnType<typeof climateState>): HassEntity => state as HassEntity;
 
 describe('primary entity adapter', () => {
+  it('rejects malformed targets and falls through to valid climate ranges', () => {
+    for (const invalid of ['55', NaN, Infinity, -Infinity, {}, null, undefined]) {
+      expect(targetModel(entity(waterHeaterState({ temperature: invalid })), '°C').kind).to.equal('none');
+      expect(targetModel(entity(climateState({ temperature: invalid, supported_features: 1 })), '°C').kind).to.equal('none');
+      expect(targetModel(entity(climateState({ temperature: invalid, supported_features: 3, target_temp_low: 18, target_temp_high: 25 })), '°C').kind).to.equal('dual');
+      for (const attribute of ['target_temp_low', 'target_temp_high']) {
+        expect(targetModel(entity(climateState({ temperature: null, supported_features: 2, target_temp_low: 18, target_temp_high: 25, [attribute]: invalid })), '°C').kind).to.equal('none');
+      }
+    }
+  });
+
+  it('rejects nonfinite limits and steps', () => {
+    for (const invalid of [NaN, Infinity, -Infinity]) {
+      expect(targetModel(entity(waterHeaterState({ min_temp: invalid, max_temp: invalid, target_temp_step: invalid })), '°C'))
+        .to.deep.equal({ kind: 'single', value: 55, min: 43, max: 60, step: 0.5 });
+    }
+  });
   it('exports the supported domains and HA feature bits', () => {
     expect(PRIMARY_DOMAINS).to.deep.equal(['climate', 'water_heater']);
     expect(ClimateEntityFeature).to.deep.equal({

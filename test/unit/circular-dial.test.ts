@@ -102,6 +102,44 @@ function expectLabelGap(el: MtCircularDial, label: Element, edge: number): void 
 }
 
 describe('mt-circular-dial', () => {
+  it('treats malformed readings as missing in formatting and geometry', async () => {
+    const el = await mount();
+    el.mode = 'heat';
+    for (const invalid of ['48', NaN, Infinity, -Infinity, {}]) {
+      Object.assign(el, { current: invalid, readonly: true });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('—');
+      expect(el.shadowRoot!.querySelector('.o-dot.current')).to.equal(null);
+      Object.assign(el, { readonly: false, dual: false, value: 20, showCurrentAsPrimary: true });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('—');
+      expect(el.shadowRoot!.querySelector('.value')!.getAttribute('style')).to.include('opacity:0');
+      el.showCurrentAsPrimary = false;
+      Object.assign(el, { readonly: false, dual: true, lowValue: 18, highValue: 24 });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.o-dot.current')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('.demand')!.getAttribute('style')).to.include('opacity:0');
+      el.mode = 'cool';
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.demand')!.getAttribute('style')).to.include('opacity:0');
+      el.mode = 'heat';
+      Object.assign(el, { dual: false, value: invalid });
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.value-text')!.textContent).to.equal('—');
+      expect(el.shadowRoot!.querySelector('.o-dot.setpoint')).to.equal(null);
+      expect(el.shadowRoot!.querySelector('svg')!.getAttribute('aria-valuetext')).to.equal('— °C');
+      for (const key of ['lowValue', 'highValue']) {
+        Object.assign(el, { dual: true, lowValue: 18, highValue: 24, [key]: invalid });
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.center')!.textContent).to.include('—');
+        expect(el.shadowRoot!.querySelectorAll('.o-dot.setpoint')).to.have.length(1);
+        expect(el.shadowRoot!.querySelectorAll('path.value')).to.have.length(0);
+        for (const node of el.shadowRoot!.querySelectorAll('[style]')) {
+          expect(node.getAttribute('style')).not.to.include('NaN');
+        }
+      }
+    }
+  });
   describe('stock parity', () => {
     for (const expanded of [false, true]) {
       for (const current of [22, 21.5]) {
