@@ -110,6 +110,13 @@ a Node-side journal records its domain/service/data and expected state. Every
 journey's `finally`, view recovery and final shutdown drain the journal through
 independently bounded REST service POSTs (30 s per request), then REST state reads
 until convergence (5 s polling window; an in-flight read still has a 30 s bound).
+Each journal drain allows up to three transient-error retries per restore entry,
+shared across its service POST and verification reads, after 1 s, 3 s and 6 s.
+Network failures/timeouts and HTTP 429/502/503/504 are retryable; other HTTP
+errors (including other 4xx) fail immediately. Each request retains its 30 s bound.
+Successful retries still require restored-state verification and do not emit FAIL.
+Restore evidence records `retries` (retry count) and `lastError` (last redacted
+request error, or null), including on successful restoration.
 Restoration never uses the page, so a closed context or fatal frontend timeout
 cannot prevent sending it. Every entry is attempted even if another restore fails;
 failures report `FAIL restore: <entity>` and remain queued for retry at subsequent

@@ -271,10 +271,28 @@ async function main() {
   // Independent of page/context/fatal: every request has ha-client's 30 s bound.
   const performRestore = async (entry) => {
     const id = entry.data.entity_id;
-    await rest(auth, `/api/services/${entry.domain}/${entry.service}`, 'POST', entry.data);
+    const backoff = [1000, 3000, 6000];
+    entry.retries = 0;
+    entry.lastError = null;
+    const restoreRequest = async (...args) => {
+      for (;;) {
+        try { return await rest(auth, ...args); }
+        catch (error) {
+          const message = safeError(error);
+          entry.lastError = message;
+          const status = message.match(/\bHTTP (\d{3})\b/);
+          const transient = status ? [429, 502, 503, 504].includes(Number(status[1]))
+            : /fetch failed|\b(?:ECONNRESET|ETIMEDOUT|ECONNREFUSED|EPIPE|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|UND_ERR_[A-Z_]+)\b|timeout \(30 s\)|network|socket (?:hang up|closed)/i.test(message);
+          if (!transient || entry.retries >= backoff.length) throw error;
+          const delay = backoff[entry.retries++];
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+    };
+    await restoreRequest(`/api/services/${entry.domain}/${entry.service}`, 'POST', entry.data);
     const end = Date.now() + 5000;
     do {
-      const actual = await rest(auth, `/api/states/${encodeURIComponent(id)}`);
+      const actual = await restoreRequest(`/api/states/${encodeURIComponent(id)}`);
       if (Object.entries(entry.verify).every(([key, value]) => equal(stateValue(actual, key), value))) return;
       await new Promise((r) => setTimeout(r, 50));
     } while (Date.now() < end);
