@@ -681,13 +681,12 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     `,
   ];
 
-  /** Release observers and invalidate pending temperature work.
+  /** Release observers, drop unsent commits, and clear optimistic targets before reconnect.
    * @param none No parameters.
    */
   disconnectedCallback(): void {
     super.disconnectedCallback();
-    this._cancelResync();
-    if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
+    this._clearPendingTarget();
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
   }

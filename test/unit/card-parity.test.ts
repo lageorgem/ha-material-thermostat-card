@@ -246,12 +246,58 @@ describe('card parity contracts', () => {
     expect(dial().value).to.equal(21);
   });
 
-  it('disconnect cancels the deadline and invalidates pending service results', async () => {
-    change({ value: 23 });
+  it('reconnect displays rounded server state instead of a resolved optimistic target', async () => {
+    const service = sinon.spy(card.hass, 'callService');
+    change({ value: 23.3 });
     await clock.tickAsync(600);
+    card.hass = { ...card.hass, states: { 'climate.test': climateState({ temperature: 23.5 }) } };
+    await card.updateComplete;
+    expect(dial().value).to.equal(23.3);
     card.remove();
-    await clock.tickAsync(3000);
+    document.body.append(card);
+    await card.updateComplete;
+    expectCleared();
+    expect(dial().value).to.equal(23.5);
+    expect(clock.countTimers()).to.equal(0);
+    await clock.tickAsync(4000);
+    expect(dial().value).to.equal(23.5);
+    expect(service.callCount).to.equal(1);
+  });
+
+  it('reconnect clears both optimistic range endpoints', async () => {
+    card.hass = makeHass({ 'climate.test': climateState({ temperature: null, target_temp_low: 19, target_temp_high: 25 }, 'heat_cool') });
+    const service = sinon.spy(card.hass, 'callService');
+    await card.updateComplete;
+    change({ low: 20, high: 24 });
+    await clock.tickAsync(600);
+    await card.updateComplete;
+    expect(dial().lowValue).to.equal(20);
+    expect(dial().highValue).to.equal(24);
+    card.remove();
+    document.body.append(card);
+    await card.updateComplete;
+    expectCleared();
+    expect(dial().lowValue).to.equal(19);
+    expect(dial().highValue).to.equal(25);
+    await clock.tickAsync(4000);
+    expect(service.callCount).to.equal(1);
+  });
+
+  it('disconnect during debounce drops the unsent commit and reconnect restores server state', async () => {
+    const service = sinon.spy(card.hass, 'callService');
+    change({ value: 23 });
+    await card.updateComplete;
     expect(dial().value).to.equal(23);
+    await clock.tickAsync(300);
+    card.remove();
+    await clock.tickAsync(600);
+    expect(service.callCount).to.equal(0);
+    document.body.append(card);
+    await card.updateComplete;
+    expectCleared();
+    expect(dial().value).to.equal(21);
+    await clock.tickAsync(4000);
+    expect(service.callCount).to.equal(0);
   });
 
   it('reapplies a configured theme on a themes-only hass update', async () => {
