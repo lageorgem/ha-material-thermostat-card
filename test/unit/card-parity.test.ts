@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import type { CircularDial } from '../../src/dial/circular-dial';
-import { makeHass, climateState } from '../helpers';
+import { makeHass, climateState, waterHeaterState } from '../helpers';
 
 window.addEventListener('error', (event) => {
   if (/ResizeObserver loop/.test(event.message)) {
@@ -41,6 +41,110 @@ describe('card parity contracts', () => {
   function dial(): CircularDial {
     return card.shadowRoot!.querySelector('mt-circular-dial')!;
   }
+
+  /** Assert that no optimistic target survives cancellation.
+   * @param none No parameters.
+   */
+  function expectCleared(): void {
+    const selected = card as unknown as { _selectedTemp?: number; _selectedLow?: number; _selectedHigh?: number };
+    expect(selected._selectedTemp).to.equal(undefined);
+    expect(selected._selectedLow).to.equal(undefined);
+    expect(selected._selectedHigh).to.equal(undefined);
+  }
+
+  for (const entity of ['climate.other', 'water_heater.test']) {
+    it(`cancels pending targets and clears optimism when switching to ${entity}`, async () => {
+      const service = sinon.spy(card.hass, 'callService');
+      card.hass = { ...card.hass, states: { ...card.hass.states,
+        [entity]: entity.startsWith('climate.') ? { ...climateState(), entity_id: entity } : waterHeaterState(),
+      } };
+      await card.updateComplete;
+      change({ low: 19, high: 25 }, 'value-changing');
+      change({ value: 22 });
+      await clock.tickAsync(300);
+      card.setConfig({ type: 'custom:material-thermostat-card', entity, font: 'theme' });
+      expectCleared();
+      await clock.tickAsync(3300);
+      await card.updateComplete;
+      expect(service.callCount).to.equal(0);
+      expect(dial().value).to.equal(entity.startsWith('climate.') ? 21 : 55);
+    });
+  }
+
+  it('keeps a pending single commit through an unrelated same-entity option change', async () => {
+    const service = sinon.spy(card.hass, 'callService');
+    change({ value: 22 });
+    await clock.tickAsync(300);
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', name: 'Renamed', font: 'theme' });
+    await clock.tickAsync(300);
+    expect(service.callCount).to.equal(1);
+    expect(service.firstCall.args).to.deep.equal(['climate', 'set_temperature', { entity_id: 'climate.test', temperature: 22 }]);
+  });
+
+  it('does not reinterpret a pending range when the model becomes single', async () => {
+    const range = { supported_features: 3, temperature: null, target_temp_low: 19, target_temp_high: 25 };
+    card.hass = makeHass({ 'climate.test': climateState(range, 'heat_cool') });
+    const service = sinon.spy(card.hass, 'callService');
+    await card.updateComplete;
+    change({ low: 20, high: 24 });
+    card.hass = { ...card.hass, states: { 'climate.test': climateState({ ...range, temperature: 22 }, 'heat_cool') } };
+    await clock.tickAsync(600);
+    await card.updateComplete;
+    expect(service.callCount).to.equal(0);
+    expectCleared();
+    expect(dial().value).to.equal(22);
+    expect(dial().lowValue).to.equal(undefined);
+    expect(dial().highValue).to.equal(undefined);
+  });
+
+  it('keeps normal range commit payloads unchanged', async () => {
+    card.hass = makeHass({ 'climate.test': climateState({ supported_features: 3, temperature: null, target_temp_low: 19, target_temp_high: 25 }, 'heat_cool') });
+    const service = sinon.spy(card.hass, 'callService');
+    await card.updateComplete;
+    change({ low: 20, high: 24 });
+    await clock.tickAsync(600);
+    expect(service.firstCall.args).to.deep.equal(['climate', 'set_temperature', { entity_id: 'climate.test', target_temp_low: 20, target_temp_high: 24 }]);
+  });
+
+  it('guards an already-queued callback against a changed configured entity', async () => {
+    const timer = sinon.spy(window, 'setTimeout');
+    const service = sinon.spy(card.hass, 'callService');
+    change({ value: 22 });
+    const callback = timer.getCalls().find((call) => call.args[1] === 600)!.args[0] as () => void;
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme' });
+    callback();
+    expect(service.callCount).to.equal(0);
+    expectCleared();
+  });
+
+  it('does not create a command from an interaction whose entity state was missing', async () => {
+    const service = sinon.spy(card.hass, 'callService');
+    card.hass = { ...card.hass, states: {} };
+    change({ value: 22 });
+    card.hass = { ...card.hass, states: { 'climate.test': climateState() } };
+    await clock.tickAsync(600);
+    expect(service.callCount).to.equal(0);
+    expectCleared();
+  });
+
+  it('entity switches cancel resync deadlines and invalidate unresolved service results', async () => {
+    let resolve!: () => void;
+    sinon.stub(card.hass, 'callService').onFirstCall().resolves().onSecondCall().returns(new Promise<void>((done) => { resolve = done; }));
+    change({ value: 22 });
+    await clock.tickAsync(600);
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme' });
+    expectCleared();
+    expect(clock.countTimers()).to.equal(0);
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', font: 'theme' });
+    await card.updateComplete;
+    change({ value: 23 });
+    await clock.tickAsync(600);
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme' });
+    resolve();
+    await clock.tickAsync(0);
+    expectCleared();
+    expect(clock.countTimers()).to.equal(0);
+  });
 
   it('rolls back rejected single values and warns once with the error message', async () => {
     sinon.stub(card.hass, 'callService').rejects(new Error('Denied'));

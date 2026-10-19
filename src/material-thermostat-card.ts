@@ -118,6 +118,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     if (!primaryDomain(config.entity)) {
       throw new Error('Specify an entity from within the climate or water_heater domain');
     }
+    if (this._config?.entity !== config.entity) this._clearPendingTarget();
     this._config = normalizeConfig(config);
     if (config.font !== 'theme') ensureGoogleSansFlex();
   }
@@ -317,24 +318,34 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * Debounce a domain-specific temperature call using optimistic values.
+    * Bind the dial interaction to its entity and target kind before debouncing.
    * @param none No parameters.
    */
   private _scheduleCommit(): void {
     this._cancelResync();
     if (this._debounceTimer) window.clearTimeout(this._debounceTimer);
+    const entityId = this._config.entity;
+    const origin = this.hass.states[entityId];
+    const kind = origin && targetModel(origin, this.hass.config?.unit_system?.temperature ?? '°C').kind;
     this._debounceTimer = window.setTimeout(() => {
-      const stateObj = this._stateObj;
-      if (!stateObj) return;
+      this._debounceTimer = undefined;
+      const stateObj = this.hass.states[entityId];
+      if (this._config.entity !== entityId || !stateObj) {
+        this._clearPendingTarget();
+        return;
+      }
       const model = targetModel(stateObj, this.hass.config?.unit_system?.temperature ?? '°C');
-      if (model.kind === 'none') return;
-      const call = temperatureServiceCall(stateObj, model.kind, {
+      if (kind === 'none' || model.kind !== kind) {
+        this._clearPendingTarget();
+        return;
+      }
+      const call = temperatureServiceCall(stateObj, kind, {
         value: this._selectedTemp ?? model.value,
         low: this._selectedLow ?? model.low,
         high: this._selectedHigh ?? model.high,
       });
       const version = this._commitVersion;
-      const sent = model.kind === 'dual'
+      const sent = kind === 'dual'
         ? { _selectedLow: this._selectedLow, _selectedHigh: this._selectedHigh }
         : { _selectedTemp: this._selectedTemp };
       const rollback = (): void => {
@@ -354,6 +365,18 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         }
       );
     }, SERVICE_DEBOUNCE_MS);
+  }
+
+  /** Cancel pending temperature work and clear every optimistic target.
+   * @param none No parameters.
+   */
+  private _clearPendingTarget(): void {
+    window.clearTimeout(this._debounceTimer);
+    this._debounceTimer = undefined;
+    this._cancelResync();
+    this._selectedTemp = undefined;
+    this._selectedLow = undefined;
+    this._selectedHigh = undefined;
   }
 
   /** Invalidate older service results and cancel their resync deadline.
