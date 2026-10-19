@@ -3,12 +3,20 @@
  * State/history/drag overrides are client-side only. Dark PNGs go to assets/.
  * Build the local bundle first, then run:
  *   HA_URL=https://your.ui.nabu.casa HA_TOKEN=<token> node dev/ha-shots.mjs
+ * Optional ONLY=name renders that shot and shots prefixed with "name-".
  */
 import { chromium } from 'playwright-core';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { SHOTS } from './showcase.mjs';
+
+const ONLY = process.env.ONLY;
+const shots = SHOTS.filter((shot) => !ONLY || shot.name === ONLY || shot.name.startsWith(`${ONLY}-`));
+if (!shots.length) {
+  console.error(`No screenshots match ONLY=${ONLY}`);
+  process.exit(1);
+}
 
 const HA_URL = process.env.HA_URL;
 const HA_TOKEN = process.env.HA_TOKEN;
@@ -206,11 +214,45 @@ try {
     );
     console.log(`${mode} background: ${background}`);
     if (!background) throw new Error('Dark theme background is missing');
-    for (const shot of SHOTS) {
+    const groupHeights = new Map();
+    const groupErrors = new Map();
+    // Measure every member, even when ONLY selects just one shot from a group.
+    // Use the same settling time as capture so asynchronous features are included.
+    for (const group of new Set(shots.map((shot) => shot.group).filter(Boolean))) {
       try {
+        let height = 0;
+        for (const member of SHOTS.filter((shot) => shot.group === group)) {
+          await inject(page, member);
+          await page.waitForFunction(iconsReady, null, { timeout: 20000 });
+          await page.waitForTimeout(member.drag ? 900 : 700);
+          const naturalHeight = await page.locator('#__shot material-thermostat-card')
+            .evaluate((card) => card.getBoundingClientRect().height);
+          if (!(naturalHeight > 0)) throw new Error(`${member.name} has no measurable height`);
+          console.log(`${group}: ${member.name} natural height ${naturalHeight}px`);
+          height = Math.max(height, naturalHeight);
+        }
+        const fixedHeight = Math.ceil(height);
+        groupHeights.set(group, fixedHeight);
+        console.log(`${group}: shared card height ${fixedHeight}px`);
+      } catch (error) {
+        groupErrors.set(group, error);
+      }
+    }
+    for (const shot of shots) {
+      try {
+        if (groupErrors.has(shot.group)) throw groupErrors.get(shot.group);
         await inject(page, shot);
         await page.waitForFunction(iconsReady, null, { timeout: 20000 });
         await page.waitForTimeout(shot.drag ? 900 : 700);
+        if (shot.group) {
+          await page.locator('#__shot material-thermostat-card').evaluate((card, height) => {
+            card.style.display = 'block';
+            card.style.height = `${height}px`;
+            const style = document.createElement('style');
+            style.textContent = 'ha-card{height:100%;box-sizing:border-box}';
+            card.shadowRoot.appendChild(style);
+          }, groupHeights.get(shot.group));
+        }
         await page.locator('#__shot').screenshot({
           path: resolve(OUT, `${shot.name}.png`),
         });
@@ -224,7 +266,7 @@ try {
     await ctx.close();
   }
   console.log(
-    `done: ${SHOTS.length - failures}/${SHOTS.length} screenshots; ${failures} failures`
+    `done: ${shots.length - failures}/${shots.length} screenshots; ${failures} failures`
   );
 } catch (error) {
   failures++;

@@ -11,6 +11,7 @@ const FAN = 'input_select.mt_showcase_fan_speed';
 const ECO = 'input_boolean.mt_showcase_eco';
 const BOOST = 'input_boolean.mt_showcase_boost';
 const LAMP = 'input_boolean.mt_showcase_lamp';
+const OUTDOOR = 'sensor.mt_showcase_outdoor';
 
 /** Numeric samples only; the screenshot consumer supplies recorder timestamps. */
 export function cool(from, to, count = 12) {
@@ -103,6 +104,117 @@ const dualStates = () => states('heat_cool', {
 });
 
 export const SHOTS = [
+  {
+    name: 'grid-1', title: 'Living Room', group: 'grid', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: OUTDOOR, label: 'Outdoor temperature' },
+      ] },
+    ]),
+    states: {
+      ...states('heat', { temperature: 22, current_temperature: 20.4 }),
+      [OUTDOOR]: { state: '11', attributes: {
+        unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
+    name: 'grid-2', title: 'Bedroom', group: 'grid', width: 420,
+    config: card([
+      { type: 'comfort', show_target_eta: true },
+      { type: 'climate-preset-modes', display: 'tile', label: 'Preset', width: 100 },
+    ], { name: 'Bedroom', dial_style: 'minimal',
+      feels_like: { temperature: TEMPERATURE, humidity: HUMIDITY } }),
+    states: states('heat', { temperature: 21.5, current_temperature: 19.2,
+      preset_modes: ['none', 'eco', 'comfort', 'boost'], preset_mode: 'comfort' }),
+    history: {
+      [TEMPERATURE]: cool(17, 19.5).map((value, i, values) =>
+        i === values.length - 1 ? 19.2 : value),
+      [HUMIDITY]: Array(12).fill(46),
+    },
+  },
+  {
+    name: 'grid-3', title: 'Office', group: 'grid', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'icons' },
+      { type: 'switch-group', display: 'tile', entities: presets.slice(0, 2) },
+    ], { name: 'Office', dial_style: 'google' }),
+    states: states('heat', { temperature: 23, current_temperature: 21.6 }),
+  },
+  {
+    name: 'grid-4', title: 'Living Room AC', group: 'grid', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'climate-fan-modes', display: 'tile', label: 'Fan', width: 50 },
+      { type: 'climate-swing-modes', display: 'tile', label: 'Swing', width: 50 },
+    ], { entity: AC, name: 'Living Room AC' }),
+    states: states('cool', { temperature: 22, current_temperature: 25.1 }),
+  },
+  {
+    name: 'grid-5', title: 'Bedroom AC', group: 'grid', width: 420,
+    config: card([
+      { type: 'climate-fan-modes', display: 'dropdown', label: 'Fan speed' },
+      ...sensorTiles(),
+    ], { entity: AC, name: 'Bedroom AC', dial_style: 'minimal' }),
+    states: states('cool', { temperature: 23, current_temperature: 26.4 }),
+  },
+  {
+    name: 'grid-6', title: 'Office AC', group: 'grid', width: 420,
+    config: card([
+      { type: 'comfort', show_target_eta: true },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: HUMIDITY, label: 'Indoor humidity' },
+      ] },
+    ], { entity: AC, name: 'Office AC', dial_style: 'google',
+      feels_like: { temperature: TEMPERATURE, humidity: HUMIDITY } }),
+    states: states('cool', { temperature: 21, current_temperature: 24.3 }),
+    history: {
+      // Still falling toward ~18.5 °C, so the fit predicts reaching the 21 °C target.
+      [TEMPERATURE]: Array.from({ length: 12 }, (_, i) =>
+        Number((18.5 + 9 * Math.exp((-0.439 * i) / 11)).toFixed(1))),
+      [HUMIDITY]: Array(12).fill(46),
+    },
+  },
+  {
+    name: 'grid-7', title: 'Whole Home', group: 'grid', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'tile', label: 'Mode', width: 100 },
+      { type: 'sensor-list', items: [
+        { entity: TEMPERATURE, label: 'Indoor temperature' },
+        { entity: OUTDOOR, label: 'Outdoor temperature' },
+      ] },
+    ], { name: 'Whole Home' }),
+    states: {
+      ...states('heat_cool', { temperature: null, target_temp_low: 20,
+        target_temp_high: 24, current_temperature: 22.2, hvac_action: 'idle' }),
+      [OUTDOOR]: { state: '11', attributes: {
+        unit_of_measurement: '°C', device_class: 'temperature',
+      } },
+    },
+  },
+  {
+    name: 'grid-8', title: 'Kitchen', group: 'grid', width: 420,
+    config: card([
+      { type: 'input-select', entity: FAN, label: 'Fan speed', display: 'tile',
+        options: fanOptions.map((option) => ({ ...option })) },
+      { type: 'entity-tile', entity: HUMIDITY, name: 'Humidity',
+        icon: 'mdi:water-percent', display: 'tile', width: 100 },
+    ], { name: 'Kitchen' }),
+    states: states('heat', { current_temperature: 20.8 }), drag: { value: 23.5 },
+  },
+  {
+    name: 'grid-9', title: 'Studio', group: 'grid', width: 420,
+    config: card([
+      { type: 'switch-list', entities: [presets[2], presets[0]] },
+      { type: 'button-list', items: [
+        { entity: 'input_button.mt_showcase_restart', label: 'Restart', icon: 'mdi:restart' },
+      ] },
+    ], { name: 'Studio', show_current_as_primary: true }),
+    states: states('heat', { temperature: 23, current_temperature: 21.4 }),
+  },
   {
     name: 'forum-hero', title: 'Living Room — Google Home style',
     config: card([
