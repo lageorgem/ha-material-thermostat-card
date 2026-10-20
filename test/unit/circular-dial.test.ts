@@ -252,21 +252,23 @@ describe('mt-circular-dial', () => {
       });
     }
 
-    it('shows the enabled state label without replacing unavailable status', async () => {
+    it('does not observe the removed state-label attribute', () => {
+      expect(MtCircularDial.observedAttributes).not.to.include('statelabel');
+    });
+
+    it('shows the mode label only while disabled', async () => {
       const el = await mount();
-      el.stateLabel = 'Heating';
-      await el.updateComplete;
-      expect(el.shadowRoot!.querySelector('.mode')!.textContent).to.equal('Heating');
-      el.stateLabel = '';
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
-      el.stateLabel = 'Heating';
       el.disabled = true;
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
       el.modeLabel = 'Unavailable';
       await el.updateComplete;
       expect(el.shadowRoot!.querySelector('.mode')!.textContent).to.equal('Unavailable');
+      el.disabled = false;
+      await el.updateComplete;
+      expect(el.shadowRoot!.querySelector('.mode')).to.equal(null);
     });
 
     for (const dual of [false, true]) {

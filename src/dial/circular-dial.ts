@@ -114,8 +114,6 @@ export class MtCircularDial extends LitElement {
   @property({ type: Boolean }) disabled = false;
   /** Optional localized temperature formatter; receives the value and decimal precision. */
   @property({ attribute: false }) formatNumber?: (value: number, decimals: number) => string;
-  /** Optional localized action/state label shown above the enabled readout. */
-  @property() stateLabel?: string;
   /** Display current temperature without any setpoint or adjustment controls. */
   @property({ type: Boolean }) readonly = false;
 
@@ -1126,9 +1124,8 @@ export class MtCircularDial extends LitElement {
    * unavailable/disabled state — never the normal "Cool"/"Heat"/"Dry" label.
    */
   private _renderStatus(): TemplateResult | typeof nothing {
-    const label = this.disabled ? this.modeLabel : this.stateLabel;
-    return label
-      ? html`<div class="mode">${label}</div>`
+    return this.disabled && this.modeLabel
+      ? html`<div class="mode">${this.modeLabel}</div>`
       : nothing;
   }
 
