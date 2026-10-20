@@ -151,6 +151,31 @@ describe('card parity contracts', () => {
     }
   }
 
+  for (const last of [{ value: 'eco', icon: '', color: 'red' }, { value: 'eco', icon: 'mdi:x', color: '#123456' }, { value: 'eco' }]) {
+    it(`matches the selector's last operation override ${JSON.stringify(last)}`, async () => {
+      card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [
+        { type: 'water-heater-operation-modes', options: [{ value: 'eco', icon: 'mdi:leaf', color: 'green' }, last, { value: 'gas', icon: 'mdi:fire', color: 'blue' }] },
+      ] });
+      card.hass = makeHass({ 'water_heater.test': waterHeaterState({}, 'eco') });
+      await card.updateComplete;
+      const row = card.shadowRoot!.querySelector('mt-feature-row')!;
+      await row.updateComplete;
+      const selector = row.shadowRoot!.querySelector('mt-climate-selector')!;
+      await selector.updateComplete;
+      const chips = selector.shadowRoot!.querySelector('mt-selector-row')!;
+      await chips.updateComplete;
+      const active = chips.items.find((item) => item.active)!;
+      const icon = last.icon ?? waterHeaterModeIcon('eco');
+      const color = last.color ?? waterHeaterModeColor('eco');
+      expect(active.icon).to.equal(icon);
+      expect(active.color).to.equal(color);
+      expect(dial().presetIcon).to.equal(active.icon || undefined);
+      expect(dial().presetIconColor).to.equal(active.color);
+      expect(dial().modeColors).to.deep.equal({ heat: active.color });
+      expect(card.shadowRoot!.querySelector('ha-card')!.style.getPropertyValue('--mt-active-color').trim()).to.equal(active.color);
+    });
+  }
+
   it('shows the operation icon on a read-only water heater', async () => {
     card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [{ type: 'water-heater-operation-modes' }] });
     card.hass = makeHass({ 'water_heater.test': waterHeaterState({ supported_features: 0 }) });

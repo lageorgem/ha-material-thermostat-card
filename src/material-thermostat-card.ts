@@ -29,6 +29,7 @@ import type {
   ClimatePresetFeatureConfig,
   FeatureConfig,
   MaterialThermostatCardConfig,
+  OptionOverride,
   WaterHeaterOperationFeatureConfig,
 } from './types';
 import { feelsLikeC } from './calc/comfort-metrics';
@@ -428,6 +429,18 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     fireEvent(this, 'hass-more-info', { entityId: this._config.entity });
   }
 
+  /** Resolve the last matching operation option, like the selector's override map.
+   * @param options configured water heater operation overrides
+   * @param mode active operation mode
+   */
+  private _operationOverride(options: OptionOverride[] | undefined, mode: string): OptionOverride | undefined {
+    const overrides = options ?? [];
+    for (let i = overrides.length - 1; i >= 0; i--) {
+      if (overrides[i].value === mode) return overrides[i];
+    }
+    return undefined;
+  }
+
   /**
    * The icon for the active climate preset or water heater operation mode, shown under the dial number (à la
    * Google Home's eco leaf) — but only when the **preset modes** feature is
@@ -443,7 +456,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       if (!feat) return undefined;
       const mode = this._stateObj?.state;
       if (!mode || mode === 'off' || mode === 'unavailable' || mode === 'unknown') return undefined;
-      const override = feat.options?.find((o) => o.value === mode);
+      const override = this._operationOverride(feat.options, mode);
       if (override?.icon !== undefined) return override.icon || undefined;
       return waterHeaterModeIcon(mode);
     }
@@ -505,7 +518,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       if (!feat) return undefined;
       const mode = this._stateObj?.state;
       if (!mode || mode === 'off' || mode === 'unavailable' || mode === 'unknown') return undefined;
-      const override = feat.options?.find((o) => o.value === mode);
+      const override = this._operationOverride(feat.options, mode);
       return override?.color ?? waterHeaterModeColor(mode);
     }
     const feat = this._features.find((f) => f.type === 'climate-preset-modes') as
@@ -540,7 +553,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const waterHeater = primaryDomain(this._config.entity) === 'water_heater';
     const operationFeature = this._features.find((f) => f.type === 'water-heater-operation-modes');
     const activeColor = waterHeater
-      ? operationFeature?.options?.find((o) => o.value === state.state)?.color ?? waterHeaterModeColor(state.state)
+      ? this._operationOverride(operationFeature?.options, state.state)?.color ?? waterHeaterModeColor(state.state)
       : climateModeColor(colorMode);
     const modeColors = waterHeater ? { heat: activeColor } : this._hvacColors();
     const action = hvacAction(state);
