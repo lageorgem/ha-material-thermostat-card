@@ -14,7 +14,7 @@ const S = {
   heading: 'hui-heading-card', icon: 'ha-icon', svgIcon: 'ha-svg-icon', path: 'path[d]',
   dial: 'mt-circular-dial', slider: '[role="slider"]',
   increase: 'button[aria-label="Increase temperature"]', decrease: 'button[aria-label="Decrease temperature"]',
-  stateLabel: '.center .mode', current: '.num.current, .current-primary, .current-marker',
+  stateLabel: '.center .mode', modeIcon: 'ha-icon.preset-icon', current: '.num.current, .current-primary, .current-marker',
   value: '.value-text', accessibleText: '.sr-only', center: '.center',
   selector: 'mt-climate-selector', row: 'mt-selector-row', chip: '.chip[title]',
   dropdown: 'mt-dropdown', trigger: 'button[aria-haspopup="listbox"]', option: '[role="option"]',
@@ -28,7 +28,7 @@ const S = {
     'entity-tile': 'mt-entity-tile', comfort: 'mt-comfort' },
   stockOption: 'option, ha-dropdown-item, ha-list-item, mwc-list-item, [role="option"], [value], [data-value], button[title]',
 };
-const CHECKS = ['sliders', 'plus-minus', 'unavailable', 'state-label', 'selectors', 'labels', 'away', 'aux', 'text', 'layout', 'values'];
+const CHECKS = ['sliders', 'plus-minus', 'unavailable', 'state-label', 'mode-icon', 'selectors', 'labels', 'away', 'aux', 'text', 'layout', 'values'];
 const SERVICES = {
   hvac: ['climate', 'set_hvac_mode', 'hvac_mode', 'state'],
   preset: ['climate', 'set_preset_mode', 'preset_mode', 'preset_mode'],
@@ -79,13 +79,13 @@ function journeys(c, opts) {
   }
   const optionsSection = /options/i.test(c.section);
   if (e.interactive && optionsSection && ['s-c-mqtt-full', 's-c-mqtt-range', 's-w-mqtt-tank'].includes(c.view)
-      && c.config.show_current_as_primary === false && c.config.show_state_label === false) result.push({ type: 'J-dial' });
+       && c.config.show_current_as_primary === false) result.push({ type: 'J-dial' });
   if (c.view === 'features-wh' && /^(?:s-)?w-away-(on|off)$/.test(s.id) && e.away) result.push({ type: 'J-away' });
   if (/^(?:s-)?[cw]-unavailable$/.test(s.id)) result.push({ type: 'J-unavailable' });
   // Reject/REST-away/unavailable journeys intentionally exercise guarded controls
   // even though these fixtures do not echo service calls (interactive=false).
   if (optionsSection && c.view === 's-c-mqtt-reject' && c.config.show_current_as_primary === false
-      && c.config.show_state_label === false && (c.config.dial_style ?? c.config.dial?.style) === 'halo') result.push({ type: 'J-reject' });
+       && (c.config.dial_style ?? c.config.dial?.style) === 'halo') result.push({ type: 'J-reject' });
   if (e.interactive && c.view === 'aux') for (const feature of e.aux) {
     if (['input-select', 'switch-group', 'switch-list', 'button-list'].includes(feature)) result.push({ type: 'J-aux', feature });
   }
@@ -149,6 +149,11 @@ function inspect(host, S) {
       min: Number(el.getAttribute('aria-valuemin')), max: Number(el.getAttribute('aria-valuemax')), text: el.getAttribute('aria-valuetext'), disabled: disabled(el) })) : [],
     increase: dial ? deep(dial, S.increase).length : 0, decrease: dial ? deep(dial, S.decrease).length : 0,
     stateLabels: dial ? deep(dial, S.stateLabel).filter(visible).map(text) : [],
+    modeIcons: dial ? [...(dial.shadowRoot?.querySelectorAll(S.modeIcon) ?? [])].map((el) => {
+      const numbers = deep(dial, S.value).filter(visible), bounds = el.getBoundingClientRect();
+      return { icon: el.getAttribute('icon'), color: el.style.color, visible: visible(el),
+        belowNumber: numbers.length > 0 && numbers.every((n) => bounds.top >= n.getBoundingClientRect().bottom - 2) };
+    }) : [],
     controls: deep(host, S.controls).map(disabled), selectors: deep(host, S.selector).map(rowInfo), away,
     aux: Object.fromEntries(Object.entries(S.aux).map(([k, v]) => [k, deep(host, v).map((el) => text(el).trim() || (deep(el, `${S.controls}, ${S.icon}`).some(visible) ? 'controls/icon' : ''))])),
     current, overflow, scroll, bounds: bounds?.toJSON(),
@@ -494,10 +499,25 @@ async function main() {
             assert(a.controls.every((d) => d === e.unavailable), `Control disabled flags ${a.controls}`);
           });
           await check(`${c.id}: state-label`, async () => {
-            // Unavailable/unknown cards show the status text in the label slot; that is
-            // asserted by the `unavailable` check, not the optional state label.
-            const a = await snapshot(c); if (e.unavailable) a.stateLabels = [];
-            assert(e.stateLabel ? a.stateLabels.length > 0 && a.stateLabels.every((s) => s.trim()) : a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
+            // Unavailable/unknown retain their disabled label; available cards never
+            // show a dial status line.
+            const a = await snapshot(c);
+            if (!e.unavailable) assert(e.stateLabel === false && a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
+          });
+          await check(`${c.id}: mode-icon`, async () => {
+            // Climate preset behaviour is unchanged; this oracle covers water heaters only.
+            if (!Object.hasOwn(e, 'modeIcon')) return { applicable: false };
+            const a = await snapshot(c), expected = e.modeIcon;
+            assert(a.modeIcons.length === (expected ? 1 : 0), `Mode icons ${JSON.stringify(a.modeIcons)}; expected ${JSON.stringify(expected)}`);
+            if (expected) {
+              const color = await evaluate(page, (value) => {
+                const el = document.createElement('span'); el.style.color = value; return el.style.color;
+              }, expected.color);
+              const [icon] = a.modeIcons;
+              assert(icon.icon === expected.icon && icon.color === color && icon.visible && icon.belowNumber,
+                `Mode icon ${JSON.stringify(icon)}; expected ${JSON.stringify(expected)} below dial number`);
+            }
+            return a.modeIcons;
           });
           await check(`${c.id}: selectors`, async () => {
             let a = await snapshot(c);

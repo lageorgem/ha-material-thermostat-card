@@ -14,6 +14,13 @@ const SELECTORS = [
 const DISPLAYS = ['icons', 'dropdown', 'tile'];
 const VARIANTS = ['plain', 'include', 'order', 'overrides', 'label-width', 'stock'];
 const OPERATION_ORDER = ['electric', 'gas', 'heat_pump', 'eco', 'performance', 'high_demand', 'off'];
+// Copied from src/theme.ts: WATER_HEATER_MODE_ICONS / waterHeaterModeIcon
+// and waterHeaterModeColor. Keep this independent plain-ESM oracle in sync.
+const OPERATION_ICONS = {
+  electric: 'mdi:lightning-bolt', gas: 'mdi:fire-circle', heat_pump: 'mdi:heat-pump',
+  eco: 'mdi:leaf', performance: 'mdi:rocket-launch', high_demand: 'mdi:finance',
+  off: 'mdi:power', on: 'mdi:power',
+};
 const AWAY = 'water-heater-away-mode';
 const items = (entities) => entities.map((entity) => ({ entity }));
 const feelsLike = () => ({ temperature: AUX.sensors.temperature, humidity: AUX.sensors.humidity });
@@ -65,9 +72,19 @@ function expectation(scenario, config) {
   return {
     sliders: e.model === 'none' ? 0 : e.model === 'dual' ? 2 : 1,
     plusMinus: e.model !== 'none', unavailable: e.unavailable,
-    stateLabel: Boolean(config.show_state_label && !e.unavailable),
+    stateLabel: false,
+    ...(scenario.domain === 'water_heater' ? { modeIcon: expectedModeIcon(scenario, config) } : {}),
     selectors, away, aux: [...new Set(aux)], interactive: scenario.interactive,
   };
+}
+
+function expectedModeIcon(scenario, config) {
+  const mode = scenario.expect.state;
+  const feature = config.features?.find((f) => f.type === 'water-heater-operation-modes');
+  if (!feature || ['off', 'unavailable', 'unknown'].includes(mode)) return null;
+  const override = feature.options?.find((o) => o.value === mode);
+  const icon = override?.icon ?? (Object.hasOwn(OPERATION_ICONS, mode) ? OPERATION_ICONS[mode] : 'mdi:water-boiler');
+  return icon ? { icon, color: override?.color ?? (mode === 'eco' ? '#4caf50' : 'var(--state-climate-heat-color, #ff8100)') } : null;
 }
 
 function allFeatures(scenario, display = 'icons') {
@@ -120,10 +137,8 @@ export function buildCases({ theme } = {}) {
     const view = `s-${scenario.id}`;
     for (const dial_style of ['halo', 'minimal', 'google']) {
       for (const show_current_as_primary of [false, true]) {
-        for (const show_state_label of [false, true]) {
-          add(`${view}-${dial_style}-current-${show_current_as_primary}-state-${show_state_label}`, view, 'Options', scenario,
-            { dial_style, show_current_as_primary, show_state_label, features: allFeatures(scenario) });
-        }
+        add(`${view}-${dial_style}-current-${show_current_as_primary}`, view, 'Options', scenario,
+          { dial_style, show_current_as_primary, features: allFeatures(scenario) });
       }
     }
     for (const display of DISPLAYS) add(`${view}-${display}`, view, 'Displays', scenario, { features: allFeatures(scenario, display) });
@@ -144,6 +159,8 @@ export function buildCases({ theme } = {}) {
   }
   add('features-climate-mismatch', 'features-climate', 'Domain mismatch', full, { features: [{ type: SELECTORS[5][0], display: 'icons' }] });
   add('features-wh-mismatch', 'features-wh', 'Domain mismatch', tank, { features: [{ type: SELECTORS[0][0], display: 'icons' }, { type: 'comfort' }], feels_like: feelsLike() });
+  add('features-wh-empty-icon', 'features-wh', 'Operation icon overrides', tank,
+    { features: [{ type: 'water-heater-operation-modes', options: [{ value: tank.expect.state, icon: '' }] }] });
   for (const id of ['w-away-on', 'w-away-off']) for (const display of ['icons', 'tile']) for (const label of [undefined, 'Holiday']) {
     add(`away-${id}-${display}-${label ?? 'default'}`, 'features-wh', 'Away states and labels', scenarioById(id),
       { features: [{ type: AWAY, display, ...(label ? { label } : {}) }] });
@@ -249,14 +266,15 @@ function selfCheck() {
   for (const entry of cases) {
     assert(entry.config.qa_id === entry.id, `Missing qa_id: ${entry.id}`);
     assert(entry.kind === 'stock' ? entry.expect === null : entry.expect !== null, `Invalid expectation: ${entry.id}`);
+    if (entry.expect) assert(entry.expect.stateLabel === false, `Unexpected state label: ${entry.id}`);
     for (const feature of entry.config.features ?? []) checkFeature(feature);
   }
   for (const scenario of SCENARIOS) {
     const entries = cases.filter((c) => c.view === `s-${scenario.id}`);
-    assert(entries.length === 16 && entries.filter((c) => c.kind === 'ours').length === 15, `Incomplete scenario view: ${scenario.id}`);
+    assert(entries.length === 10 && entries.filter((c) => c.kind === 'ours').length === 9, `Incomplete scenario view: ${scenario.id}`);
   }
   assert(cases.filter((c) => c.view === 'features-climate').length === 91, 'Incomplete climate feature matrix');
-  assert(cases.filter((c) => c.view === 'features-wh').length === 30, 'Incomplete water-heater feature matrix');
+  assert(cases.filter((c) => c.view === 'features-wh').length === 31, 'Incomplete water-heater feature matrix');
   console.log(`Validated ${cases.length} cases: ${cases.filter((c) => c.kind === 'ours').length} ours, ${cases.filter((c) => c.kind === 'stock').length} stock; ${SCENARIOS.length} scenario views; unique IDs and feature shapes OK`);
 }
 

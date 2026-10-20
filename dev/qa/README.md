@@ -53,7 +53,8 @@ Every custom case gets checks named `<case id>: <check>`:
 | `sliders` | Exact dial slider count: 0/1/2. |
 | `plus-minus` | Both temperature step buttons present iff declared. |
 | `unavailable` | Dial and selector/away control disabled state matches oracle. |
-| `state-label` | Nonempty state line iff declared. |
+| `state-label` | Zero visible dial status lines on available cards; unavailable/unknown retain their disabled label. |
+| `mode-icon` | Water heaters: operation-feature icon below the number, with active-mode icon/color overrides or theme defaults; none without feature, for off/unavailable/unknown, or an empty icon override. Climate preset behaviour unchanged. |
 | `selectors` | Feature/display, offered values (set or explicit order), DOM options, overrides, active markers and disabled controls; no unexpected feature family. Disabled dropdowns cannot open: verify item model + disabled trigger. |
 | `labels` | No unoverridden raw lowercase/snake_case option labels. |
 | `away` | Presence, display, pressed state, disabled state, configured label (including Holiday). |
@@ -71,7 +72,7 @@ cosmetic pixel equality is deliberately not tested (low impact, high upkeep).
 | Journey | Coverage |
 | --- | --- |
 | `J-select` | Every selector in features-climate/features-wh: all non-active options through icons/dropdown/tile; exactly one matching domain/service/entity/payload frame; live state/attribute convergence within 5 s; finally restore and assert. |
-| `J-dial` | Three dial styles for full/range/tank Options with current-primary/state-label false: ± debounce (no call before 600 ms), ArrowUp, PageUp (+10 steps), Home/End clamping; both dual handles independently; exactly one expected temperature frame and live state; finally restore. |
+| `J-dial` | Three dial styles for full/range/tank Options with current-primary false: ± debounce (no call before 600 ms), ArrowUp, PageUp (+10 steps), Home/End clamping; both dual handles independently; exactly one expected temperature frame and live state; finally restore. |
 | `J-away` | REST away-on/off cases: boolean set_away_mode frame only; disabled emits nothing. Verify REST fixture remains unchanged. |
 | `J-unavailable` | Dispatch clicks to disabled selector/away controls; no service frame. |
 | `J-reject` | Reject halo Options: prove optimistic movement, outgoing temperature frame, return to server value within 8 s. |
