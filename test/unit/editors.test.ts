@@ -214,15 +214,15 @@ describe('material-thermostat-card-editor', () => {
     const form = el.shadowRoot!.querySelector('ha-form') as any;
     const style = form.schema[3];
     expect(style).to.include({ name: '', type: 'expandable', title: 'Style', flatten: true, icon: 'mdi:palette-outline' });
-    expect(style.schema.map((s: any) => s.name)).to.deep.equal(['dial_style', 'show_current_as_primary', 'show_state_label', 'font']);
+    expect(style.schema.map((s: any) => s.name)).to.deep.equal(['dial_style', 'show_current_as_primary', 'font']);
     expect(style.schema[0].selector.select.mode).to.equal('dropdown');
     expect(style.schema[0].selector.select.options).to.deep.equal([
       { value: 'halo', label: 'Halo' },
       { value: 'minimal', label: 'Minimal' },
       { value: 'google', label: 'Google Home' },
     ]);
-    expect(style.schema[3].selector.select.mode).to.equal('dropdown');
-    expect(style.schema[3].selector.select.options).to.deep.equal([
+    expect(style.schema[2].selector.select.mode).to.equal('dropdown');
+    expect(style.schema[2].selector.select.options).to.deep.equal([
       { value: 'rounded', label: 'Google Sans Flex (rounded)' },
       { value: 'theme', label: 'Theme font' },
     ]);
@@ -417,22 +417,41 @@ describe('material-thermostat-card-editor', () => {
     expect(el.shadowRoot!.querySelectorAll('.feature-head > ha-icon').length).to.equal(12);
   });
 
-  it('accepts both primary domains and exposes the optional state label', async () => {
+  it('accepts both primary domains without exposing the removed state label', async () => {
     const el = await mount();
     const form = el.shadowRoot!.querySelector('ha-form') as any;
     expect(form.schema[0].selector).to.deep.equal({ entity: { domain: ['climate', 'water_heater'] } });
-    expect(form.data.show_state_label).to.equal(false);
-    expect(form.computeLabel({ name: 'show_state_label' })).to.equal('Show HVAC action / state label');
-    expect(form.schema[3].schema[2].selector).to.deep.equal({ boolean: {} });
-    const cap = captureEvents('config-changed');
-    emitValueChanged(form, { ...form.data, show_state_label: true });
-    await el.updateComplete;
-    expect(form.data.show_state_label).to.equal(true);
-    expect((cap.events[0].detail as any).config.show_state_label).to.equal(true);
-    emitValueChanged(form, { ...form.data, show_state_label: false });
-    cap.stop();
-    expect((cap.events[1].detail as any).config.show_state_label).to.equal(undefined);
+    const fields = form.schema.flatMap((field: { name: string; schema?: { name: string }[] }) => [field, ...(field.schema ?? [])]);
+    expect(fields.map((field: { name: string }) => field.name)).to.not.include('show_state_label');
+    expect(form.data).to.not.have.property('show_state_label');
   });
+
+  for (const value of [true, false]) {
+    for (const change of ['base', 'feels-like', 'features']) {
+      it(`never saves legacy show_state_label=${value} on ${change} changes`, async () => {
+        const legacy = Object.freeze({ name: 'Original', show_state_label: value, custom_key: 'preserved' });
+        const el = await mount(legacy);
+        const form = el.shadowRoot!.querySelector('ha-form') as HTMLElement & { data: Record<string, unknown> };
+        expect(form.data).to.not.have.property('show_state_label');
+        const cap = captureEvents('config-changed');
+        if (change === 'base') {
+          emitValueChanged(form, { ...form.data, show_state_label: value, name: 'Updated' });
+        } else if (change === 'feels-like') {
+          emitValueChanged(el.shadowRoot!.querySelectorAll('ha-form')[1], { show_as_current: true });
+        } else {
+          el.shadowRoot!.querySelector<HTMLButtonElement>('.add-btn')!.click();
+          await el.updateComplete;
+          el.shadowRoot!.querySelector<HTMLButtonElement>('.add-opt')!.click();
+        }
+        cap.stop();
+        expect(cap.events.length).to.equal(1);
+        const config = (cap.events[0] as CustomEvent<{ config: MaterialThermostatCardConfig }>).detail.config;
+        expect(config).to.not.have.property('show_state_label');
+        expect(config).to.have.property('custom_key', 'preserved');
+        expect(legacy.show_state_label).to.equal(value);
+      });
+    }
+  }
 
   it('hides structured names and water-heater feels-like settings without losing YAML', async () => {
     for (const name of [{ type: 'entity' }, ['Boiler', { type: 'entity' }]]) {
@@ -596,15 +615,15 @@ describe('material-thermostat-card-editor', () => {
   describe('add-feature menu and defaultFeature per type', () => {
     it('_addOpen toggles when clicking .add-btn', async () => {
       const el = await mount();
-      expect((el as any)._addOpen).to.be.false;
+      expect((el as any)._addOpen).to.equal(false);
       const btn = el.shadowRoot!.querySelector('.add-btn') as HTMLButtonElement;
       btn.click();
       await el.updateComplete;
-      expect((el as any)._addOpen).to.be.true;
+      expect((el as any)._addOpen).to.equal(true);
       expect(el.shadowRoot!.querySelector('.add-menu')).to.not.equal(null);
       btn.click();
       await el.updateComplete;
-      expect((el as any)._addOpen).to.be.false;
+      expect((el as any)._addOpen).to.equal(false);
     });
 
     const cases: { type: FeatureType; check: (f: any) => void }[] = [
@@ -631,7 +650,7 @@ describe('material-thermostat-card-editor', () => {
         expect(cfg.features.length).to.equal(1);
         check(cfg.features[0]);
         expect((el as any)._editingIndex).to.equal(0);
-        expect((el as any)._addOpen).to.be.false;
+        expect((el as any)._addOpen).to.equal(false);
       });
     });
 
@@ -970,7 +989,7 @@ describe('material-thermostat-card-editor', () => {
     };
     try {
       const el = await mount();
-      expect(el.isConnected).to.be.true;
+      expect(el.isConnected).to.equal(true);
       await aTimeout(20); // let connectedCallback's ensureHaComponents() resolve
       expect(loaderCalled).to.equal(true);
     } finally {
@@ -1182,7 +1201,7 @@ describe('mt-climate-feature-editor', () => {
         stopped = true;
       };
       (el as any)._moveOption(ev);
-      expect(stopped).to.be.true;
+      expect(stopped).to.equal(true);
     });
   });
 
@@ -1341,7 +1360,7 @@ describe('mt-climate-feature-editor', () => {
         options: [{ value: 'auto', hide: true }],
       });
       const hideBtn = el.shadowRoot!.querySelector('.opt .opt-hide')!;
-      expect(hideBtn.classList.contains('on')).to.be.true;
+      expect(hideBtn.classList.contains('on')).to.equal(true);
     });
   });
 
@@ -1492,7 +1511,7 @@ describe('mt-input-select-editor', () => {
         stopped = true;
       };
       (el as any)._moveOption(ev);
-      expect(stopped).to.be.true;
+      expect(stopped).to.equal(true);
     });
   });
 
@@ -1650,7 +1669,7 @@ describe('mt-input-select-editor', () => {
         },
         { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
       );
-      expect(el.shadowRoot!.querySelector('.opt .opt-hide')!.classList.contains('on')).to.be.true;
+      expect(el.shadowRoot!.querySelector('.opt .opt-hide')!.classList.contains('on')).to.equal(true);
     });
 
     it('keeps a color override and prunes it when reset', async () => {
@@ -1936,7 +1955,7 @@ describe('mt-entity-list-editor', () => {
       stopped = true;
     };
     (el as any)._moveItem(ev);
-    expect(stopped).to.be.true;
+    expect(stopped).to.equal(true);
   });
 
   it('_removeItem removes by index', async () => {
@@ -2051,7 +2070,7 @@ describe('mt-entity-tile-editor', () => {
     cap.stop();
     const f = (cap.events[0].detail as any).feature;
     expect(f.display).to.equal('tile');
-    expect('compact' in f).to.be.false; // migrated away from the legacy flag
+    expect('compact' in f).to.equal(false); // migrated away from the legacy flag
   });
 
   it('renders a width field with the tile default (50) and emits width changes', async () => {
@@ -2093,7 +2112,7 @@ describe('mt-entity-tile-editor', () => {
     emitValueChanged(tf, '');
     cap.stop();
     const f = (cap.events[1].detail as any).feature;
-    expect('name' in f).to.be.false;
+    expect('name' in f).to.equal(false);
     expect(f.width).to.equal(50); // untouched
   });
 
@@ -2118,7 +2137,7 @@ describe('mt-entity-tile-editor', () => {
     const cap3 = captureEvents('feature-changed');
     emitValueChanged(field, undefined); // undefined = revert to default (pruned)
     cap3.stop();
-    expect('icon' in (cap3.events[0].detail as any).feature).to.be.false;
+    expect('icon' in (cap3.events[0].detail as any).feature).to.equal(false);
   });
 
   describe('color picker (tile display only)', () => {
@@ -2149,7 +2168,7 @@ describe('mt-entity-tile-editor', () => {
       const cap = captureEvents('feature-changed');
       emitValueChanged(cf, undefined);
       cap.stop();
-      expect('color' in (cap.events[0].detail as any).feature).to.be.false;
+      expect('color' in (cap.events[0].detail as any).feature).to.equal(false);
     });
   });
 

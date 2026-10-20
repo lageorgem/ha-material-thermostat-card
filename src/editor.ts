@@ -12,6 +12,7 @@ import { ensureHaComponents } from './editors/load-ha';
 import './editors/entity-picker';
 import { tokens } from './theme';
 import { primaryDomain, WaterHeaterEntityFeature } from './entity/adapter';
+import { normalizeConfig } from './config/normalize';
 
 interface FormSchemaItem {
   name: string;
@@ -44,7 +45,6 @@ const BASE_SCHEMA: FormSchemaItem[] = [
         { value: 'google', label: 'Google Home' },
       ]) },
       { name: 'show_current_as_primary', selector: { boolean: {} } },
-      { name: 'show_state_label', selector: { boolean: {} } },
       { name: 'font', selector: select([
         { value: 'rounded', label: 'Google Sans Flex (rounded)' },
         { value: 'theme', label: 'Theme font' },
@@ -162,7 +162,6 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       dial_style: this._config.dial_style ?? 'halo',
       font: this._config.font ?? 'rounded',
       show_current_as_primary: this._config.show_current_as_primary ?? false,
-      show_state_label: this._config.show_state_label ?? false,
     };
   }
 
@@ -181,8 +180,9 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
    * @param config the updated config
    */
   private _emit(config: MaterialThermostatCardConfig): void {
-    this._config = config;
-    fireEvent(this, 'config-changed', { config });
+    // Apply shared migrations to every write, including feature-only edits.
+    this._config = normalizeConfig(config);
+    fireEvent(this, 'config-changed', { config: this._config });
   }
 
   /**
@@ -203,8 +203,6 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
         return 'Font';
       case 'show_current_as_primary':
         return 'Show current temperature as primary information';
-      case 'show_state_label':
-        return 'Show HVAC action / state label';
       case 'temperature':
         return 'Temperature sensor';
       case 'humidity':
@@ -247,7 +245,6 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
       dial_style: data.dial_style === 'halo' ? undefined : data.dial_style,
       font: data.font === 'rounded' ? undefined : data.font,
       show_current_as_primary: data.show_current_as_primary || undefined,
-      show_state_label: data.show_state_label || undefined,
     };
     this._emit(config);
   }
