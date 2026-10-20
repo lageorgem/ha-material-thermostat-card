@@ -962,6 +962,8 @@ combobox:
 
 ## Development
 
+See [Contributing](CONTRIBUTING.md) for local setup, verification and PR guidance.
+
 | Command                             | Description                                                                                                                                                 |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`                       | Install dependencies                                                                                                                                        |

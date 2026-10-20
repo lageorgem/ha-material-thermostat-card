@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Card documentation
+    url: https://github.com/lageorgem/ha-material-thermostat-card#readme
+    about: Check installation, configuration and supported features before opening an issue.

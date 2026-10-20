@@ -1,0 +1,36 @@
+name: Feature request
+description: Describe a user problem and a proposed improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea! Search existing issues and check the [README](https://github.com/lageorgem/ha-material-thermostat-card#readme) first. Keep each request focused on one user problem.
+
+        Issues are public. Never include tokens, passwords, Home Assistant URLs containing credentials, or private data in examples or attachments.
+  - type: textarea
+    id: user-problem
+    attributes:
+      label: User problem or use case
+      description: What are you trying to do, and what makes it difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: requested-behavior
+    attributes:
+      label: Requested behavior
+      description: Describe how the card should behave and how that would help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives
+      description: What do you do today, or what alternatives have you considered? "None" is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: device-example
+    attributes:
+      label: Device, integration or example (optional)
+      description: Include relevant device/integration names or a redacted example, mockup or screenshot. No private credentials or live Home Assistant access needed.

@@ -1,0 +1,123 @@
+name: Bug report
+description: Report a reproducible problem with the thermostat card.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the card! Search existing issues and check the [README](https://github.com/lageorgem/ha-material-thermostat-card#readme) first. Report one problem per issue.
+
+        Issues are public. Never post tokens, passwords, Home Assistant URLs containing credentials, or private data. Redact copies of YAML, attributes, console errors and screenshots before sharing; keep relevant option names and values intact where safe.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I checked my report and attachments for secrets and private data.
+          required: true
+  - type: input
+    id: card-version
+    attributes:
+      label: Card version
+      description: Enter the installed version number from HACS or your installed release, not "latest".
+      placeholder: e.g. 1.10.0
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: e.g. 2026.6.0
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Browser or companion app, OS and device
+      description: Include browser/app and OS versions, and the device model where relevant.
+      placeholder: e.g. Chrome 150, macOS 26, MacBook Air
+    validations:
+      required: true
+  - type: dropdown
+    id: problem-area
+    attributes:
+      label: Problem area
+      options:
+        - Dial/temperature
+        - Modes/fan/swing
+        - Editor
+        - Layout/theme
+        - Water heater
+        - Installation/update
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest sequence that reproduces the problem, including the starting entity state if relevant.
+      placeholder: |
+        1. Configure the card with...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happens instead? Mention whether it happens consistently or intermittently.
+    validations:
+      required: true
+  - type: textarea
+    id: card-yaml
+    attributes:
+      label: Minimal card YAML
+      description: Copy the card's YAML from the dashboard card editor, remove unrelated features and redact private details. Paste only YAML (no code fences). If unavailable or not applicable, explain why instead.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: entity-attributes
+    attributes:
+      label: Relevant raw entity attributes
+      description: In Home Assistant, open Developer Tools > States and select the affected entity. Paste a redacted copy of its state and relevant attributes, preserving raw values (e.g. fan_modes/fan_mode, hvac_modes, swing_modes/swing_mode, supported_features, temperatures, operation_list/operation_mode). Do not change the entity state. If unavailable or not applicable, explain why instead.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: visual-evidence
+    attributes:
+      label: Screenshots or recording (optional)
+      description: Drag or paste redacted images/video here if they help show the problem. Hide private dashboard content and addresses.
+  - type: textarea
+    id: console-errors
+    attributes:
+      label: Relevant browser console errors (optional)
+      description: Paste only relevant redacted errors and stack traces, not a full log dump.
+      render: text
+  - type: textarea
+    id: theme
+    attributes:
+      label: Theme or card-mod details (optional)
+      description: For visual problems, name the theme and any relevant card-mod/custom CSS. If tried, describe the result with the default theme and custom CSS removed.
+  - type: textarea
+    id: stock-comparison
+    attributes:
+      label: Stock-card comparison (optional)
+      description: If tried, does Home Assistant's stock thermostat or tile card show the same problem with the same entity?
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround (optional)
+      description: Have you found a way around the problem?
