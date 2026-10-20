@@ -11,6 +11,12 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
 - Quiet/silent fan modes now default to `mdi:power-sleep`, distinct from the
   low-speed fan icon (#1). Per-option icon overrides remain unchanged.
 
+### Fixed
+
+- Climate and water-heater selector editors now preview and edit the last
+  duplicate option override, matching the card. Saving coalesces duplicates;
+  resetting an icon no longer resurrects a shadowed override.
+
 ## [1.10.0] — 2026-10-19
 
 ### Added

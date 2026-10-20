@@ -106,7 +106,17 @@ function expectQuietCall(hass: TestHass, raw = 'quiet'): void {
   expect(hass.__calls[0].data).to.deep.equal({ entity_id: 'climate.test', fan_mode: raw });
 }
 
+// Register before the runner's error listener, as in the existing card suites.
+const ignoreResizeObserverLoop = (event: ErrorEvent) => {
+  if (event.message === 'ResizeObserver loop completed with undelivered notifications.') {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+  }
+};
+window.addEventListener('error', ignoreResizeObserverLoop);
+
 describe('issue #1: fan icon overrides through the public card configuration', () => {
+  after(() => window.removeEventListener('error', ignoreResizeObserverLoop));
   afterEach(() => fixtureCleanup());
 
   for (const display of ['icons', 'dropdown', 'tile'] as const) {
@@ -203,4 +213,67 @@ describe('issue #1: fan icon overrides through the public card configuration', (
     ]));
     await quietControl(row, 'icons', 'mdi:leaf');
   });
+
+  for (const display of ['icons', 'tile'] as const) {
+    for (const keepFields of [false, true]) {
+      it(`edits and resets the effective duplicate in ${display}, preserved fields: ${keepFields}`, async () => {
+        const effective: OptionOverride = keepFields
+          ? { value: 'quiet', icon: 'mdi:leaf', label: 'Whisper', color: '#123456' }
+          : { value: 'quiet', icon: 'mdi:leaf' };
+        const low = { value: 'low', icon: 'mdi:fan-speed-1' };
+        const high = { value: 'high', label: 'Fast' };
+        const saved = config(display, [
+          low,
+          { value: 'quiet', icon: keepFields ? '' : 'mdi:star', label: 'Stale', color: '#abcdef', hide: true },
+          high,
+          effective,
+        ]);
+        const original = JSON.parse(JSON.stringify(saved));
+        const hass = fanHass();
+        const { card, row } = await mount(saved, hass);
+        const label = keepFields ? 'Whisper' : 'Quiet';
+        (await quietControl(row, display, 'mdi:leaf', label)).click();
+        const editor = await fixture<MaterialThermostatCardEditor>(
+          html`<material-thermostat-card-editor></material-thermostat-card-editor>`
+        );
+        editor.hass = hass;
+        editor.setConfig(saved);
+        await editor.updateComplete;
+        editor.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Edit feature"]')!.click();
+        await editor.updateComplete;
+        const iconField = async () => {
+          const feature = editor.shadowRoot!.querySelector('mt-climate-feature-editor')!;
+          await feature.updateComplete;
+          return feature.shadowRoot!.querySelector('.opt-name[title="quiet"]')!
+            .parentElement!.querySelector('mt-icon-field')!;
+        };
+        expect((await iconField()).value).to.equal('mdi:leaf');
+        const edit = async (icon: string | undefined) => {
+          const field = await iconField();
+          const changed = oncePromise<{ config: MaterialThermostatCardConfig }>(editor, 'config-changed');
+          field.dispatchEvent(new CustomEvent('value-changed', {
+            detail: { value: icon }, bubbles: true, composed: true,
+          }));
+          const event = await changed;
+          await editor.updateComplete;
+          const next = JSON.parse(JSON.stringify(event.detail.config)) as MaterialThermostatCardConfig;
+          card.setConfig(next);
+          return { next, row: await renderedRow(card) };
+        };
+        for (const icon of ['mdi:power-sleep', '', undefined]) {
+          const result = await edit(icon);
+          const remaining = { ...effective, icon };
+          if (icon === undefined) delete remaining.icon;
+          expect((result.next.features![0] as ClimateFanFeatureConfig).options).to.deep.equal(
+            icon === undefined && !keepFields ? [low, high] : [low, high, remaining]
+          );
+          (await quietControl(result.row, display, icon ?? 'mdi:power-sleep', label)).click();
+          if (keepFields) {
+            expect(result.row.items.find(item => item.value === 'quiet')!.color).to.equal('#123456');
+          }
+          expect(saved).to.deep.equal(original);
+        }
+      });
+    }
+  }
 });

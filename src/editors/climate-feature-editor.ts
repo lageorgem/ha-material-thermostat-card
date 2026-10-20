@@ -110,9 +110,9 @@ export class MtClimateFeatureEditor extends LitElement {
     this._emit({ order });
   }
 
-  /** The existing override for a value, if any. */
+  /** The effective override for a value: the last whole option wins at runtime. */
   private _override(value: string): OptionOverride | undefined {
-    return this.feature.options?.find((o) => o.value === value);
+    return this.feature.options?.filter((o) => o.value === value).pop();
   }
 
   /**
@@ -135,7 +135,10 @@ export class MtClimateFeatureEditor extends LitElement {
    * @param patch the override fields to set
    */
   private _setOverride(value: string, patch: Partial<OptionOverride>): void {
-    const options = [...(this.feature.options ?? [])];
+    const existing = this.feature.options ?? [];
+    const last = existing.map((o) => o.value).lastIndexOf(value);
+    // Drop shadowed entries, without merging stale fields or moving other modes.
+    const options = existing.filter((o, i) => o.value !== value || i === last);
     const idx = options.findIndex((o) => o.value === value);
     const merged: OptionOverride = { ...(idx >= 0 ? options[idx] : { value }), ...patch };
     if (merged.label === '') delete merged.label;
