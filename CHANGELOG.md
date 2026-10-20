@@ -41,6 +41,8 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
 
 ### Changed
 
+- Swing selectors default to the bundled `mt:` AC swing icons, matched to the
+  mode name; per-option `icon` overrides still take precedence.
 - **Capability-driven targets**: `TARGET_TEMPERATURE` and
   `TARGET_TEMPERATURE_RANGE` determine single versus dual controls, including
   dual setpoints in `auto`. A single target wins when both are available; entities
@@ -56,6 +58,11 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
 
 ### Fixed
 
+- Dropdown menus line up exactly with the control they open from, and their
+  corners match the highlighted option inside (rows stay pill-shaped with large text).
+- The big temperature no longer shrinks on whole-number targets of entities with
+  0.5° steps, so neighbouring dials match.
+- The visual editor's colour pill lines up exactly with the title field it attaches to.
 - Climate HVAC/preset/fan/swing/horizontal-swing and water-heater operation-mode
   selectors, plus the water-heater away control, are disabled while the card's
   main entity is unavailable; auxiliary controls such as `input-select` are not.

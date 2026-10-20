@@ -40,7 +40,8 @@ below) — distinct from the standalone `entity-tile` feature.
 
 Per-option **`color?`** (hex) overrides the accent color. Editor UI: `mt-color-field`
 (`editors/color-field.ts`) — a **half-pill swatch** attached to the left of the
-title (`mt-text-field` gets `flatLeft`), opening a popover with a native color
+title (`mt-text-field` gets `flatLeft`), aligned exactly with the title field,
+opening a popover with a native color
 input + **Reset to default**. The swatch's `defaultColor` (shown when unset) is
 `climateModeColor(value)` for HVAC, `presetColor(value)` (eco→`#4caf50`,
 sleep→`#2196f3`, `theme.ts`) for presets, else the theme primary. Visibility: HVAC
@@ -60,6 +61,17 @@ Where a color is applied at render time:
 `{ value, label?, icon?, hide?, color? }` — supported by all five `climate-*` selectors,
 `water-heater-operation-modes` and `input-select`. `value` keys to an underlying
 option; `hide:true` removes it.
+
+Vertical and horizontal swing selectors default to bundled `mt:` AC swing icons
+matched to the mode name. Fixed positions (`Top`, `Fixed Top-Middle`, `Upper`,
+`Lower`, `Bottom`, `Left`, `Center`, `Right`, etc.) use fixed-position icons;
+partial ranges (`Swing Top`, `Swing Middle`, `Swing Left`, etc.) use range icons.
+Full-swing names (`on`, `swing`, `full`, `auto`, `Full Swing`, `wide`, and HA's
+standard `vertical`) use full-swing icons. HA's `horizontal` value in a vertical
+list uses horizontal full swing. `off` and `both` retain their previous MDI
+icons; unknown names retain the previous MDI fallbacks. Per-option `icon`
+overrides take precedence.
+
 Those features also accept **`order?: string[]`** (an explicit display order of
 option values). The selectors apply it via `orderValues(all, order)` in
 `theme.ts` (listed values first in order, the rest in natural order — robust to
@@ -251,6 +263,9 @@ HA's lazily-loaded `ha-select` (which is inert inside a custom card). It sizes t
 content (`width:max-content`), anchors to whichever edge keeps it on screen
 (`_alignRight`/`_up`), and coordinates "only one open at a time" via a
 document-level `mt-dropdown-open` event.
+
+The open menu lines up exactly with its trigger control. Its corners match the
+highlighted option inside; rows remain pill-shaped with large text.
 
 ## Adding a new feature type
 

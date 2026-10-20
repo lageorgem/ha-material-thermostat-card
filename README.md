@@ -428,6 +428,9 @@ features:
 
 The same display options apply to fan, swing and preset selectors; these examples show one of each.
 
+Vertical and horizontal swing selectors use the bundled [`mt:` AC swing icons](#ac-swing-icons-mt)
+by default, matched to the mode name. Per-option `icon` overrides are only needed to change them.
+
 <table>
   <tr>
     <td align="center" width="34%"><code>climate-fan-modes</code><br><code>display: icons</code></td>
@@ -460,7 +463,7 @@ operation-mode selector and does not accept `include`, `order` or `options`.
 ### Option overrides
 
 `climate-*`, `water-heater-operation-modes` and `input-select` accept an `options:` list to customize how each underlying value is
-shown. Unlisted values keep their Home Assistant defaults.
+shown. Unlisted values keep their defaults, including the bundled `mt:` icons for recognised swing modes.
 
 | Feature key | Type            | Description                                                                                                                                                                                                                                        |
 | ----------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -840,6 +843,16 @@ The card registers a set of **AC swing icons** with Home Assistant, usable anywh
 (this card's overrides, other cards, the icon picker) as `mt:<name>`. Preview the SVGs in
 [`icons/`](https://github.com/lageorgem/ha-material-thermostat-card/tree/main/icons/).
 
+These are the **default icons** for vertical and horizontal swing selectors, chosen from the
+mode name without configuration:
+
+- Fixed positions (`Top`, `Fixed Top-Middle`, `Upper`, `Lower`, `Bottom`, `Left`, `Center`,
+  `Right`, etc.) use the matching fixed-position icon.
+- Partial ranges (`Swing Top`, `Swing Middle`, `Swing Left`, etc.) use the matching range icon.
+- Full swing (`on`, `swing`, `full`, `auto`, `Full Swing`, `wide`, or HA's standard `vertical`)
+  uses the full-swing icon. HA's `horizontal` value in a vertical list uses horizontal full swing.
+- `off` and `both` keep their previous MDI icons; unrecognised names keep the previous MDI fallbacks.
+
 Each icon shows **five positions** (vertical cones top→bottom, or horizontal rays left→right). Active
 positions are drawn solid (**dark**); the rest are dimmed (**gray**) for context — a **fixed**
 position selects one, a **partial swing** selects three, and **full swing** selects all five.
@@ -851,11 +864,12 @@ position selects one, a **partial swing** selects three, and **full swing** sele
 | **Horizontal — fixed** | `swing-horizontal-fixed-left`, `swing-horizontal-fixed-left-middle`, `swing-horizontal-fixed-middle`, `swing-horizontal-fixed-right-middle`, `swing-horizontal-fixed-right` |
 | **Horizontal — swing** | `swing-horizontal-left` (left 3), `swing-horizontal-middle` (mid 3), `swing-horizontal-right` (right 3), `swing-horizontal-full`                                            |
 
+Per-option `icon` overrides still win. Use them only to change a default — for example,
+to show a fixed-middle icon for `off` instead of its MDI icon:
+
 ```yaml
 - type: climate-swing-modes
   options:
-    - value: vertical
-      icon: mt:swing-vertical-full
     - value: 'off'
       icon: mt:swing-vertical-fixed-middle
 ```
