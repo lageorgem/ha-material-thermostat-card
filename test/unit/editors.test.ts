@@ -549,6 +549,23 @@ describe('material-thermostat-card-editor', () => {
     });
   }
 
+  it('labels vertical swing consistently in the add menu and feature row without changing its type', async () => {
+    const el = await mount();
+    el.shadowRoot!.querySelector<HTMLButtonElement>('.add-btn')!.click();
+    await el.updateComplete;
+    const option = Array.from(el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.add-opt'))
+      .find((button) => button.textContent!.trim() === 'Climate vertical swing modes');
+    expect(option).to.not.equal(undefined);
+    const cap = captureEvents('config-changed');
+    option!.click();
+    await el.updateComplete;
+    cap.stop();
+    const config = (cap.events[0] as CustomEvent<{ config: MaterialThermostatCardConfig }>).detail.config;
+    expect(config.features).to.deep.equal([{ type: 'climate-swing-modes' }]);
+    expect(el.shadowRoot!.querySelector('.feature-title > div')!.textContent)
+      .to.equal('Climate vertical swing modes');
+  });
+
   it('adds and edits new primary features with labelled rows and catalogue icons', async () => {
     for (const [type, label, icon, kind] of [
       ['climate-swing-horizontal-modes', 'Climate horizontal swing modes', 'mdi:arrow-left-right', 'swing-horizontal'],

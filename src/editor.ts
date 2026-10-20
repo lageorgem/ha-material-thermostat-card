@@ -62,7 +62,7 @@ const FEELS_LIKE_SCHEMA: FormSchemaItem[] = [
 const ADDABLE_FEATURES: { type: FeatureType; label: string; icon: string }[] = [
   { type: 'climate-hvac-modes', label: 'Climate HVAC modes', icon: 'mdi:thermostat' },
   { type: 'climate-fan-modes', label: 'Climate fan modes', icon: 'mdi:fan' },
-  { type: 'climate-swing-modes', label: 'Climate swing modes', icon: 'mdi:arrow-oscillating' },
+  { type: 'climate-swing-modes', label: 'Climate vertical swing modes', icon: 'mdi:arrow-oscillating' },
   { type: 'climate-swing-horizontal-modes', label: 'Climate horizontal swing modes', icon: 'mdi:arrow-left-right' },
   { type: 'climate-preset-modes', label: 'Climate preset modes', icon: 'mdi:leaf' },
   { type: 'comfort', label: 'Comfort & time to comfortable', icon: 'mdi:emoticon-happy-outline' },
@@ -114,7 +114,7 @@ function defaultFeature(type: FeatureType): FeatureConfig {
 const FEATURE_LABELS: Record<FeatureType, string> = {
   'climate-hvac-modes': 'Climate HVAC modes',
   'climate-fan-modes': 'Climate fan modes',
-  'climate-swing-modes': 'Climate swing modes',
+  'climate-swing-modes': 'Climate vertical swing modes',
   'climate-preset-modes': 'Climate preset modes',
   'climate-swing-horizontal-modes': 'Climate horizontal swing modes',
   'water-heater-operation-modes': 'Water heater operation modes',
