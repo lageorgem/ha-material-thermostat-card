@@ -5,6 +5,7 @@
  */
 const CLIMATE = 'climate.mt_showcase_thermostat';
 const AC = 'climate.mt_showcase_ac';
+const WATER_HEATER = 'water_heater.mt_showcase_tank';
 const TEMPERATURE = 'sensor.mt_showcase_temperature';
 const HUMIDITY = 'sensor.mt_showcase_humidity';
 const FAN = 'input_select.mt_showcase_fan_speed';
@@ -58,6 +59,25 @@ function climate(state, attributes = {}) {
   };
 }
 
+function waterHeater(state, attributes = {}) {
+  return {
+    state,
+    attributes: {
+      friendly_name: 'Showcase tank',
+      supported_features: 15,
+      operation_list: ['off', 'eco', 'electric', 'heat_pump', 'high_demand', 'performance'],
+      operation_mode: state,
+      temperature: 55,
+      current_temperature: 47.5,
+      min_temp: 40,
+      max_temp: 75,
+      target_temp_step: 0.5,
+      away_mode: 'off',
+      ...attributes,
+    },
+  };
+}
+
 function states(state = 'cool', attributes = {}) {
   const active = climate(state, {
     ...(state === 'cool' ? { current_temperature: 26.5, hvac_action: 'cooling' } : {}),
@@ -104,6 +124,62 @@ const dualStates = () => states('heat_cool', {
 });
 
 export const SHOTS = [
+  {
+    name: 'water-heater', title: 'Hot water', width: 420,
+    config: card([
+      { type: 'water-heater-operation-modes', display: 'icons', width: 100 },
+      { type: 'water-heater-away-mode', display: 'tile', label: 'Away', width: 100 },
+    ], { entity: WATER_HEATER, name: 'Hot water', dial_style: 'halo' }),
+    states: { [WATER_HEATER]: waterHeater('eco') },
+  },
+  {
+    name: 'water-heater-gas', title: 'Gas boiler', width: 420,
+    config: card([
+      { type: 'water-heater-operation-modes', display: 'dropdown', label: 'Mode' },
+    ], { entity: WATER_HEATER, name: 'Gas boiler', dial_style: 'google' }),
+    states: { [WATER_HEATER]: waterHeater('gas', {
+      temperature: 60, current_temperature: 44,
+      operation_list: ['off', 'gas'], supported_features: 11,
+    }) },
+  },
+  {
+    name: 'water-heater-tile', title: 'Heat pump cylinder', width: 420,
+    config: card([
+      { type: 'water-heater-operation-modes', display: 'tile', label: 'Mode', width: 50 },
+      { type: 'water-heater-away-mode', display: 'tile', label: 'Away', width: 50 },
+    ], { entity: WATER_HEATER, name: 'Heat pump cylinder', dial_style: 'minimal' }),
+    states: { [WATER_HEATER]: waterHeater('heat_pump', {
+      temperature: 50, current_temperature: 51,
+      operation_list: ['off', 'eco', 'heat_pump', 'performance'], away_mode: 'on',
+    }) },
+  },
+  {
+    name: 'swing-both', title: 'Living Room AC', width: 420,
+    config: card([
+      { type: 'climate-hvac-modes', display: 'icons', width: 100 },
+      { type: 'climate-swing-modes', display: 'tile', label: 'Vertical', width: 50 },
+      { type: 'climate-swing-horizontal-modes', display: 'tile', label: 'Horizontal', width: 50 },
+    ], { entity: AC, name: 'Living Room AC' }),
+    states: states('cool', {
+      supported_features: 1 | 2 | 4 | 8 | 16 | 32 | 128 | 256 | 512,
+      swing_mode: 'Full Swing',
+      swing_horizontal_modes: ['off', 'Left', 'Center', 'Right', 'Swing'],
+      swing_horizontal_mode: 'Center',
+    }),
+  },
+  {
+    name: 'swing-icons', title: 'Default swing icons', width: 420,
+    config: card([
+      { type: 'climate-swing-modes', display: 'icons', width: 100 },
+      { type: 'climate-swing-horizontal-modes', display: 'icons', width: 100 },
+    ], { entity: AC, name: 'Default swing icons' }),
+    states: states('cool', {
+      supported_features: 1 | 2 | 4 | 8 | 16 | 32 | 128 | 256 | 512,
+      swing_mode: 'Fixed Middle',
+      swing_horizontal_modes: ['off', 'Left', 'Center', 'Right', 'Swing'],
+      swing_horizontal_mode: 'Swing',
+    }),
+  },
   {
     name: 'reply-1', title: 'Living Room', group: 'reply', width: 420,
     config: card([
