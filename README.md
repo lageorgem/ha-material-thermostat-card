@@ -428,6 +428,21 @@ features:
 
 The same display options apply to fan, swing and preset selectors; these examples show one of each.
 
+Fan modes containing `quiet` or `silent` (case-insensitive) default to `mdi:power-sleep`,
+distinct from `low` / `min` / `1` (`mdi:fan-speed-1`). Auto/off matches still take precedence.
+To change an icon, use a per-option override with the **exact raw value** from the entity's
+`fan_modes` attribute (including case), not its translated display label:
+
+```yaml
+- type: climate-fan-modes
+  options:
+    - value: quiet
+      icon: mdi:weather-night
+```
+
+The stock feature key `fan_modes: [quiet, low]` is an allow-list (translated to `include`),
+not a list of override objects; put icon overrides under `options` as above.
+
 Vertical and horizontal swing selectors use the bundled [`mt:` AC swing icons](#ac-swing-icons-mt)
 by default, matched to the mode name. Per-option `icon` overrides are only needed to change them.
 

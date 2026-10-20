@@ -154,7 +154,8 @@ export function fanIcon(value: string): string {
   const v = value.toLowerCase();
   if (v.includes('auto')) return 'mdi:fan-auto';
   if (v.includes('off') || v === '0') return 'mdi:fan-off';
-  if (/(^|[^0-9])1([^0-9]|$)|low|min|quiet|silent/.test(v)) return 'mdi:fan-speed-1';
+  if (/quiet|silent/.test(v)) return 'mdi:power-sleep';
+  if (/(^|[^0-9])1([^0-9]|$)|low|min/.test(v)) return 'mdi:fan-speed-1';
   if (/(^|[^0-9])2([^0-9]|$)|mid|med/.test(v)) return 'mdi:fan-speed-2';
   if (/(^|[^0-9])3([^0-9]|$)|high|max|strong|turbo/.test(v)) return 'mdi:fan-speed-3';
   return 'mdi:fan';
