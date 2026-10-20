@@ -15,6 +15,9 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
   `climate.set_swing_horizontal_mode`.
 - **Water heater operation modes** (`water-heater-operation-modes`) via
   `water_heater.set_operation_mode`, with HA's canonical ordering and mode icons.
+  Adding the feature also shows the active mode's icon under the temperature,
+  like the climate preset icon, following per-option `icon`/`color` overrides
+  (an empty `icon` hides it). Hidden when the heater is off, unavailable or unknown.
 - **Water heater away toggle** (`water-heater-away-mode`) via
   `water_heater.set_away_mode`, with `display: icons|tile`; shown only when the
   entity supports away mode and reports a known on/off away state.
@@ -26,13 +29,12 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
   `custom:material-thermostat-card`; stock `style: icons|dropdown` and
   `hvac_modes`, `preset_modes`, `fan_modes`, `swing_modes`,
   `swing_horizontal_modes`, `operation_modes` are translated to `display` and
-  `include`. Explicit custom keys take precedence.
+  `include`. Explicit custom keys take precedence. Stock YAML containing
+  `show_state_label` still loads; the key is ignored. The dial stays free of mode
+  or action text; its arc fills from current to target rather than by mode.
 - **Structured HA names** in `name:` (for example,
   `[{type: entity}, {type: device}]`), rendered through HA where supported;
   YAML-only, preserved by the visual editor, with entity-name fallback.
-- **Optional state label** (`show_state_label: true`, default `false`) above the
-  dial number: localized HVAC action or state. Deliberate stock differences remain:
-  the arc fills from current to target rather than by mode, and the label is opt-in.
 - **Sections sizing** via `getGridOptions`: 12 columns, minimum 6, auto rows.
 - **Live-HA stock-parity QA harness** in `dev/qa/`, with paired stock/custom
   fixtures, service journeys and English/German checks; opt-in, not a CI gate.
@@ -47,7 +49,7 @@ project adheres to [Semantic Versioning](https://semver.org/) and the format of
   text and “Unavailable”; user label overrides still win. Numbers follow HA's
   number-format setting (including decimal commas). Editor strings remain English.
 - **Domain-aware visual editor** accepts climate and water heater entities and
-  offers their supported controls, including the state-label option.
+  offers their supported controls.
 - **Accessibility**: labelled card group, PageUp/PageDown/Home/End dial keys, and
   independently keyboard-operable dual handles.
 - **Default step** is 1 °F or 0.5 °C when the entity reports no valid step.

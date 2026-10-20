@@ -152,9 +152,8 @@ The editor filters its catalogue by domain, available attributes and away capabi
 formatters, with English/entity-name fallbacks for older frontends. Literal names
 and option label overrides win. Numbers use HA's number-format preference via Intl;
 editor UI strings remain English. Structured `name` configs are YAML-only and the
-editor preserves them. `show_state_label` defaults false and displays localized
-HVAC action/state when enabled. Deliberate stock differences: current-to-target arc
-fill and opt-in state label.
+editor preserves them. Deliberate stock differences: current-to-target arc fill
+and no mode or action text around the dial number.
 
 The card is a labelled screen-reader group; the dial supports PageUp/PageDown/Home/End
 and independent keyboard dual handles. Entity selectors reject unavailable-state

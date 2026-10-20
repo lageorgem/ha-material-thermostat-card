@@ -59,7 +59,7 @@ gracefully under any Home Assistant theme.
 
 - 🎯 **Draggable circular dial** (custom SVG) — drag, tap, `+/−`, or keyboard; themed by HVAC mode/action.
 - 🔀 **Capability-driven single or dual setpoints**, including dual handles in `auto` and `heat_cool`, with **+/− buttons** that adjust the selected setpoint (tap a handle to select; defaults to the one nearest the current temperature).
-- 🚿 **Water heater support** — target temperature, operation modes and an away-mode toggle, when supported by the entity.
+- 🚿 **Water heater support** — target temperature, operation modes and an away-mode toggle, when supported by the entity; the active operation-mode icon appears under the temperature when the operation-modes feature is added.
 - 🌡️ Current‑temperature marker, with an optional **"show current as primary"** big number.
 - 🥵 **"Feels‑like" temperature** from a temperature + humidity sensor (heat index), shown on the dial.
 - ⏳ A **comfort** feature: tells you when the room **feels comfortable** and forecasts **time until comfortable** / **until the target is reached** from recent history.
@@ -146,7 +146,6 @@ stock feature syntax. For example:
 ```yaml
 type: custom:material-thermostat-card # was: thermostat
 entity: climate.living_room
-show_state_label: true
 features:
   - type: climate-hvac-modes
     style: dropdown
@@ -162,7 +161,7 @@ on their corresponding selector feature. Explicit `display` and `include` take p
 Only values offered by the entity are shown.
 
 Two deliberate visual differences remain: our arc fills from **current to target** rather
-than by mode, and the state label is **opt-in** (`show_state_label: true`).
+than by mode, and no mode or action text clutters the dial number.
 
 **Localization.** Mode, preset, fan, swing and operation labels, state text and “Unavailable”
 use Home Assistant's translations. Numbers follow your Home Assistant number-format setting
@@ -180,7 +179,6 @@ The visual editor's own strings remain English.
 | `dial_style`              | `halo` \| `minimal` \| `google` | `halo`      | `halo`: mode‑coloured glow, dimmed when idle/off; `minimal`: no glow; `google`: flat Google Home look with a background disc and no glow                                                                                        |
 | `font`                    | `rounded` \| `theme`            | `rounded`   | `rounded`: Google Sans Flex with its rounded axis; `theme`: use the Home Assistant theme's font without requesting a font from Google                                                                                           |
 | `show_current_as_primary` | boolean                         | `false`     | Show the **current** temperature as the large centre number. The target then labels the setpoint marker on the ring and the current dot is left unlabelled (no duplicate reading)                                               |
-| `show_state_label`        | boolean                         | `false`     | Show the localized HVAC action (e.g. “Heating”) or entity state above the number                                                                                                                                                |
 | `feels_like`              | object                          | —           | "Feels‑like" temperature/humidity sensors — see [Feels‑like temperature](#feels-like-temperature)                                                                                                                               |
 | `features`                | list                            | `[]`        | Controls rendered below / beside the dial — see [Features](#features)                                                                                                                                                           |
 
@@ -449,6 +447,11 @@ The same display options apply to fan, swing and preset selectors; these example
 per-option overrides as climate selectors. Its default order follows Home Assistant's
 canonical operation-mode order, with an icon for each mode.
 
+When this feature is added, the active operation-mode icon (e.g. an eco leaf or gas
+flame) also appears under the temperature, like the climate preset icon. It follows
+the feature's per-option `icon` and `color` overrides; an empty `icon` hides it.
+It is not shown when the heater is off, unavailable or unknown.
+
 `water-heater-away-mode` accepts only `display: icons|tile`, `label` and `width`.
 It appears only when away mode is supported and `away_mode` is a known `on`/`off` value;
 selection toggles that value using a boolean `away_mode` service payload. It is not an
@@ -488,6 +491,7 @@ shown. Unlisted values keep their Home Assistant defaults.
 >
 > - **HVAC modes** — feeds the **dial** (halo, temperature, mode icon) for the active mode, and the tile tint in `tile` display.
 > - **Preset modes** — feeds the **preset icon under the dial number**, and the tile tint in `tile` display.
+> - **Water heater operation modes** — feeds the **operation-mode icon under the dial number**, and the tile tint in `tile` display.
 > - **Any other selector** (fan/swing/`input-select`/`switch-group`) — applies to the **tile tint in `tile` display** only.
 >
 > The picker is shown for HVAC and preset modes in any display, and for every selector in `tile` display.
@@ -897,7 +901,7 @@ Theme-only changes apply even when no entity state changes.
 Most options above are editable from the card's **visual editor** (`tap_action` and structured names are YAML-only): a base
 form (entity, name, theme), two collapsible sections, and a **drag‑sortable list of features**:
 
-- **Style** — dial style, "show current temperature as primary", state label, and font.
+- **Style** — dial style, "show current temperature as primary", and font.
 - **Feels-like temperature** — labelled, clearable temperature and humidity sensor pickers, plus
   the option to show the computed [feels‑like](#feels-like-temperature) value as the current temperature.
 

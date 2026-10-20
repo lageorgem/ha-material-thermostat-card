@@ -13,8 +13,8 @@ temperature dial for `climate.*` and `water_heater.*`, plus a configurable stack
 - Water heater **operation modes** and **away mode** (icons or tile when supported);
   climate-only selectors, comfort and feels-like settings are ignored for water heaters
 - Drop-in stock thermostat feature YAML: change the card type; stock `style` and mode lists work
-- HA-translated labels/state text, user number formatting, structured HA names (YAML-only),
-  and opt-in `show_state_label` (default false); editor strings remain English
+- HA-translated labels/state text, user number formatting and structured HA names (YAML-only);
+  editor strings remain English
 - Climate HVAC/preset/fan/swing/horizontal-swing and water-heater operation-mode selectors,
   plus the water-heater away control, are disabled while the card's main entity is unavailable;
   auxiliary controls such as `input-select` are not
@@ -27,7 +27,7 @@ temperature dial for `climate.*` and `water_heater.*`, plus a configurable stack
 - A visual editor for every feature type
 - Sections sizing (12 columns, minimum 6, auto rows) and live theme-only updates
 
-Unlike the stock card, the dial arc fills from current to target, and the state label is opt-in.
+Unlike the stock card, the dial arc fills from current to target, with no mode or action text cluttering the number.
 
 See the [README](https://github.com/lageorgem/ha-material-thermostat-card) for full configuration,
 examples, and the icon reference.
