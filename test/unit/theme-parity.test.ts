@@ -142,8 +142,13 @@ describe('theme stock parity', () => {
   });
 
   it('retains the other theme helper mappings', () => {
-    for (const [value, suffix] of [['auto', 'auto'], ['off', 'off'], ['0', 'off'], ['low', 'speed-1'], ['medium', 'speed-2'], ['high', 'speed-3'], ['custom', '']] as const) {
-      expect(fanIcon(value)).to.equal(`mdi:fan${suffix ? `-${suffix}` : ''}`);
+    for (const [value, icon] of [
+      ['auto', 'mdi:fan-auto'], ['off', 'mdi:fan-off'], ['0', 'mdi:fan-off'],
+      ['quiet', 'mdi:power-sleep'], ['silent', 'mdi:power-sleep'],
+      ['low', 'mdi:fan-speed-1'], ['min', 'mdi:fan-speed-1'], ['1', 'mdi:fan-speed-1'],
+      ['medium', 'mdi:fan-speed-2'], ['high', 'mdi:fan-speed-3'], ['custom', 'mdi:fan'],
+    ] as const) {
+      expect(fanIcon(value)).to.equal(icon);
     }
     for (const [value, icon] of [['none', 'cancel'], ['off', 'cancel'], ['eco', 'leaf'], ['away', 'home-export-outline'], ['home', 'home'], ['sleep', 'power-sleep'], ['night', 'power-sleep'], ['boost', 'rocket-launch'], ['turbo', 'rocket-launch'], ['comfort', 'sofa'], ['activity', 'run-fast'], ['custom', 'tune-variant']]) {
       expect(presetIcon(value)).to.equal(`mdi:${icon}`);

@@ -100,12 +100,26 @@ describe('theme', () => {
     it("'0' → off", () => {
       expect(fanIcon('0')).to.equal('mdi:fan-off');
     });
-    it("'1'/low/min/quiet/silent → speed-1", () => {
+    it('quiet/silent → power-sleep, case-insensitively and in compound modes', () => {
+      for (const value of ['quiet', 'silent', 'Quiet', 'SILENT', 'qUiEt', 'quiet low', 'low silent', 'Silent 1', 'high quiet']) {
+        expect(fanIcon(value), value).to.equal('mdi:power-sleep');
+      }
+    });
+    it('keeps auto/off precedence over quiet/silent', () => {
+      for (const value of ['auto quiet', 'SILENT AUTO', 'auto off quiet']) {
+        expect(fanIcon(value), value).to.equal('mdi:fan-auto');
+      }
+      for (const value of ['off quiet', 'SILENT OFF']) {
+        expect(fanIcon(value), value).to.equal('mdi:fan-off');
+      }
+    });
+    it("'1'/low/min → speed-1", () => {
       expect(fanIcon('1')).to.equal('mdi:fan-speed-1');
       expect(fanIcon('low')).to.equal('mdi:fan-speed-1');
       expect(fanIcon('min')).to.equal('mdi:fan-speed-1');
-      expect(fanIcon('quiet')).to.equal('mdi:fan-speed-1');
-      expect(fanIcon('silent')).to.equal('mdi:fan-speed-1');
+      expect(fanIcon('LOW')).to.equal('mdi:fan-speed-1');
+      expect(fanIcon('Minimum')).to.equal('mdi:fan-speed-1');
+      expect(fanIcon('speed 1')).to.equal('mdi:fan-speed-1');
     });
     it("'2'/mid/med → speed-2", () => {
       expect(fanIcon('2')).to.equal('mdi:fan-speed-2');
