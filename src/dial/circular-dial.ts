@@ -308,7 +308,8 @@ export class MtCircularDial extends LitElement {
     const showingCurrent = this.showCurrentAsPrimary && this.current != null;
     const big = showingCurrent ? this.current : this._displayValue;
     const precision = showingCurrent ? 1 : this._precision;
-    return this._fmt(big, precision).length >= 4;
+    const [integer, fraction] = this._centerParts(big, precision);
+    return integer.length + (fraction ? fraction.length + 1 : 0) >= 4;
   }
 
   /** Show the range for 5s after a setpoint change, then collapse to the mode. */
@@ -728,13 +729,23 @@ export class MtCircularDial extends LitElement {
   }
 
   /**
+   * Shared centre number parts: preserve rounding, omit the zero fraction.
+   * @param value the temperature
+   * @param precision decimals to retain before splitting the number
+   */
+  private _centerParts(value: number | undefined, precision: number): [string, string] {
+    const [integer, fraction] = this._fmt(value, precision, false).split('.');
+    return [integer, fraction && fraction !== '0' ? fraction : ''];
+  }
+
+  /**
    * Centre temperature: preserve precision rounding, omit zero decimals.
    * @param value the temperature
    * @param precision decimals to retain before splitting the number
    */
   private _fmtCenter(value: number | undefined, precision: number): TemplateResult {
-    const [integer, fraction] = this._fmt(value, precision, false).split('.');
-    return html`${integer}${fraction && fraction !== '0' ? html`<sup>${fraction}</sup>` : nothing}`;
+    const [integer, fraction] = this._centerParts(value, precision);
+    return html`${integer}${fraction ? html`<sup>${fraction}</sup>` : nothing}`;
   }
 
   /**

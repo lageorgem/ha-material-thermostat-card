@@ -3798,17 +3798,40 @@ describe('mt-circular-dial', () => {
       expect(el.shadowRoot!.querySelector('.center.tight')).to.equal(null);
     });
 
-    it('single: true when a marker is near the axis AND the number is wide ("24.0")', async () => {
+    it('single: true when a marker is near the axis AND the number is wide ("24.5")', async () => {
       const el = await mount();
       el.mode = 'cool';
       el.min = 7;
       el.max = 35;
-      el.step = 0.5; // setpoint renders as "24.0" — 4 chars, wide
-      el.value = 24;
+      el.step = 0.5; // setpoint renders as "24.5" — wide
+      el.value = 24.5;
       el.current = 30; // ≈90°
       await el.updateComplete;
       expect((el as any)._centerTight).to.be.true;
     });
+
+    for (const localized of [false, true]) {
+      for (const value of [55, 55.5]) {
+        it(`single: measures rendered ${value} near 9 o'clock (${localized ? 'German' : 'default'} formatter)`, async () => {
+          const el = await mount();
+          el.mode = 'cool';
+          el.min = 40;
+          el.max = 100;
+          el.step = 0.5;
+          el.value = value;
+          el.current = 50; // ≈270°, within the horizontal-axis guard
+          if (localized) {
+            el.formatNumber = (v, d) => v.toFixed(d).replace('.', ',');
+          }
+          await el.updateComplete;
+          const center = el.shadowRoot!.querySelector('.center')!;
+          expect(center.classList.contains('tight')).to.equal(value === 55.5);
+          const readout = center.querySelector('.value-text')!;
+          expect(readout.textContent!.trim()).to.equal(value === 55 ? '55' : '555');
+          expect(readout.querySelector('sup')?.textContent ?? '').to.equal(value === 55 ? '' : '5');
+        });
+      }
+    }
 
     it('single: false when a marker is near the axis but the number is short ("24")', async () => {
       // The root cause of the per-card size differences: a short setpoint must
@@ -3841,8 +3864,8 @@ describe('mt-circular-dial', () => {
       el.mode = 'cool';
       el.min = 7;
       el.max = 35;
-      el.step = 0.5; // setpoint "30.0" — wide
-      el.value = 30; // ≈90°, becomes the big number (no current)
+      el.step = 0.5; // setpoint "30.5" — wide
+      el.value = 30.5; // ≈90°, becomes the big number (no current)
       el.current = undefined;
       el.showCurrentAsPrimary = true;
       await el.updateComplete;
