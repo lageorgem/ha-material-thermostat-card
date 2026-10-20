@@ -444,11 +444,35 @@ by default, matched to the mode name. Per-option `icon` overrides are only neede
   </tr>
 </table>
 
+<table>
+  <tr>
+    <td align="center" width="50%"><code>climate-swing-modes</code> + <code>climate-swing-horizontal-modes</code><br><code>display: tile</code></td>
+    <td align="center" width="50%">Default swing icons<br><code>display: icons</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/swing-both.png" alt="Living Room AC cooling with an HVAC icon row and Vertical and Horizontal swing tiles side by side" width="320"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/swing-icons.png" alt="AC swing icon rows using default mt: icons: all nine vertical positions with Fixed Middle selected, and horizontal swing with Swing selected" width="320"></td>
+  </tr>
+</table>
+
 ### Water heater controls
 
 `water-heater-operation-modes` uses the same display, label, width, include, order and
 per-option overrides as climate selectors. Its default order follows Home Assistant's
 canonical operation-mode order, with an icon for each mode.
+
+<table>
+  <tr>
+    <td align="center" width="34%"><code>display: icons</code> + away tile</td>
+    <td align="center" width="33%"><code>display: dropdown</code></td>
+    <td align="center" width="33%"><code>display: tile</code></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/water-heater.png" alt="Hot water tank in eco mode with a halo dial at target 55, current temperature 47.5, an eco leaf, operation-mode icons and an away tile" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/water-heater-gas.png" alt="Gas boiler heating with a Google-style dial at target 60, current temperature 44, a gas flame and a Mode dropdown" width="240"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/water-heater-tile.png" alt="Heat pump cylinder at target 50 with a neutral minimal dial, a Mode tile showing heat pump and an Away tile showing on" width="240"></td>
+  </tr>
+</table>
 
 When this feature is added, the active operation-mode icon (e.g. an eco leaf or gas
 flame) also appears under the temperature, like the climate preset icon. It follows
