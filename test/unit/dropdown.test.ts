@@ -19,6 +19,75 @@ function trigger(el: MtDropdown): HTMLButtonElement {
 }
 
 describe('mt-dropdown', () => {
+  describe('menu layout', () => {
+    async function openMenu(variant: 'pill' | 'tile', right: boolean, width = 300,
+      options = items): Promise<MtDropdown> {
+      const el = await fixture<MtDropdown>(html`<mt-dropdown
+        variant=${variant} label="Mode" .items=${options}
+        style=${`position: fixed; top: 16px; ${right ? 'right' : 'left'}: 16px; width: ${width}px; font: 16px Arial;`}
+      ></mt-dropdown>`);
+      // HA icons are not registered in unit tests; reproduce their real box size.
+      const iconStyle = document.createElement('style');
+      iconStyle.textContent = 'ha-icon { display: inline-block; width: var(--mdc-icon-size); height: var(--mdc-icon-size); flex-shrink: 0; }';
+      el.shadowRoot!.append(iconStyle);
+      el.shadowRoot!.querySelector<HTMLButtonElement>('button')!.click();
+      await el.updateComplete;
+      return el;
+    }
+
+    function expectConcentric(menu: HTMLElement, active: HTMLElement): void {
+      const menuStyle = getComputedStyle(menu);
+      const itemRadius = parseFloat(getComputedStyle(active).borderTopLeftRadius);
+      expect(itemRadius).to.be.closeTo(active.offsetHeight / 2, 0.5);
+      expect(parseFloat(menuStyle.borderTopLeftRadius)).to.equal(
+        itemRadius + parseFloat(menuStyle.paddingLeft)
+      );
+      expect(active.offsetHeight).to.be.within(42, 44);
+    }
+
+    for (const variant of ['pill', 'tile'] as const) {
+      for (const right of [false, true]) {
+        it(`matches the ${variant} trigger width with ${right ? 'right' : 'left'} anchoring and concentric corners`, async () => {
+          const el = await openMenu(variant, right);
+          const button = el.shadowRoot!.querySelector('button')!;
+          const menu = el.shadowRoot!.querySelector<HTMLElement>('.menu')!;
+          const bounds = menu.getBoundingClientRect();
+          const triggerBounds = button.getBoundingClientRect();
+          expect(triggerBounds.width).to.equal(300);
+          expect(bounds.width).to.be.closeTo(triggerBounds.width, 0.5);
+          expect(menu.classList.contains('right')).to.equal(right);
+          expect(right ? bounds.right : bounds.left).to.be.closeTo(
+            right ? triggerBounds.right : triggerBounds.left, 0.5
+          );
+          expectConcentric(menu, menu.querySelector<HTMLElement>('.opt.active')!);
+        });
+
+        it(`grows a ${variant} menu for long labels within the viewport cap (${right ? 'right' : 'left'})`, async () => {
+          const el = await openMenu(variant, right, 150, [
+            { value: 'long', label: 'W'.repeat(60), active: true, icon: 'mdi:fire' },
+          ]);
+          const menu = el.shadowRoot!.querySelector<HTMLElement>('.menu')!;
+          expect(menu.getBoundingClientRect().width).to.be.greaterThan(150);
+          expect(menu.getBoundingClientRect().width).to.be.at.most(Math.min(360, 0.85 * window.innerWidth));
+        });
+      }
+    }
+
+    it('preserves pill rows and concentric corners in a scrolled menu', async () => {
+      const el = await openMenu('tile', false, 300, Array.from({ length: 12 }, (_, i) => ({
+        value: String(i), label: `Option ${i}`, icon: 'mdi:fire', active: i === 11,
+      })));
+      const menu = el.shadowRoot!.querySelector<HTMLElement>('.menu')!;
+      expect(menu.offsetHeight).to.equal(280);
+      expect(menu.scrollHeight).to.be.greaterThan(menu.clientHeight);
+      menu.scrollTop = menu.scrollHeight;
+      expect(menu.scrollTop).to.be.greaterThan(0);
+      const active = menu.querySelector<HTMLElement>('.opt.active')!;
+      expectConcentric(menu, active);
+      expect(active.getBoundingClientRect().bottom).to.be.at.most(menu.getBoundingClientRect().bottom);
+    });
+  });
+
   it('never selects disabled menu items, including synthetic clicks', async () => {
     const el = await fixture<MtDropdown>(html`<mt-dropdown .items=${[{ value: 'a', label: 'A' }, { value: 'b', label: 'B', disabled: true }]}></mt-dropdown>`);
     let emitted = 0;

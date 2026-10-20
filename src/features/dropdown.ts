@@ -250,6 +250,10 @@ export class MtDropdown extends LitElement {
         transform: rotate(180deg);
       }
       .menu {
+        --mt-menu-padding: 6px;
+        --mt-menu-item-height: 44px;
+        --mt-menu-item-radius: calc(var(--mt-menu-item-height) / 2);
+        box-sizing: border-box;
         position: absolute;
         left: 0;
         right: auto;
@@ -258,14 +262,14 @@ export class MtDropdown extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 2px;
-        padding: 6px;
+        padding: var(--mt-menu-padding);
         /* at least as wide as the trigger, but grow to fit the widest option
            (so long labels aren't clipped); capped so it stays on screen */
         min-width: 100%;
         width: max-content;
         max-width: min(360px, 85vw);
         background: var(--mt-surface-container-high);
-        border-radius: 20px;
+        border-radius: calc(var(--mt-menu-item-radius) + var(--mt-menu-padding));
         box-shadow:
           0 4px 12px rgba(0, 0, 0, 0.3),
           0 1px 3px rgba(0, 0, 0, 0.2);
@@ -283,6 +287,9 @@ export class MtDropdown extends LitElement {
         bottom: calc(100% + 6px);
       }
       .opt {
+        box-sizing: border-box;
+        min-height: var(--mt-menu-item-height);
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -291,7 +298,7 @@ export class MtDropdown extends LitElement {
         border: none;
         background: transparent;
         color: var(--mt-on-surface);
-        border-radius: var(--mt-shape-full);
+        border-radius: var(--mt-menu-item-radius);
         cursor: pointer;
         font: inherit;
         text-align: left;
