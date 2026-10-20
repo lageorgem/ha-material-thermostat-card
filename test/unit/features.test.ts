@@ -497,6 +497,23 @@ describe('mt-climate-selector', () => {
   });
 
   describe('kind: swing', () => {
+    for (const kind of ['swing', 'swing_horizontal'] as const) {
+      it(`${kind} keeps explicit icons and empty-icon overrides ahead of bundled defaults`, async () => {
+        const values = kind === 'swing' ? ['top', 'middle', 'bottom'] : ['left', 'middle', 'right'];
+        const hass = makeHass({ 'climate.test': climateState({
+          swing_modes: values,
+          swing_horizontal_modes: values,
+        }) });
+        const el = await fixture<MtClimateSelector>(html`<mt-climate-selector
+          .hass=${hass} entityId="climate.test" kind=${kind}
+          .options=${[{ value: values[0], icon: 'mdi:star' }, { value: 'middle', icon: '' }]}
+        ></mt-climate-selector>`);
+        expect(rowItems(el).map(item => item.icon)).to.deep.equal([
+          'mdi:star', '', kind === 'swing' ? 'mt:swing-vertical-fixed-bottom' : 'mt:swing-horizontal-fixed-right',
+        ]);
+      });
+    }
+
     it('builds items from swing_modes, active = swing_mode, swingIcon defaults', async () => {
       const hass = makeHass({ 'climate.test': climateState() });
       const el = await fixture<MtClimateSelector>(
@@ -513,8 +530,8 @@ describe('mt-climate-selector', () => {
       expect(items.find((i) => i.value === 'off')!.active).to.be.false;
       // swingIcon heuristics
       expect(items.find((i) => i.value === 'off')!.icon).to.equal('mdi:arrow-expand-vertical');
-      expect(items.find((i) => i.value === 'vertical')!.icon).to.equal('mdi:arrow-up-down');
-      expect(items.find((i) => i.value === 'horizontal')!.icon).to.equal('mdi:arrow-left-right');
+      expect(items.find((i) => i.value === 'vertical')!.icon).to.equal('mt:swing-vertical-full');
+      expect(items.find((i) => i.value === 'horizontal')!.icon).to.equal('mt:swing-horizontal-full');
       expect(items.find((i) => i.value === 'both')!.icon).to.equal('mdi:arrow-all');
     });
 

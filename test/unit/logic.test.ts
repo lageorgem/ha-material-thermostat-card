@@ -132,18 +132,18 @@ describe('theme', () => {
       expect(swingIcon('fixed')).to.equal('mdi:arrow-expand-vertical');
       expect(swingIcon('OFF')).to.equal('mdi:arrow-expand-vertical');
     });
-    it('both/on/full → arrow-all', () => {
+    it('both keeps both axes; on/full use the bundled full vertical swing icon', () => {
       expect(swingIcon('both')).to.equal('mdi:arrow-all');
-      expect(swingIcon('on')).to.equal('mdi:arrow-all');
-      expect(swingIcon('full')).to.equal('mdi:arrow-all');
+      expect(swingIcon('on')).to.equal('mt:swing-vertical-full');
+      expect(swingIcon('full')).to.equal('mt:swing-vertical-full');
     });
-    it('*horizontal* → arrow-left-right', () => {
-      expect(swingIcon('horizontal')).to.equal('mdi:arrow-left-right');
-      expect(swingIcon('swing-horizontal')).to.equal('mdi:arrow-left-right');
+    it('horizontal token → bundled full horizontal swing icon', () => {
+      expect(swingIcon('horizontal')).to.equal('mt:swing-horizontal-full');
+      expect(swingIcon('swing-horizontal')).to.equal('mt:swing-horizontal-full');
     });
-    it('*vertical* → arrow-up-down', () => {
-      expect(swingIcon('vertical')).to.equal('mdi:arrow-up-down');
-      expect(swingIcon('swing-vertical')).to.equal('mdi:arrow-up-down');
+    it('exact vertical → bundled full vertical swing icon', () => {
+      expect(swingIcon('vertical')).to.equal('mt:swing-vertical-full');
+      expect(swingIcon('swing-vertical')).to.equal('mdi:swap-vertical');
     });
     it('default → swap-vertical', () => {
       expect(swingIcon('diagonal')).to.equal('mdi:swap-vertical');

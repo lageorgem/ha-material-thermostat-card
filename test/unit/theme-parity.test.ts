@@ -7,7 +7,12 @@ import {
   waterHeaterModeColor,
   sortOperationModes,
   swingHorizontalIcon,
+  swingIcon,
   climateModeColor,
+  fanIcon,
+  presetIcon,
+  prettyLabel,
+  isOffValue,
   presetColor,
   orderValues,
 } from '../../src/theme';
@@ -70,26 +75,89 @@ describe('theme stock parity', () => {
     expect(sortOperationModes(['eco'])).to.deep.equal(['eco']);
   });
 
-  const horizontalCases: Array<[string, string]> = [
-    ['OFF', 'mdi:arrow-collapse-horizontal'],
-    ['on', 'mdi:arrow-left-right'],
-    ['both', 'mdi:arrow-left-right'],
-    ['swing', 'mdi:arrow-left-right'],
-    ['Auto Left', 'mdi:arrow-left-right'],
-    ['Far LEFT', 'mdi:arrow-left'],
-    ['Far RIGHT', 'mdi:arrow-right'],
-    ['CENTER', 'mdi:format-horizontal-align-center'],
-    ['Middle position', 'mdi:format-horizontal-align-center'],
-    ['custom', 'mdi:arrow-left-right'],
-    ['', 'mdi:arrow-left-right'],
-    ['left right', 'mdi:arrow-left'],
-    ['right center', 'mdi:arrow-right'],
+  const verticalGroups: Array<[string[], string]> = [
+    [['off', 'stop', 'fixed', ' OFF '], 'mdi:arrow-expand-vertical'],
+    [['both'], 'mdi:arrow-all'],
+    [['horizontal', 'swing-horizontal', 'vertical horizontal'], 'mt:swing-horizontal-full'],
+    [['on', 'swing', 'vertical', 'full', 'auto', 'all', 'Full Swing', 'auto top'], 'mt:swing-vertical-full'],
+    [['top', 'highest', 'up', 'Fixed Top', 'position top'], 'mt:swing-vertical-fixed-top'],
+    [['upper', 'high', 'upper middle', 'top middle', 'middle top', 'Fixed Top-Middle', ' fixed__TOP--middle '], 'mt:swing-vertical-fixed-upper-middle'],
+    [['middle', 'mid', 'center', 'centre', 'Fixed Middle'], 'mt:swing-vertical-fixed-middle'],
+    [['lower', 'low', 'lower middle', 'bottom middle', 'middle bottom', 'Fixed Bottom-Middle'], 'mt:swing-vertical-fixed-lower-middle'],
+    [['bottom', 'lowest', 'down', 'Fixed Bottom'], 'mt:swing-vertical-fixed-bottom'],
+    [['custom', '', 'diagonal', 'swing custom', 'range custom', 'topmost', 'autonomous', 'nonhorizontal', 'swing-vertical'], 'mdi:swap-vertical'],
+    [['full swing top', 'range top middle', ' swing\t TOP\n'], 'mt:swing-vertical-top'],
   ];
-  for (const [mode, icon] of horizontalCases) {
-    it(`maps horizontal swing ${JSON.stringify(mode)}`, () => {
-      expect(swingHorizontalIcon(mode)).to.equal(icon);
-    });
+  for (const [positions, suffix] of [
+    [['top', 'upper', 'high', 'up'], 'top'],
+    [['middle', 'mid', 'center', 'centre'], 'middle'],
+    [['bottom', 'lower', 'low', 'down'], 'bottom'],
+  ] as const) {
+    verticalGroups.push([positions.flatMap(p => [`Swing ${p}`, `range_${p}`]), `mt:swing-vertical-${suffix}`]);
   }
+  const horizontalGroups: Array<[string[], string]> = [
+    [['off', ' OFF '], 'mdi:arrow-collapse-horizontal'],
+    [['on', 'swing', 'both', 'full', 'auto', 'wide', 'all', 'Auto Left', 'full right'], 'mt:swing-horizontal-full'],
+    [['left', 'leftmost', 'Far LEFT', 'fixed left'], 'mt:swing-horizontal-fixed-left'],
+    [['left middle', 'left center', 'center left', 'middle left', 'fixed__LEFT--middle'], 'mt:swing-horizontal-fixed-left-middle'],
+    [['right', 'rightmost', 'Far RIGHT'], 'mt:swing-horizontal-fixed-right'],
+    [['right middle', 'right center', 'center right', 'middle right'], 'mt:swing-horizontal-fixed-right-middle'],
+    [['middle', 'mid', 'center', 'centre', 'Middle position'], 'mt:swing-horizontal-fixed-middle'],
+    [['custom', '', 'stop', 'fixed', 'swing custom', 'range custom', 'autonomous', 'leftover'], 'mdi:arrow-left-right'],
+    [['full swing left', 'range left middle'], 'mt:swing-horizontal-left'],
+  ];
+  for (const [positions, suffix] of [
+    [['left'], 'left'], [['right'], 'right'], [['middle', 'center', 'centre', 'mid'], 'middle'],
+  ] as const) {
+    horizontalGroups.push([positions.flatMap(p => [`Swing ${p}`, `range_${p}`]), `mt:swing-horizontal-${suffix}`]);
+  }
+  for (const [axis, iconFor, groups] of [
+    ['vertical', swingIcon, verticalGroups], ['horizontal', swingHorizontalIcon, horizontalGroups],
+  ] as const) {
+    for (const [values, icon] of groups) {
+      for (const value of values) {
+        it(`maps ${axis} swing ${JSON.stringify(value)}`, () => {
+          expect(iconFor(value)).to.equal(icon);
+        });
+      }
+    }
+  }
+
+  it('maps the real-world AC lists and HA standard swing modes in order', () => {
+    expect(['Fixed Top', 'Fixed Top-Middle', 'Fixed Middle', 'Fixed Bottom-Middle', 'Fixed Bottom', 'Swing Bottom', 'Swing Middle', 'Swing Top', 'Full Swing'].map(swingIcon)).to.deep.equal([
+      'mt:swing-vertical-fixed-top', 'mt:swing-vertical-fixed-upper-middle', 'mt:swing-vertical-fixed-middle', 'mt:swing-vertical-fixed-lower-middle', 'mt:swing-vertical-fixed-bottom', 'mt:swing-vertical-bottom', 'mt:swing-vertical-middle', 'mt:swing-vertical-top', 'mt:swing-vertical-full',
+    ]);
+    expect(['Top', 'Upper', 'Middle', 'Lower', 'Bottom', 'Auto'].map(swingIcon)).to.deep.equal([
+      'mt:swing-vertical-fixed-top', 'mt:swing-vertical-fixed-upper-middle', 'mt:swing-vertical-fixed-middle', 'mt:swing-vertical-fixed-lower-middle', 'mt:swing-vertical-fixed-bottom', 'mt:swing-vertical-full',
+    ]);
+    expect(['off', 'on', 'both', 'vertical', 'horizontal'].map(swingIcon)).to.deep.equal([
+      'mdi:arrow-expand-vertical', 'mt:swing-vertical-full', 'mdi:arrow-all', 'mt:swing-vertical-full', 'mt:swing-horizontal-full',
+    ]);
+    expect(['off', 'left', 'center', 'right', 'swing'].map(swingHorizontalIcon)).to.deep.equal([
+      'mdi:arrow-collapse-horizontal', 'mt:swing-horizontal-fixed-left', 'mt:swing-horizontal-fixed-middle', 'mt:swing-horizontal-fixed-right', 'mt:swing-horizontal-full',
+    ]);
+    expect(['left', 'right', 'wide'].map(swingHorizontalIcon)).to.deep.equal([
+      'mt:swing-horizontal-fixed-left', 'mt:swing-horizontal-fixed-right', 'mt:swing-horizontal-full',
+    ]);
+  });
+
+  it('retains the other theme helper mappings', () => {
+    for (const [value, suffix] of [['auto', 'auto'], ['off', 'off'], ['0', 'off'], ['low', 'speed-1'], ['medium', 'speed-2'], ['high', 'speed-3'], ['custom', '']] as const) {
+      expect(fanIcon(value)).to.equal(`mdi:fan${suffix ? `-${suffix}` : ''}`);
+    }
+    for (const [value, icon] of [['none', 'cancel'], ['off', 'cancel'], ['eco', 'leaf'], ['away', 'home-export-outline'], ['home', 'home'], ['sleep', 'power-sleep'], ['night', 'power-sleep'], ['boost', 'rocket-launch'], ['turbo', 'rocket-launch'], ['comfort', 'sofa'], ['activity', 'run-fast'], ['custom', 'tune-variant']]) {
+      expect(presetIcon(value)).to.equal(`mdi:${icon}`);
+    }
+    expect(presetColor('sleep')).to.equal('#2196f3');
+    expect(presetColor('custom')).to.equal(undefined);
+    for (const [mode, color] of [['cool', '#2b9af9'], ['heat', '#ff8100'], ['heat_cool', '#009688'], ['auto', '#e5c454'], ['dry', '#efbd07'], ['fan_only', '#8a8a8a']]) {
+      expect(climateModeColor(mode)).to.equal(`var(--state-climate-${mode}-color, ${color})`);
+    }
+    for (const value of ['', 'off', 'none', 'false', 'null', '0', 'unavailable', 'unknown']) expect(isOffValue(value)).to.be.true;
+    expect(isOffValue('on')).to.be.false;
+    expect(prettyLabel('heat_cool')).to.equal('Heat/Cool');
+    expect(prettyLabel('fan_only')).to.equal('Fan Only');
+  });
 
   describe('orderValues include allow-list', () => {
     it('keeps the existing no-order reference and explicit-order behaviour', () => {

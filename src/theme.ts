@@ -187,13 +187,40 @@ export function presetIcon(value: string): string {
   return 'mdi:tune-variant';
 }
 
-/** Heuristic icon for a swing mode value. */
+/** Normalize integration-specific swing labels before matching whole tokens. */
+function normalizeSwing(value: string): string {
+  return value.toLowerCase().replace(/[-_\s]+/g, ' ').trim();
+}
+
+/** Whether a swing label contains any of the supplied position tokens. */
+function hasSwingToken(tokens: string[], ...positions: string[]): boolean {
+  return positions.some(position => tokens.includes(position));
+}
+
+/** Bundled AC icons for recognized vertical positions/ranges, MDI otherwise. */
 export function swingIcon(value: string): string {
-  const v = value.toLowerCase();
+  const v = normalizeSwing(value);
+  const parts = v.split(' ');
   if (v === 'off' || v === 'stop' || v === 'fixed') return 'mdi:arrow-expand-vertical';
-  if (v === 'both' || v === 'on' || v === 'full') return 'mdi:arrow-all';
-  if (v.includes('horizontal')) return 'mdi:arrow-left-right';
-  if (v.includes('vertical')) return 'mdi:arrow-up-down';
+  if (v === 'both') return 'mdi:arrow-all';
+  if (parts.includes('horizontal')) return 'mt:swing-horizontal-full';
+  if (hasSwingToken(parts, 'swing', 'range')) {
+    if (hasSwingToken(parts, 'top', 'upper', 'high', 'up')) return 'mt:swing-vertical-top';
+    if (hasSwingToken(parts, 'middle', 'mid', 'center', 'centre')) return 'mt:swing-vertical-middle';
+    if (hasSwingToken(parts, 'bottom', 'lower', 'low', 'down')) return 'mt:swing-vertical-bottom';
+  }
+  if (['on', 'swing', 'vertical', 'full', 'auto', 'all'].includes(v) || hasSwingToken(parts, 'full', 'auto')) {
+    return 'mt:swing-vertical-full';
+  }
+  if ((parts.includes('top') && parts.includes('middle')) || hasSwingToken(parts, 'upper', 'high')) {
+    return 'mt:swing-vertical-fixed-upper-middle';
+  }
+  if ((parts.includes('bottom') && parts.includes('middle')) || hasSwingToken(parts, 'lower', 'low')) {
+    return 'mt:swing-vertical-fixed-lower-middle';
+  }
+  if (hasSwingToken(parts, 'top', 'highest', 'up')) return 'mt:swing-vertical-fixed-top';
+  if (hasSwingToken(parts, 'middle', 'mid', 'center', 'centre')) return 'mt:swing-vertical-fixed-middle';
+  if (hasSwingToken(parts, 'bottom', 'lowest', 'down')) return 'mt:swing-vertical-fixed-bottom';
   return 'mdi:swap-vertical';
 }
 
@@ -202,12 +229,22 @@ export function swingIcon(value: string): string {
  * @param mode the horizontal swing mode value
  */
 export function swingHorizontalIcon(mode: string): string {
-  const v = mode.toLowerCase();
+  const v = normalizeSwing(mode);
+  const parts = v.split(' ');
   if (v === 'off') return 'mdi:arrow-collapse-horizontal';
-  if (v === 'on' || v === 'both' || v === 'swing' || v.includes('auto')) return 'mdi:arrow-left-right';
-  if (v.includes('left')) return 'mdi:arrow-left';
-  if (v.includes('right')) return 'mdi:arrow-right';
-  if (v.includes('center') || v.includes('middle')) return 'mdi:format-horizontal-align-center';
+  if (hasSwingToken(parts, 'swing', 'range')) {
+    if (parts.includes('left')) return 'mt:swing-horizontal-left';
+    if (parts.includes('right')) return 'mt:swing-horizontal-right';
+    if (hasSwingToken(parts, 'middle', 'center', 'centre', 'mid')) return 'mt:swing-horizontal-middle';
+  }
+  if (['on', 'swing', 'both', 'full', 'auto', 'wide', 'all'].includes(v) || hasSwingToken(parts, 'full', 'auto')) {
+    return 'mt:swing-horizontal-full';
+  }
+  if (parts.includes('left') && hasSwingToken(parts, 'middle', 'center')) return 'mt:swing-horizontal-fixed-left-middle';
+  if (parts.includes('right') && hasSwingToken(parts, 'middle', 'center')) return 'mt:swing-horizontal-fixed-right-middle';
+  if (hasSwingToken(parts, 'left', 'leftmost')) return 'mt:swing-horizontal-fixed-left';
+  if (hasSwingToken(parts, 'right', 'rightmost')) return 'mt:swing-horizontal-fixed-right';
+  if (hasSwingToken(parts, 'middle', 'center', 'centre', 'mid')) return 'mt:swing-horizontal-fixed-middle';
   return 'mdi:arrow-left-right';
 }
 
