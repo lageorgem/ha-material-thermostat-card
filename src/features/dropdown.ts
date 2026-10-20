@@ -252,7 +252,6 @@ export class MtDropdown extends LitElement {
       .menu {
         --mt-menu-padding: 6px;
         --mt-menu-item-height: 44px;
-        --mt-menu-item-radius: calc(var(--mt-menu-item-height) / 2);
         box-sizing: border-box;
         position: absolute;
         left: 0;
@@ -269,7 +268,7 @@ export class MtDropdown extends LitElement {
         width: max-content;
         max-width: min(360px, 85vw);
         background: var(--mt-surface-container-high);
-        border-radius: calc(var(--mt-menu-item-radius) + var(--mt-menu-padding));
+        border-radius: calc(var(--mt-menu-item-height) / 2 + var(--mt-menu-padding));
         box-shadow:
           0 4px 12px rgba(0, 0, 0, 0.3),
           0 1px 3px rgba(0, 0, 0, 0.2);
@@ -298,7 +297,7 @@ export class MtDropdown extends LitElement {
         border: none;
         background: transparent;
         color: var(--mt-on-surface);
-        border-radius: var(--mt-menu-item-radius);
+        border-radius: var(--mt-shape-full);
         cursor: pointer;
         font: inherit;
         text-align: left;

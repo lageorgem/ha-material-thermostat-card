@@ -37,10 +37,12 @@ describe('mt-dropdown', () => {
 
     function expectConcentric(menu: HTMLElement, active: HTMLElement): void {
       const menuStyle = getComputedStyle(menu);
-      const itemRadius = parseFloat(getComputedStyle(active).borderTopLeftRadius);
+      const itemRadius = Math.min(
+        parseFloat(getComputedStyle(active).borderTopLeftRadius), active.offsetHeight / 2
+      );
       expect(itemRadius).to.be.closeTo(active.offsetHeight / 2, 0.5);
       expect(parseFloat(menuStyle.borderTopLeftRadius)).to.equal(
-        itemRadius + parseFloat(menuStyle.paddingLeft)
+        parseFloat(menuStyle.getPropertyValue('--mt-menu-item-height')) / 2 + parseFloat(menuStyle.paddingLeft)
       );
       expect(active.offsetHeight).to.be.within(42, 44);
     }
@@ -72,6 +74,19 @@ describe('mt-dropdown', () => {
         });
       }
     }
+
+    it('preserves pill rows when enlarged text makes them taller than the minimum', async () => {
+      const el = await openMenu('pill', false);
+      el.style.fontSize = '32px';
+      el.style.lineHeight = '38px';
+      const active = el.shadowRoot!.querySelector<HTMLElement>('.opt.active')!;
+      const radius = getComputedStyle(active).borderTopLeftRadius;
+      expect(radius).to.match(/^\d+(\.\d+)?px$/);
+      expect(active.offsetHeight).to.be.greaterThan(44);
+      expect(Math.min(parseFloat(radius), active.offsetHeight / 2)).to.be.closeTo(
+        active.offsetHeight / 2, 0.5
+      );
+    });
 
     it('preserves pill rows and concentric corners in a scrolled menu', async () => {
       const el = await openMenu('tile', false, 300, Array.from({ length: 12 }, (_, i) => ({
