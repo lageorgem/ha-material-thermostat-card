@@ -19,9 +19,9 @@ import {
   CARD_PADDING_X,
   pctToSpan,
 } from './grid';
-import { tokens, climateModeColor, waterHeaterModeColor, presetIcon, presetColor } from './theme';
+import { tokens, climateModeColor, waterHeaterModeColor, waterHeaterModeIcon, presetIcon, presetColor } from './theme';
 import { primaryDomain, targetModel, temperatureServiceCall, dialColorMode, hvacAction, isUnavailable } from './entity/adapter';
-import { entityDisplayName, formatEntityState, formatAttributeValue, formatNumber, localizeKey } from './localize';
+import { entityDisplayName, formatEntityState, formatNumber, localizeKey } from './localize';
 import { normalizeConfig } from './config/normalize';
 import { applyCardTheme } from './apply-theme';
 import type {
@@ -29,6 +29,7 @@ import type {
   ClimatePresetFeatureConfig,
   FeatureConfig,
   MaterialThermostatCardConfig,
+  WaterHeaterOperationFeatureConfig,
 } from './types';
 import { feelsLikeC } from './calc/comfort-metrics';
 import { parseReading, sensorTempUnit, systemTempUnit, toCelsius, fromCelsius } from './calc/units';
@@ -428,7 +429,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   }
 
   /**
-   * The icon for the active climate preset, shown under the dial number (à la
+   * The icon for the active climate preset or water heater operation mode, shown under the dial number (à la
    * Google Home's eco leaf) — but only when the **preset modes** feature is
    * configured and a meaningful preset is active. A per-option icon override
    * wins; an explicit "no icon" override ('') suppresses it; otherwise the
@@ -437,6 +438,15 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
      * @param none No parameters.
    */
   private _presetIcon(): string | undefined {
+    if (primaryDomain(this._config.entity) === 'water_heater') {
+      const feat = this._features.find((f) => f.type === 'water-heater-operation-modes') as WaterHeaterOperationFeatureConfig | undefined;
+      if (!feat) return undefined;
+      const mode = this._stateObj?.state;
+      if (!mode || mode === 'off' || mode === 'unavailable' || mode === 'unknown') return undefined;
+      const override = feat.options?.find((o) => o.value === mode);
+      if (override?.icon !== undefined) return override.icon || undefined;
+      return waterHeaterModeIcon(mode);
+    }
     const feat = this._features.find((f) => f.type === 'climate-preset-modes') as
       | ClimatePresetFeatureConfig
       | undefined;
@@ -490,6 +500,14 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
      * @param none No parameters.
    */
   private _presetColor(): string | undefined {
+    if (primaryDomain(this._config.entity) === 'water_heater') {
+      const feat = this._features.find((f) => f.type === 'water-heater-operation-modes') as WaterHeaterOperationFeatureConfig | undefined;
+      if (!feat) return undefined;
+      const mode = this._stateObj?.state;
+      if (!mode || mode === 'off' || mode === 'unavailable' || mode === 'unknown') return undefined;
+      const override = feat.options?.find((o) => o.value === mode);
+      return override?.color ?? waterHeaterModeColor(mode);
+    }
     const feat = this._features.find((f) => f.type === 'climate-preset-modes') as
       | ClimatePresetFeatureConfig
       | undefined;
@@ -527,9 +545,6 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const modeColors = waterHeater ? { heat: activeColor } : this._hvacColors();
     const action = hvacAction(state);
     const modeLabel = formatEntityState(this.hass, state);
-    const stateLabel = this._config.show_state_label
-      ? action && action !== 'off' ? formatAttributeValue(this.hass, state, 'hvac_action') : modeLabel
-      : undefined;
     const features = this._features;
     const layout = this._layout();
 
@@ -554,7 +569,6 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
               .mode=${colorMode}
               .hvacAction=${action}
               .modeLabel=${modeLabel}
-              .stateLabel=${stateLabel}
               .formatNumber=${(value: number, decimals: number) => formatNumber(this.hass, value, decimals)}
               .presetIcon=${this._presetIcon()}
               .presetIconColor=${this._presetColor()}

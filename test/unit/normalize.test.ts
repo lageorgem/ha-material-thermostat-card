@@ -20,6 +20,13 @@ function configWith(features: unknown[]): MaterialThermostatCardConfig {
 }
 
 describe('normalizeConfig', () => {
+  it('drops the legacy state label key without mutating frozen input', () => {
+    const config = Object.freeze({ ...configWith([]), show_state_label: true });
+    expect(normalizeConfig(config)).not.to.have.property('show_state_label');
+    expect(config.show_state_label).to.equal(true);
+    expect(normalizeConfig({ ...config, features: undefined })).not.to.have.property('show_state_label');
+  });
+
   for (const [type, key] of selectors) {
     for (const style of ['icons', 'dropdown']) {
       it(`translates ${type} with ${style} without mutating frozen input`, () => {

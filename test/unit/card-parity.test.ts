@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import '../../src/material-thermostat-card';
 import { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import type { CircularDial } from '../../src/dial/circular-dial';
-import { climateModeColor, waterHeaterModeColor } from '../../src/theme';
+import { climateModeColor, waterHeaterModeColor, waterHeaterModeIcon } from '../../src/theme';
 import type { WaterHeaterOperationFeatureConfig } from '../../src/types';
 import { makeHass, climateState, waterHeaterState } from '../helpers';
 
@@ -130,11 +130,67 @@ describe('card parity contracts', () => {
     }
   }
 
+  for (const mode of ['eco', 'gas', '', 'off', 'unavailable', 'unknown']) {
+    for (const options of [undefined, [], [{ value: 'other', icon: 'mdi:other' }], [{ value: mode }], [{ value: mode, icon: 'mdi:x', color: '#123456' }], [{ value: mode, icon: '' }]]) {
+      it(`shows the water heater ${mode} operation icon with options ${JSON.stringify(options)}`, async () => {
+        card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [
+          { type: 'climate-preset-modes', options: [{ value: 'eco', icon: 'mdi:wrong' }] },
+          { type: 'water-heater-operation-modes', options },
+          { type: 'water-heater-operation-modes', options: [{ value: mode, icon: 'mdi:wrong', color: '#ffffff' }] },
+        ] });
+        card.hass = makeHass({ 'water_heater.test': waterHeaterState({ preset_mode: 'eco' }, mode) });
+        await card.updateComplete;
+        await dial().updateComplete;
+        const meaningful = !!mode && !['off', 'unavailable', 'unknown'].includes(mode);
+        const override = options?.find((option) => option.value === mode);
+        const icon = meaningful ? override?.icon === undefined ? waterHeaterModeIcon(mode) : override.icon || undefined : undefined;
+        expect(dial().presetIcon).to.equal(icon);
+        expect(dial().presetIconColor).to.equal(meaningful ? override?.color ?? waterHeaterModeColor(mode) : undefined);
+        expect(dial().shadowRoot!.querySelector('.preset-icon')?.getAttribute('icon')).to.equal(icon);
+      });
+    }
+  }
+
+  it('shows the operation icon on a read-only water heater', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [{ type: 'water-heater-operation-modes' }] });
+    card.hass = makeHass({ 'water_heater.test': waterHeaterState({ supported_features: 0 }) });
+    await card.updateComplete;
+    await dial().updateComplete;
+    expect(dial().readonly).to.equal(true);
+    expect(dial().shadowRoot!.querySelector('.preset-icon')!.getAttribute('icon')).to.equal(waterHeaterModeIcon('eco'));
+  });
+
+  it('has no operation icon when the water heater state is missing', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [{ type: 'water-heater-operation-modes' }] });
+    card.hass = makeHass({});
+    await card.updateComplete;
+    const resolver = card as unknown as { _presetIcon(): string | undefined; _presetColor(): string | undefined };
+    expect(resolver._presetIcon()).to.equal(undefined);
+    expect(resolver._presetColor()).to.equal(undefined);
+  });
+
+  it('ignores a climate preset feature on a water heater', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme', features: [{ type: 'climate-preset-modes' }] });
+    card.hass = makeHass({ 'water_heater.test': waterHeaterState({ preset_mode: 'eco' }) });
+    await card.updateComplete;
+    expect(dial().presetIcon).to.equal(undefined);
+    expect(dial().presetIconColor).to.equal(undefined);
+  });
+
+  it('ignores an operation feature on a climate entity', async () => {
+    card.setConfig({ type: 'custom:material-thermostat-card', entity: 'climate.test', font: 'theme', features: [{ type: 'water-heater-operation-modes' }] });
+    await card.updateComplete;
+    expect(dial().presetIcon).to.equal(undefined);
+    expect(dial().presetIconColor).to.equal(undefined);
+  });
+
   it('uses the water heater operation colour without a configured feature', async () => {
     card.setConfig({ type: 'custom:material-thermostat-card', entity: 'water_heater.test', font: 'theme' });
     card.hass = makeHass({ 'water_heater.test': waterHeaterState() });
     await card.updateComplete;
     expect(dial().modeColors).to.deep.equal({ heat: waterHeaterModeColor('eco') });
+    expect(dial().presetIcon).to.equal(undefined);
+    expect(dial().presetIconColor).to.equal(undefined);
     expect(card.shadowRoot!.querySelector('ha-card')!.style.getPropertyValue('--mt-active-color').trim()).to.equal(waterHeaterModeColor('eco'));
   });
 

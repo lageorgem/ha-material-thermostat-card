@@ -152,16 +152,18 @@ describe('material-thermostat-card', () => {
       for (const action of ['heating', 'off', undefined]) {
         it(`climate state label ${show_state_label} with action ${action}`, async () => {
           const el = track(await mount(baseConfig({ show_state_label }), { [ENTITY]: climateState({ hvac_action: action }, 'heat') }));
-          expect(dial(el).stateLabel).to.equal(show_state_label ? action === 'heating' ? 'Heating' : 'Heat' : undefined);
+          await dial(el).updateComplete;
+          expect(dial(el).shadowRoot.querySelector('.mode')).to.equal(null);
         });
       }
       it(`water heater state label ${show_state_label}`, async () => {
         const el = track(await mount(baseConfig({ entity: WATER, show_state_label }), { [WATER]: waterHeaterState() }));
-        expect(dial(el).stateLabel).to.equal(show_state_label ? 'Eco' : undefined);
+        await dial(el).updateComplete;
+        expect(dial(el).shadowRoot.querySelector('.mode')).to.equal(null);
       });
     }
 
-    it('uses HA state/action formatting, structured names, and German numbers', async () => {
+    it('uses HA state formatting, structured names, and German numbers without a state label', async () => {
       const el = track(await mount(baseConfig({ name: { type: 'entity' }, show_state_label: true })));
       const nameFormatter = sinon.stub().returns('Arbeitszimmer');
       el.hass = makeHass({ [ENTITY]: climateState({ temperature: 21.5 }) }, {
@@ -175,8 +177,14 @@ describe('material-thermostat-card', () => {
       expect(el.shadowRoot!.querySelector('.name')!.textContent).to.equal('Arbeitszimmer');
       expect(nameFormatter.firstCall.args[1]).to.deep.equal({ type: 'entity' });
       expect(dial(el).modeLabel).to.equal('Kühlen');
-      expect(dial(el).stateLabel).to.equal('Kühlt');
+      expect(dial(el).shadowRoot.querySelector('.mode')).to.equal(null);
       expect(dial(el).shadowRoot.textContent).to.contain('21,5');
+    });
+
+    it('preserves the disabled label for unavailable entities with legacy YAML', async () => {
+      const el = track(await mount(baseConfig({ show_state_label: true }), { [ENTITY]: climateState({}, 'unavailable') }));
+      await dial(el).updateComplete;
+      expect(dial(el).shadowRoot.querySelector('.mode').textContent).to.equal(dial(el).modeLabel);
     });
 
     it('filters foreign features before rendering, sizing, and layout, and ignores water heater feels-like', async () => {

@@ -219,8 +219,6 @@ export interface MaterialThermostatCardConfig extends LovelaceCardConfig {
   font?: 'rounded' | 'theme';
   /** Show the current room temperature as the large primary number. */
   show_current_as_primary?: boolean;
-  /** Show the localized HVAC action / state text above the dial number, like HA's stock card. Default false. */
-  show_state_label?: boolean;
   /** "Feels-like" temperature/humidity sensors (shared by the comfort feature). */
   feels_like?: FeelsLikeConfig;
   features?: FeatureConfig[];

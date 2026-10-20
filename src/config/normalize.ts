@@ -25,6 +25,7 @@ export function normalizeConfig(
   config: MaterialThermostatCardConfig,
 ): MaterialThermostatCardConfig {
   const result = { ...config };
+  delete result.show_state_label;
   if (config.features === undefined) return result;
 
   result.features = config.features.map((feature) => {
