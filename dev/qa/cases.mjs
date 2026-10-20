@@ -72,7 +72,7 @@ function expectation(scenario, config) {
   return {
     sliders: e.model === 'none' ? 0 : e.model === 'dual' ? 2 : 1,
     plusMinus: e.model !== 'none', unavailable: e.unavailable,
-    stateLabel: false,
+    stateLabel: e.unavailable,
     ...(scenario.domain === 'water_heater' ? { modeIcon: expectedModeIcon(scenario, config) } : {}),
     selectors, away, aux: [...new Set(aux)], interactive: scenario.interactive,
   };
@@ -82,7 +82,7 @@ function expectedModeIcon(scenario, config) {
   const mode = scenario.expect.state;
   const feature = config.features?.find((f) => f.type === 'water-heater-operation-modes');
   if (!feature || ['off', 'unavailable', 'unknown'].includes(mode)) return null;
-  const override = feature.options?.find((o) => o.value === mode);
+  const override = feature.options?.findLast((o) => o.value === mode);
   const icon = override?.icon ?? (Object.hasOwn(OPERATION_ICONS, mode) ? OPERATION_ICONS[mode] : 'mdi:water-boiler');
   return icon ? { icon, color: override?.color ?? (mode === 'eco' ? '#4caf50' : 'var(--state-climate-heat-color, #ff8100)') } : null;
 }
@@ -266,7 +266,7 @@ function selfCheck() {
   for (const entry of cases) {
     assert(entry.config.qa_id === entry.id, `Missing qa_id: ${entry.id}`);
     assert(entry.kind === 'stock' ? entry.expect === null : entry.expect !== null, `Invalid expectation: ${entry.id}`);
-    if (entry.expect) assert(entry.expect.stateLabel === false, `Unexpected state label: ${entry.id}`);
+    if (entry.expect) assert(entry.expect.stateLabel === entry.expect.unavailable, `Unexpected state label: ${entry.id}`);
     for (const feature of entry.config.features ?? []) checkFeature(feature);
   }
   for (const scenario of SCENARIOS) {
@@ -275,6 +275,15 @@ function selfCheck() {
   }
   assert(cases.filter((c) => c.view === 'features-climate').length === 91, 'Incomplete climate feature matrix');
   assert(cases.filter((c) => c.view === 'features-wh').length === 31, 'Incomplete water-heater feature matrix');
+  const modeIcon = expectedModeIcon({ expect: { state: 'eco' } }, { features: [
+    { type: 'water-heater-operation-modes', options: [
+      { value: 'eco', icon: 'mdi:leaf', color: '#111111' },
+      { value: 'eco', icon: 'mdi:star', color: '#222222' },
+      { value: 'electric', icon: 'mdi:flash', color: '#333333' },
+    ] },
+    { type: 'water-heater-operation-modes', options: [{ value: 'eco', icon: 'mdi:fire', color: '#444444' }] },
+  ] });
+  assert(modeIcon.icon === 'mdi:star' && modeIcon.color === '#222222', 'Mode icon must use the first feature and last matching option');
   console.log(`Validated ${cases.length} cases: ${cases.filter((c) => c.kind === 'ours').length} ours, ${cases.filter((c) => c.kind === 'stock').length} stock; ${SCENARIOS.length} scenario views; unique IDs and feature shapes OK`);
 }
 

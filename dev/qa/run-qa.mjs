@@ -499,10 +499,10 @@ async function main() {
             assert(a.controls.every((d) => d === e.unavailable), `Control disabled flags ${a.controls}`);
           });
           await check(`${c.id}: state-label`, async () => {
-            // Unavailable/unknown retain their disabled label; available cards never
-            // show a dial status line.
+            // Both unavailable and unknown disable the dial and retain its status label.
+            // Available cards never show a dial status line.
             const a = await snapshot(c);
-            if (!e.unavailable) assert(e.stateLabel === false && a.stateLabels.length === 0, `State labels ${JSON.stringify(a.stateLabels)}`);
+            assert(e.stateLabel === e.unavailable && a.stateLabels.length === Number(e.stateLabel) && a.stateLabels.every((label) => label.trim().length > 0), `State labels ${JSON.stringify(a.stateLabels)}; expected ${Number(e.stateLabel)} visible non-empty labels`);
           });
           await check(`${c.id}: mode-icon`, async () => {
             // Climate preset behaviour is unchanged; this oracle covers water heaters only.
