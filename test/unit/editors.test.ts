@@ -17,6 +17,8 @@ import type { MtInputSelectEditor } from '../../src/editors/input-select-editor'
 import type { MtEntityListEditor } from '../../src/editors/entity-list-editor';
 import type { MtEntityTileEditor } from '../../src/editors/entity-tile-editor';
 import type { MtComfortEditor } from '../../src/editors/comfort-editor';
+import type { MtColorField } from '../../src/editors/color-field';
+import type { MtTextField } from '../../src/editors/text-field';
 import type {
   FeatureType,
   InputSelectFeatureConfig,
@@ -28,6 +30,35 @@ function emitValueChanged(node: Element, value: unknown): void {
   node.dispatchEvent(
     new CustomEvent('value-changed', { detail: { value }, bubbles: true, composed: true })
   );
+}
+
+/** Check actual joined control geometry, including the native controls, at editor widths. */
+async function expectAttachedTitle(el: HTMLElement): Promise<void> {
+  const groups = el.shadowRoot!.querySelectorAll<HTMLElement>('.title-group');
+  expect(groups.length).to.be.greaterThan(0);
+  el.style.display = 'block';
+  el.style.setProperty('--divider-color', '#cccccc');
+  for (const width of [600, 320]) {
+    el.style.width = `${width}px`;
+    for (const group of groups) {
+      const color = group.querySelector<MtColorField>('mt-color-field')!;
+      const text = group.querySelector<MtTextField>('mt-text-field')!;
+      await Promise.all([color.updateComplete, text.updateComplete]);
+      expect(color.hasAttribute('attached')).to.equal(true);
+      const button = color.shadowRoot!.querySelector('button')!;
+      const input = text.shadowRoot!.querySelector('input')!;
+      for (const [left, right] of [[color, text], [button, input]]) {
+        const a = left.getBoundingClientRect();
+        const b = right.getBoundingClientRect();
+        expect(a.height).to.be.greaterThan(0);
+        expect(a.top).to.be.closeTo(b.top, 0.5);
+        expect(a.height).to.be.closeTo(b.height, 0.5);
+        expect(a.right).to.be.closeTo(b.left, 0.5);
+      }
+      expect(getComputedStyle(button).borderRightWidth).to.equal('1px');
+      expect(getComputedStyle(input).borderLeftWidth).to.equal('0px');
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1038,6 +1069,7 @@ describe('mt-climate-feature-editor', () => {
         el.feature = (event as CustomEvent).detail.feature;
       });
       const row = el.shadowRoot!.querySelector('.opt')!;
+      await expectAttachedTitle(el);
       expect(row.querySelector('mt-icon-field')!.defaultIcon).to.be.a('string');
       emitValueChanged(row.querySelector('mt-text-field')!, 'Economy');
       await el.updateComplete;
@@ -1369,6 +1401,7 @@ describe('mt-climate-feature-editor', () => {
 
     it('shows the color field for HVAC modes in any display', async () => {
       const el = await mount('hvac');
+      await expectAttachedTitle(el);
       expect(el.shadowRoot!.querySelector('.opt mt-color-field')).to.not.equal(null);
     });
 
@@ -1707,6 +1740,7 @@ describe('mt-input-select-editor', () => {
         { 'input_select.mode': entityState('input_select.mode', 'home', { options: ['home'] }) }
       );
       const cf = el.shadowRoot!.querySelector('.opt mt-color-field') as Element;
+      await expectAttachedTitle(el);
       expect(cf).to.not.equal(null);
       const cap = captureEvents('feature-changed');
       emitValueChanged(cf, '#222222');
@@ -1999,6 +2033,7 @@ describe('mt-entity-list-editor', () => {
         showDisplay: true,
       });
       const cf = el.shadowRoot!.querySelector('.item mt-color-field') as Element;
+      await expectAttachedTitle(el);
       expect(cf).to.not.equal(null);
       const cap = captureEvents('feature-changed');
       emitValueChanged(cf, '#334455');
@@ -2144,6 +2179,7 @@ describe('mt-entity-tile-editor', () => {
     it('is shown in tile display and its value drives {color}', async () => {
       const el = await mount({ type: 'entity-tile', entity: 'sensor.x', display: 'tile' });
       const cf = el.shadowRoot!.querySelector('.title-group mt-color-field') as Element;
+      await expectAttachedTitle(el);
       expect(cf).to.not.equal(null);
       const cap = captureEvents('feature-changed');
       emitValueChanged(cf, '#ff0000');

@@ -138,6 +138,7 @@ export class MtInputSelectEditor extends LitElement {
                   <div class="title-group">
                     ${showColor
                       ? html`<mt-color-field
+                          .attached=${true}
                           .value=${ov?.color}
                           @value-changed=${(e: CustomEvent) =>
                             this._setOverride(value, { color: e.detail.value })}
@@ -222,7 +223,7 @@ export class MtInputSelectEditor extends LitElement {
     }
     .title-group {
       display: flex;
-      align-items: center;
+      align-items: stretch;
       min-width: 0;
     }
     .title-group mt-text-field {

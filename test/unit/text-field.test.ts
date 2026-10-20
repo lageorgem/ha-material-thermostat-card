@@ -47,8 +47,8 @@ describe('mt-text-field', () => {
     i.dispatchEvent(new Event('input'));
     const ev = await p;
     expect(ev.detail.value).to.equal('Kitchen');
-    expect(ev.bubbles).to.be.true;
-    expect(ev.composed).to.be.true;
+    expect(ev.bubbles).to.equal(true);
+    expect(ev.composed).to.equal(true);
   });
 
   it('emits an empty string when cleared', async () => {
@@ -66,11 +66,13 @@ describe('mt-text-field', () => {
 
   it('has no flat-left class by default and adds it when flatLeft is set', async () => {
     const plain = await mount();
-    expect(input(plain).classList.contains('flat-left')).to.be.false;
+    expect(input(plain).classList.contains('flat-left')).to.equal(false);
     const flat = await fixture<MtTextField>(
       html`<mt-text-field .flatLeft=${true}></mt-text-field>`
     );
     await flat.updateComplete;
-    expect(input(flat).classList.contains('flat-left')).to.be.true;
+    expect(input(flat).classList.contains('flat-left')).to.equal(true);
+    expect(getComputedStyle(input(flat)).borderLeftWidth).to.equal('0px');
+    expect(input(flat).getBoundingClientRect().height).to.equal(40);
   });
 });

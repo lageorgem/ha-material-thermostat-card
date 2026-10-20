@@ -91,6 +91,7 @@ export class MtEntityTileEditor extends LitElement {
             <div class="title-group">
               ${showColor
                 ? html`<mt-color-field
+                    .attached=${true}
                     .value=${this.feature.color}
                     @value-changed=${(e: CustomEvent) => this._patch({ color: e.detail.value })}
                   ></mt-color-field>`
@@ -148,7 +149,7 @@ export class MtEntityTileEditor extends LitElement {
     /* Color pill + title field attach into a single pill. */
     .title-group {
       display: flex;
-      align-items: center;
+      align-items: stretch;
       flex: 1;
       min-width: 0;
     }

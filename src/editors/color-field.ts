@@ -2,8 +2,8 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 /**
- * A compact color picker shaped as a **half-pill** meant to attach to the left
- * of a title field (see {@link ../editors/text-field.MtTextField}'s `flatLeft`).
+ * A compact pill color picker. Set `attached` to join its flat right edge to
+ * a title field (see {@link ../editors/text-field.MtTextField}'s `flatLeft`).
  * The swatch shows the effective color — the custom override, else the
  * {@link defaultColor} provided by the theme/feature — and opens a small popover
  * with a native color input plus a "Reset to default" action.
@@ -22,6 +22,8 @@ export class MtColorField extends LitElement {
   @property() defaultColor = 'var(--md-sys-color-primary, var(--primary-color, #6750a4))';
   /** Accessible label / tooltip. */
   @property() label = 'Color';
+  /** Join to a flat-left text field; this control owns the single seam border. */
+  @property({ type: Boolean, reflect: true }) attached = false;
 
   /** Whether the color popover is open. */
   @state() private _open = false;
@@ -108,7 +110,7 @@ export class MtColorField extends LitElement {
       <button
         type="button"
         class="swatch"
-        style=${`background: ${this.value ?? this.defaultColor}`}
+        style=${`--swatch-color: ${this.value ?? this.defaultColor}`}
         aria-haspopup="dialog"
         aria-expanded=${this._open ? 'true' : 'false'}
         title=${this.label}
@@ -134,21 +136,37 @@ export class MtColorField extends LitElement {
 
   static styles = css`
     :host {
-      display: inline-block;
+      --color-field-height: 40px;
+      --color-field-width: 56px;
+      --color-field-inset: 4px;
+      display: inline-flex;
       position: relative;
+      flex-shrink: 0;
     }
-    /* Half-pill: rounded on the left, flat on the right so it butts against a
-       flat-left title field into a single pill. */
     .swatch {
-      width: 36px;
-      height: 40px;
+      position: relative;
+      box-sizing: border-box;
+      width: var(--color-field-width);
+      height: var(--color-field-height);
       padding: 0;
       border: 1px solid var(--md-sys-color-outline-variant, var(--divider-color));
-      border-right: none;
-      border-radius: var(--md-sys-shape-corner-full, 9999px) 0 0
-        var(--md-sys-shape-corner-full, 9999px);
+      border-radius: var(--md-sys-shape-corner-full, 9999px);
+      background: var(--md-sys-color-surface-container-high, var(--secondary-background-color));
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+    }
+    .swatch::before {
+      content: '';
+      position: absolute;
+      inset: var(--color-field-inset);
+      border-radius: inherit;
+      background: var(--swatch-color);
+      pointer-events: none;
+    }
+    /* MtTextField.flatLeft has no left border: retain ours as the single seam. */
+    :host([attached]) .swatch {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
     }
     .popover {
       position: absolute;

@@ -10,11 +10,31 @@ const colorInput = (el: MtColorField) =>
   el.shadowRoot!.querySelector('input[type="color"]') as HTMLInputElement | null;
 
 describe('mt-color-field', () => {
+  it('reflects attached and retains one seam border with an inset swatch', async () => {
+    const el = await fixture<MtColorField>(html`<mt-color-field></mt-color-field>`);
+    el.style.setProperty('--divider-color', '#cccccc');
+    expect(el.hasAttribute('attached')).to.equal(false);
+    el.attached = true;
+    await el.updateComplete;
+    expect(el.hasAttribute('attached')).to.equal(true);
+    const style = getComputedStyle(swatch(el));
+    expect(style.borderRightWidth).to.equal('1px');
+    expect(style.borderTopRightRadius).to.equal('0px');
+    expect(swatch(el).getBoundingClientRect().height).to.equal(40);
+    expect(swatch(el).getBoundingClientRect().width).to.equal(56);
+    expect(getComputedStyle(swatch(el), '::before').top).to.equal('4px');
+    el.attached = false;
+    await el.updateComplete;
+    expect(el.hasAttribute('attached')).to.equal(false);
+    expect(getComputedStyle(swatch(el)).borderTopRightRadius).to.not.equal('0px');
+  });
+
   it('shows the default color on the swatch when no value is set', async () => {
     const el = await fixture<MtColorField>(
       html`<mt-color-field .defaultColor=${'#ff8800'}></mt-color-field>`
     );
     expect(swatch(el).getAttribute('style') ?? '').to.contain('#ff8800');
+    expect(getComputedStyle(swatch(el), '::before').backgroundColor).to.equal('rgb(255, 136, 0)');
     // popover closed initially
     expect(colorInput(el)).to.equal(null);
   });
@@ -24,6 +44,7 @@ describe('mt-color-field', () => {
       html`<mt-color-field .value=${'#123456'} .defaultColor=${'#ff8800'}></mt-color-field>`
     );
     expect(swatch(el).getAttribute('style') ?? '').to.contain('#123456');
+    expect(getComputedStyle(swatch(el), '::before').backgroundColor).to.equal('rgb(18, 52, 86)');
   });
 
   describe('popover', () => {

@@ -217,6 +217,7 @@ export class MtClimateFeatureEditor extends LitElement {
         <div class="title-group">
           ${showColor
             ? html`<mt-color-field
+                .attached=${true}
                 .value=${ov?.color}
                 .defaultColor=${this._defaultColor(value)}
                 @value-changed=${(e: CustomEvent) =>
@@ -299,7 +300,7 @@ export class MtClimateFeatureEditor extends LitElement {
     /* The color pill + title field form a single attached pill. */
     .title-group {
       display: flex;
-      align-items: center;
+      align-items: stretch;
       min-width: 0;
     }
     .title-group mt-text-field {
