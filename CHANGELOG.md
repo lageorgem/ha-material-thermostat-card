@@ -4,7 +4,7 @@ All notable changes to the **Material Thermostat Card** are documented here. Thi
 project adheres to [Semantic Versioning](https://semver.org/) and the format of
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.11.0] — 2026-10-21
 
 ### Added
 
