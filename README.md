@@ -358,6 +358,25 @@ Add any number of rows under `features:`. Each entry has a `type` and type‑spe
 | `include` | `climate-*`, `water-heater-operation-modes`                                       | list of strings                 | all available values                                                                  | Non-empty allow-list: show only these available values, in this order unless `order` overrides it. `[]` applies no filter                                                                            |
 | `label`   | `climate-*`, `water-heater-*`, `input-select`, `switch-group/list`, `button-list` | string                          | —                                                                                     | Optional **title** — rendered above the control in `icons`/`dropdown` modes, and as the **tile's title line** in `tile` mode; mode-selector tile titles fall back to HA's translated attribute label |
 | `width`   | **all** feature types                                                             | positive number                 | `50` (`entity-tile`, including `icon`) · `100` (all others, including selector tiles) | Optional percentage, e.g. `50`; rounded to the nearest 10, then clamped to 10–100. Non-positive/non-numeric uses the type's default — see [Layout](#layout--responsiveness)                          |
+| `alignment` | **all** feature types | `left` \| `center` \| `right` | `left` | Position the whole feature in unused row space, only when it is the row's only visible feature. Does not change width, text alignment or chip order |
+
+For example, center a half-width selector on its own row:
+
+```yaml
+type: custom:material-thermostat-card
+entity: climate.living_room
+features:
+  - type: climate-hvac-modes # full-width row; keeps the layout stacked
+  - type: input-select
+    entity: input_select.ac_preset
+    display: dropdown
+    width: 50
+    alignment: center
+```
+
+Use `alignment: right` to move it to the right instead; omit `alignment` for left.
+Shared rows (including two `width: 50` features or `30 + 30`) ignore alignment and
+keep their existing order, even when space remains.
 
 ### Climate selectors (HVAC / fan / swing / preset)
 
@@ -494,7 +513,7 @@ flame) also appears under the temperature, like the climate preset icon. It foll
 the feature's per-option `icon` and `color` overrides; an empty `icon` hides it.
 It is not shown when the heater is off, unavailable or unknown.
 
-`water-heater-away-mode` accepts only `display: icons|tile`, `label` and `width`.
+`water-heater-away-mode` accepts only `display: icons|tile`, `label`, `width` and `alignment`.
 It appears only when away mode is supported and `away_mode` is a known `on`/`off` value;
 selection toggles that value using a boolean `away_mode` service payload. It is not an
 operation-mode selector and does not accept `include`, `order` or `options`.
@@ -869,6 +888,15 @@ in both **sections** and **masonry** views, since sizing is measured from the ca
 
 The `width` control in the visual editor is a slider (**10–100%**, dots on the tens). Leave it unset
 for full width (all types except `entity-tile`) or the 50% default (`entity-tile`, both displays).
+Beside it, a **Left / Centre / Right** pill uses familiar text-alignment icons to position
+the **whole feature**, not its text or chips. YAML uses `alignment: left|center|right`.
+
+Alignment uses unused space in the current feature-grid row without changing width or
+reordering features. Only rows with **one visible feature** use it; hidden comfort
+features do not occupy a place in row packing. A `width: 100` feature has no spare
+space, so alignment has no effect. Wide side-by-side behavior is unchanged:
+alignment is relative to the **feature sidebar**, not the whole card. A lone feature
+with the widest configured width fills that sidebar, leaving no space to align within.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/lageorgem/ha-material-thermostat-card/main/assets/wide.png" alt="Wide layout with the dial on the left and HVAC, fan, swing and preset controls on the right, each configured at 50% width" width="760">

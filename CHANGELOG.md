@@ -4,6 +4,15 @@ All notable changes to the **Material Thermostat Card** are documented here. Thi
 project adheres to [Semantic Versioning](https://semver.org/) and the format of
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- **Feature row alignment**: a Left / Centre / Right icon pill beside each width
+  control, with optional `alignment: left|center|right` (default `left`). Positions
+  the whole feature in unused space only when it is alone on its visible row;
+  shared rows, widths, text and chip order remain unchanged.
+
 ## [1.10.1] — 2026-10-20
 
 ### Added

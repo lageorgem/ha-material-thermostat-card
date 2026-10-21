@@ -36,6 +36,16 @@ selector `display` exists on every feature. The selector `tile` display is a
 Google-Home-style card showing the current value (see the selector section
 below) — distinct from the standalone `entity-tile` feature.
 
+All feature types accept optional `alignment?: 'left' | 'center' | 'right'`,
+default `left`, alongside `width`. This positions the **whole feature host** in
+unused grid-row space only when it is the row's only visible feature. It does not
+change width, text alignment, display mode or chip order. Shared rows (`50 + 50`
+or `30 + 30`) ignore it and retain config order. Hidden comfort features are
+excluded from packing. Full rows have no space to align; in wide mode the space
+is relative to the sidebar, not the card (a lone widest feature fills it).
+Width defaults remain 50 for entity tiles, 100 for all other types; see
+[`layout.md`](layout.md) for packing and wide-mode rules.
+
 ### Per-option colors (`OptionOverride.color` / `EntityItem.color`)
 
 Per-option **`color?`** (hex) overrides the accent color. Editor UI: `mt-color-field`
@@ -116,7 +126,7 @@ shared editor's rows are **drag-reorderable** (`ha-sortable` + `.handle`,
 
 ### Entity tile specifics (`entity-tile.ts` + `actions.ts`)
 
-`{ entity, name?, icon?, color?, display?, tap_action?, compact?, width? }`.
+`{ entity, name?, icon?, color?, display?, tap_action?, compact?, width?, alignment? }`.
 
 - Default tap (`pressOrToggle`): press for button/input_button/scene/script,
   toggle for switch/light/fan/input_boolean, more-info otherwise.
@@ -327,5 +337,10 @@ highlighted option inside; rows remain pill-shaped with large text.
   (the recurring "HA components are inert in a custom editor" trap). Source
   reference: `home-assistant/frontend` →
   `src/panels/lovelace/editor/card-editor/ha-grid-layout-slider.ts`. The field
-  has a **reset** button to clear width back to auto (unset); when unset the
-  slider shows no handle (tap the track to set one).
+   has a **reset** button to clear width back to auto (unset); when unset the
+   slider shows no handle (tap the track to set one).
+- **Alignment control** sits beside width for every feature type: a labelled
+  Left / Centre / Right pill using `mdi:format-align-left`,
+  `mdi:format-align-center` and `mdi:format-align-right`. Despite the familiar
+  text-alignment icons, it moves the feature host, not its contents. YAML uses
+  `center`, not `centre`; omitted alignment means `left`.

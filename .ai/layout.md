@@ -24,22 +24,29 @@ CARD_PADDING_X= 32    ha-card horizontal padding (host width − this = content 
 pctToSpan(pct)= clamp(round(pct/10), 1, 10)
 ```
 
-## Packing & wrapping = native CSS grid auto-flow
+## Packing, wrapping & singleton alignment
 
 The feature area is **one CSS grid**, `grid-template-columns: repeat(gridCols,
-minmax(0,1fr))`. Each `<mt-feature-row>` sets `grid-column: span (pct/10)`. The
-grid's auto-flow does all the packing:
+minmax(0,1fr))`. Feature spans remain `pct/10`. Packing follows config order,
+left to right, wrapping before a feature that does not fit the remaining columns:
 
 - two `width: 50` → span 5 + span 5 → fill one row (gap handled by the grid).
 - `50 + 60` → span 5 then span 6; 6 doesn't fit in the remaining 5 columns → it
   **wraps** to the next row. (This is req "line-break based on width".)
-- a lone `width: 30` → span 3, left-aligned, columns 4–10 empty (stays small).
+- a lone `width: 30` → span 3, left-aligned by default (stays small).
 - unset (100) → span 10 → full row.
 
-No manual packing code — auto-flow + integer spans + a 10-col grid give exact
-percentages with correct gaps and wrapping. (History: don't go back to flexbox
-basis-px, custom unit grids, or per-row flex — each failed a case. This is the
-simple one.)
+Optional `alignment: left|center|right` (default `left`) positions the whole
+feature host in unused space **only on singleton visible rows**. It never changes
+the span, text alignment or internal chip order. Shared rows, including `50 + 50`
+and partially filled `30 + 30`, ignore alignment and retain their order. Full-width
+features have no spare space. Hidden comfort hosts are excluded from packing.
+
+The placement contract is deterministic: pack visible spans against the current
+grid column count first, then align singleton rows without changing row membership.
+Use config, current layout and feature visibility, not DOM geometry; no new
+observers are needed for alignment. Keep the CSS grid and integer spans, not
+flexbox basis-px, custom unit grids or per-row flex.
 
 `_featureWidthPct(f)`: explicit `width` → `clamp(round(width/10)*10, 10, 100)`;
 `entity-tile` → 50; else 100. `_featureSpan(f)` = `pctToSpan(pct)` (1–10).
@@ -72,6 +79,10 @@ for the dial) AND the leftover is ≥ `DIAL_MIN_PX`. A config of plain selectors
 (all 100%) is always stacked — give features explicit `width < 100` to get the
 side-by-side layout.
 
+Alignment is relative to this feature sidebar's grid, **not the whole card**.
+A lone feature at `maxPct` fills the sidebar and cannot visibly move. Alignment
+does not alter wide-mode eligibility, sidebar width or dial placement.
+
 ## The dial bottom-gap crop (stacked mode)
 
 The dial is square; stacked layout crops its empty bottom band with
@@ -96,6 +107,7 @@ squishing.
 ## Test gotchas
 
 - `style.gridTemplateColumns` reads back with `minmax(0px, 1fr)` (0 → 0px).
-- `mt-feature-row` sets `style.gridColumn = "span N"` (reads back as set).
+- Check feature spans and singleton positioning separately; shared rows must keep
+  their original placement even when alignment is configured.
 - `_widthPx` is set directly in tests (`(el as any)._widthPx = px; requestUpdate;
   await updateComplete`) — there's no real ResizeObserver in jsdom-style mounts.
