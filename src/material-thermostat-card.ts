@@ -18,6 +18,8 @@ import {
   WIDE_MIN_PX,
   CARD_PADDING_X,
   pctToSpan,
+  packFeatureRows,
+  FEATURE_GAP_PX,
 } from './grid';
 import { tokens, climateModeColor, waterHeaterModeColor, waterHeaterModeIcon, presetIcon, presetColor } from './theme';
 import { primaryDomain, targetModel, temperatureServiceCall, dialColorMode, hvacAction, isUnavailable } from './entity/adapter';
@@ -88,12 +90,15 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
   @state() private _selectedHigh?: number;
   /** The card's inner content width in px (measured), for the grid. */
   @state() private _widthPx = 0;
+  /** Visibility belongs to normalized config identities, never to array indices. */
+  @state() private _comfortVisibility = new Map<FeatureConfig, boolean>();
 
   private _debounceTimer?: number;
   private _resyncTimer?: number;
   private _commitVersion = 0;
   private readonly _nameId = `mt-name-${++nextNameId}`;
   private _resizeObserver?: ResizeObserver;
+  private _featureRevision = 0;
 
   /**
    * Lazily load and return the card's visual editor element.
@@ -128,6 +133,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     }
     if (this._config?.entity !== config.entity) this._clearPendingTarget();
     this._config = normalizeConfig(config);
+    this._comfortVisibility = new Map();
+    this._featureRevision++;
     if (config.font !== 'theme') ensureGoogleSansFlex();
   }
 
@@ -204,7 +211,8 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
       changed.has('_selectedTemp') ||
       changed.has('_selectedLow') ||
       changed.has('_selectedHigh') ||
-      changed.has('_widthPx')
+      changed.has('_widthPx') ||
+      changed.has('_comfortVisibility')
     )
       return true;
     if (!this._config) return false;
@@ -283,10 +291,22 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     return pctToSpan(this._featureWidthPct(f));
   }
 
+  /** Accept only a current comfort row's report; repeated reports do not render again.
+   * @param event the row's visibility report (not an arbitrary child event)
+   */
+  private _onFeatureVisibility(event: CustomEvent<{ feature: FeatureConfig; visible: boolean }>): void {
+    const row = event.currentTarget as HTMLElementTagNameMap['mt-feature-row'];
+    const feature = row.feature;
+    if (feature.type !== 'comfort' || event.detail.feature !== feature) return;
+    const visible = event.detail.visible;
+    if ((this._comfortVisibility.get(feature) ?? false) === visible) return;
+    this._comfortVisibility = new Map(this._comfortVisibility).set(feature, visible);
+  }
+
   /**
    * Resolve the layout for the current width: stacked (narrow) or side-by-side
-   * (wide). The feature area is a CSS grid whose auto-flow packs features and
-   * wraps a row when the next feature's width doesn't fit. In a wide layout the
+    * (wide). The feature area is a CSS grid packed in sparse auto-flow order,
+    * wrapping a row when the next feature's width doesn't fit. In a wide layout the
    * feature area is the widest feature's percentage (right) and the fixed-size
      * dial is centered in the remaining space (left).
      * @param none No parameters.
@@ -560,6 +580,11 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
     const modeLabel = formatEntityState(this.hass, state);
     const features = this._features;
     const layout = this._layout();
+    const placements = packFeatureRows(features.map((feature) =>
+      feature.type === 'comfort' && !this._comfortVisibility.get(feature)
+        ? undefined
+        : this._featureSpan(feature)
+    ), layout.gridCols);
 
     return html`
       <ha-card role="group" aria-labelledby=${this._nameId} class=${fontClass} style=${`--mt-active-color: ${activeColor}`}>
@@ -608,12 +633,16 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
                 })}
               >
                 ${features.map(
-                  (feature: FeatureConfig) =>
+                  (feature: FeatureConfig, index: number) =>
                     html`<mt-feature-row
                       .hass=${this.hass}
                       .entityId=${this._config.entity}
                       .feature=${feature}
                       .span=${this._featureSpan(feature)}
+                      .placement=${placements[index]}
+                      .gridColumns=${layout.gridCols}
+                      .visibilityRevision=${this._featureRevision}
+                      @feature-row-visibility=${this._onFeatureVisibility}
                       .feelsLikeTemp=${this._config.feels_like?.temperature}
                       .feelsLikeHumidity=${this._config.feels_like?.humidity}
                     ></mt-feature-row>`
@@ -691,7 +720,7 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
          so the spacing below the dial is even. */
       .body.stacked {
         flex-direction: column;
-        gap: 12px;
+        gap: ${FEATURE_GAP_PX}px;
       }
       /* Side-by-side (wide): the feature area takes the widest feature's % on the
          right; the dial-wrap fills the rest and centers the fixed-size dial. */
@@ -706,14 +735,13 @@ export class MaterialThermostatCard extends LitElement implements LovelaceCard {
         justify-content: center;
         min-width: 0;
       }
-      /* Feature area: a 10-column grid (each column = 10% of the row). A feature
-         spans width/10 columns; the grid's auto-flow packs them and wraps a row
-         when the next feature's span doesn't fit. */
+      /* A full feature area has 10 columns. Explicit placements preserve sparse
+         auto-flow rows while singleton hosts align inside a full-row grid area. */
       .features {
         box-sizing: border-box;
         display: grid;
         align-content: flex-start;
-        gap: 12px;
+        gap: ${FEATURE_GAP_PX}px;
         min-width: 0;
       }
       .error {

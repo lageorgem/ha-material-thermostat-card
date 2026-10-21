@@ -28,6 +28,18 @@ describe('normalizeConfig', () => {
   });
 
   for (const [type, key] of selectors) {
+    for (const alignment of ['left', 'center', 'right']) {
+      it(`preserves ${type} ${alignment} alignment while normalizing frozen stock YAML`, () => {
+        const feature = Object.freeze({ type, style: 'dropdown', alignment, [key]: ['heat'] });
+        const config = Object.freeze(configWith([feature]));
+        Object.freeze(config.features);
+        expect(normalizeConfig(config).features).to.deep.equal([
+          { type, display: 'dropdown', alignment, include: ['heat'] },
+        ]);
+        expect(feature.style).to.equal('dropdown');
+        expect(feature.alignment).to.equal(alignment);
+      });
+    }
     for (const style of ['icons', 'dropdown']) {
       it(`translates ${type} with ${style} without mutating frozen input`, () => {
         const values = Object.freeze(['second', 'first']);

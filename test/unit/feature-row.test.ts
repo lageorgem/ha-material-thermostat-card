@@ -60,6 +60,30 @@ describe('mt-feature-row', () => {
       await el.updateComplete;
       expect(el.style.gridColumn).to.equal('');
     });
+
+    it('supports optional placement and clears singleton styles when returning to legacy spans', async () => {
+      const hass = makeHass({ 'climate.test': climateState() });
+      const el = await mount(hass, { type: 'climate-hvac-modes', alignment: 'center' }, { span: 3 });
+      el.placement = { row: 2, column: 1, singleton: true };
+      await el.updateComplete;
+      expect(el.style.gridColumn).to.equal('1 / span 10');
+      expect(el.style.gridRow).to.equal('2');
+      expect(el.style.justifySelf).to.equal('center');
+      expect(el.style.width).not.to.equal('');
+      el.gridColumns = 6;
+      await el.updateComplete;
+      expect(el.style.gridColumn).to.equal('1 / span 6');
+      expect(el.style.width).to.equal('calc(50% - 6px)');
+      el.feature = { type: 'climate-hvac-modes', alignment: 'right' };
+      await el.updateComplete;
+      expect(el.style.justifySelf).to.equal('right');
+      el.placement = undefined;
+      await el.updateComplete;
+      expect(el.style.gridColumn).to.equal('span 3');
+      expect(el.style.gridRow).to.equal('');
+      expect(el.style.width).to.equal('');
+      expect(el.style.justifySelf).to.equal('');
+    });
   });
 
   describe('render dispatch by feature type', () => {

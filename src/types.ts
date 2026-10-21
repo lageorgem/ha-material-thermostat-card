@@ -3,6 +3,16 @@ import type { ActionConfig, LovelaceCardConfig } from 'custom-card-helpers';
 /** How a selector feature is laid out. */
 export type FeatureDisplay = 'icons' | 'dropdown' | 'tile';
 
+/** Physical placement within unused grid space; only applies to singleton rows. */
+export type FeatureAlignment = 'left' | 'center' | 'right';
+
+export interface FeatureLayout {
+  /** Width as a percentage of the card (10–100, steps of 10). Entity tiles default to 50%; others to 100%. */
+  width?: number;
+  /** Move the feature host, not its contents. Unset = left. */
+  alignment?: FeatureAlignment;
+}
+
 /** How an entity-tile is laid out: a bare icon chip, or a full tile with title + value. */
 export type EntityTileDisplay = 'icon' | 'tile';
 
@@ -45,12 +55,10 @@ export interface EntityItem {
   color?: string;
 }
 
-interface BaseSelectorFeature {
+interface BaseSelectorFeature extends FeatureLayout {
   display?: FeatureDisplay;
   /** Optional title rendered above the selector (e.g. "Fan speed"). */
   label?: string;
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
 /** Per-option overrides plus an optional explicit display order of values. */
@@ -85,12 +93,10 @@ export interface WaterHeaterOperationFeatureConfig extends BaseSelectorFeature, 
 }
 
 /** Water heater away-mode toggle configuration. */
-export interface WaterHeaterAwayFeatureConfig {
+export interface WaterHeaterAwayFeatureConfig extends FeatureLayout {
   type: 'water-heater-away-mode';
   display?: 'icons' | 'tile';
   label?: string;
-  /** Width % (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
 export interface ClimatePresetFeatureConfig extends BaseSelectorFeature, OrderedOptions {
@@ -109,20 +115,16 @@ export interface SwitchGroupFeatureConfig extends BaseSelectorFeature {
   entities: EntityItem[];
 }
 
-export interface SwitchListFeatureConfig {
+export interface SwitchListFeatureConfig extends FeatureLayout {
   type: 'switch-list';
   label?: string;
   entities: EntityItem[];
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
-export interface ButtonListFeatureConfig {
+export interface ButtonListFeatureConfig extends FeatureLayout {
   type: 'button-list';
   label?: string;
   items: EntityItem[];
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
 /**
@@ -130,15 +132,13 @@ export interface ButtonListFeatureConfig {
  * Google Home app. Lighter than {@link EntityTileFeatureConfig} when you just
  * want to read several values stacked in a list.
  */
-export interface SensorListFeatureConfig {
+export interface SensorListFeatureConfig extends FeatureLayout {
   type: 'sensor-list';
   label?: string;
   items: EntityItem[];
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
-export interface EntityTileFeatureConfig {
+export interface EntityTileFeatureConfig extends FeatureLayout {
   type: 'entity-tile';
   entity: string;
   name?: string;
@@ -150,8 +150,6 @@ export interface EntityTileFeatureConfig {
   tap_action?: ActionConfig;
   /** @deprecated Legacy flag replaced by `display: 'icon'`; still read for back-compat. */
   compact?: boolean;
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = 50%. */
-  width?: number;
 }
 
 /**
@@ -163,12 +161,10 @@ export interface EntityTileFeatureConfig {
  * room feels comfortable — and, optionally, until the target temperature is
  * reached. Comfort is calculated, not configured.
  */
-export interface ComfortFeatureConfig {
+export interface ComfortFeatureConfig extends FeatureLayout {
   type: 'comfort';
   /** Also show the time until the target temperature is reached. */
   show_target_eta?: boolean;
-  /** Width as a percentage of the card (10–100, steps of 10). Unset = full width. */
-  width?: number;
 }
 
 export type FeatureConfig =

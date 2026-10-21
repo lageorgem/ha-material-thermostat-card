@@ -947,13 +947,20 @@ describe('material-thermostat-card', () => {
       expect((rows[0] as any).span).to.equal(5);
       expect((rows[1] as any).span).to.equal(3);
       expect((rows[2] as any).span).to.equal(10);
-      // mt-feature-row reflects the span onto its host grid-column
+      // Explicit placement preserves the same gap-adjusted geometry as auto-flow.
       await (rows[0] as any).updateComplete;
       await (rows[1] as any).updateComplete;
       await (rows[2] as any).updateComplete;
-      expect((rows[0] as HTMLElement).style.gridColumn).to.equal('span 5');
-      expect((rows[1] as HTMLElement).style.gridColumn).to.equal('span 3');
-      expect((rows[2] as HTMLElement).style.gridColumn).to.equal('span 10');
+      const area = el.shadowRoot!.querySelector('.features')!.getBoundingClientRect();
+      const boxes = [...rows].map((row) => row.getBoundingClientRect());
+      const gap = 12;
+      expect(boxes[0].width).to.be.closeTo((area.width + gap) * 0.5 - gap, 1);
+      expect(boxes[1].width).to.be.closeTo((area.width + gap) * 0.3 - gap, 1);
+      expect(boxes[1].left).to.be.closeTo(boxes[0].right + gap, 1);
+      expect(boxes[1].top).to.be.closeTo(boxes[0].top, 1);
+      expect(boxes[2].width).to.be.closeTo(area.width, 1);
+      expect(boxes[2].left).to.be.closeTo(area.left, 1);
+      expect(boxes[2].top).to.be.closeTo(Math.max(boxes[0].bottom, boxes[1].bottom) + gap, 1);
     });
 
     it('stacked dial gets a negative marginBottom crop', async () => {
