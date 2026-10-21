@@ -2,7 +2,9 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import { MIN_WIDTH_PCT, MAX_WIDTH_PCT, WIDTH_STEP } from '../grid';
+import type { FeatureAlignment } from '../types';
 import './grid-slider';
+import './alignment-toggle';
 
 /**
  * A small editor control for a feature's width, expressed as a **percentage of
@@ -15,6 +17,8 @@ import './grid-slider';
 export class MtWidthField extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ type: Number }) value?: number;
+  /** Row alignment, independent of width. Unset means left. */
+  @property() alignment?: FeatureAlignment;
   /** The width used when unset (shown as the handle position + hint). */
   @property({ type: Number }) default = MAX_WIDTH_PCT;
 
@@ -54,29 +58,35 @@ export class MtWidthField extends LitElement {
     return html`
       <div class="label">Width (% of card)</div>
       <div class="control">
-        <button
-          class="reset"
-          aria-label="Reset width to full"
-          title="Reset to full width"
-          ?disabled=${!set}
-          @click=${this._reset}
-        >
-          <ha-icon icon="mdi:restore"></ha-icon>
-        </button>
-        <mt-grid-slider
-          .value=${display}
-          .min=${MIN_WIDTH_PCT}
-          .max=${MAX_WIDTH_PCT}
-          .step=${WIDTH_STEP}
-          tooltip-mode="always"
-          @value-changed=${this._onChanged}
-        ></mt-grid-slider>
+        <div class="width-controls">
+          <button
+            class="reset"
+            aria-label="Reset width to full"
+            title="Reset to full width"
+            ?disabled=${!set}
+            @click=${this._reset}
+          >
+            <ha-icon icon="mdi:restore"></ha-icon>
+          </button>
+          <mt-grid-slider
+            .value=${display}
+            .min=${MIN_WIDTH_PCT}
+            .max=${MAX_WIDTH_PCT}
+            .step=${WIDTH_STEP}
+            tooltip-mode="always"
+            @value-changed=${this._onChanged}
+          ></mt-grid-slider>
+        </div>
+        <mt-alignment-toggle .value=${this.alignment}></mt-alignment-toggle>
       </div>
       ${set
         ? nothing
         : html`<div class="hint">
             Default — ${this.default === MAX_WIDTH_PCT ? 'full width' : `${this.default}%`}.
           </div>`}
+      <div class="alignment-help">
+        Alignment applies only when this feature is alone on its row.
+      </div>
     `;
   }
 
@@ -91,10 +101,21 @@ export class MtWidthField extends LitElement {
     }
     .control {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
       /* room above the slider for the floating value tooltip */
       padding-top: 20px;
+    }
+    .width-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 160px;
+      min-width: 0;
+    }
+    mt-alignment-toggle {
+      flex: 0 0 auto;
     }
     .reset {
       flex: 0 0 auto;
@@ -123,7 +144,8 @@ export class MtWidthField extends LitElement {
       flex: 1 1 auto;
       min-width: 0;
     }
-    .hint {
+    .hint,
+    .alignment-help {
       color: var(--secondary-text-color);
       font-size: 0.78rem;
       margin-top: 4px;

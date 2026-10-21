@@ -3,6 +3,7 @@ import { makeHass, captureEvents } from '../helpers';
 import '../../src/editors/width-field';
 import type { MtWidthField } from '../../src/editors/width-field';
 import type { MtGridSlider } from '../../src/editors/grid-slider';
+import type { MtAlignmentToggle } from '../../src/editors/alignment-toggle';
 
 /** The reset button. */
 function resetBtn(el: MtWidthField): HTMLButtonElement {
@@ -15,6 +16,48 @@ function slider(el: MtWidthField): MtGridSlider {
 }
 
 describe('mt-width-field', () => {
+  it('keeps width and alignment events independent, including reset', async () => {
+    const el = await fixture<MtWidthField>(html`<mt-width-field
+      .value=${70} .alignment=${'center'}
+    ></mt-width-field>`);
+    const toggle = el.shadowRoot!.querySelector('mt-alignment-toggle') as MtAlignmentToggle;
+    await toggle.updateComplete;
+    const widths: CustomEvent[] = [];
+    const alignments: CustomEvent[] = [];
+    const generic: Event[] = [];
+    el.addEventListener('width-changed', (e) => widths.push(e as CustomEvent));
+    el.addEventListener('alignment-changed', (e) => alignments.push(e as CustomEvent));
+    el.addEventListener('value-changed', (e) => generic.push(e));
+    resetBtn(el).click();
+    expect(widths.map((e) => e.detail)).to.deep.equal([{ value: undefined }]);
+    expect(el.alignment).to.equal('center');
+    expect(toggle.value).to.equal('center');
+    expect(alignments).to.have.length(0);
+    toggle.shadowRoot!.querySelectorAll('button')[2].click();
+    expect(alignments.map((e) => e.detail)).to.deep.equal([{ value: 'right' }]);
+    expect(widths).to.have.length(1);
+    expect(generic).to.have.length(0);
+    expect(el.value).to.equal(70);
+    expect(slider(el).value).to.equal(70);
+  });
+
+  it('fits a 320px editor with visible icons and no horizontal overflow', async () => {
+    const el = await fixture<MtWidthField>(html`<mt-width-field style="width: 320px; max-width: 100%"
+      .value=${70}
+    ></mt-width-field>`);
+    const toggle = el.shadowRoot!.querySelector('mt-alignment-toggle') as MtAlignmentToggle;
+    await toggle.updateComplete;
+    const bounds = el.getBoundingClientRect();
+    expect(el.scrollWidth).to.be.at.most(el.clientWidth);
+    for (const button of toggle.shadowRoot!.querySelectorAll('button')) {
+      const rect = button.getBoundingClientRect();
+      expect(rect.left).to.be.at.least(bounds.left);
+      expect(rect.right).to.be.at.most(bounds.right);
+      expect(rect.width).to.be.at.least(24);
+    }
+    expect(slider(el).getBoundingClientRect().width).to.be.greaterThan(0);
+  });
+
   describe('value set', () => {
     it('renders mt-grid-slider with that value, percentage min/max/step, tooltip-mode "always", reset enabled, no hint', async () => {
       const hass = makeHass({});
