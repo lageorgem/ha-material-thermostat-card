@@ -17,6 +17,9 @@ function ignoreResizeObserverWarning(event: ErrorEvent): void {
   }
 }
 
+// Register before WTR installs its error handler; keep real resize observations active.
+window.addEventListener('error', ignoreResizeObserverWarning);
+
 const selector = (width?: number, alignment?: FeatureAlignment): FeatureConfig => ({
   type: 'input-select', entity: 'input_select.test', display: 'dropdown', width, alignment,
 });
@@ -83,14 +86,10 @@ describe('feature row packing', () => {
 
 describe('singleton feature alignment geometry', () => {
   let card: MaterialThermostatCard;
-  beforeEach(() => window.addEventListener('error', ignoreResizeObserverWarning));
+  after(() => window.removeEventListener('error', ignoreResizeObserverWarning));
   afterEach(async () => {
-    try {
-      card?.remove();
-      await nextFrame();
-    } finally {
-      window.removeEventListener('error', ignoreResizeObserverWarning);
-    }
+    card?.remove();
+    await nextFrame();
   });
 
   async function mount(features: FeatureConfig[], visible = false): Promise<void> {
