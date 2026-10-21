@@ -1,5 +1,6 @@
 import { expect, nextFrame } from '@open-wc/testing';
-import { MaterialThermostatCard } from '../../src/material-thermostat-card';
+import '../../src/material-thermostat-card';
+import type { MaterialThermostatCard } from '../../src/material-thermostat-card';
 import type { MtFeatureRow } from '../../src/features/feature-row';
 import type { FeatureAlignment, FeatureConfig, MaterialThermostatCardConfig } from '../../src/types';
 import { FEATURE_GAP_PX, packFeatureRows } from '../../src/grid';
@@ -8,12 +9,13 @@ import { climateState, entityState, makeHass } from '../helpers';
 import type { TestHass } from '../helpers';
 
 // Only the browser's benign resize-notification warning is suppressed.
-window.addEventListener('error', (event) => {
-  if (/^ResizeObserver loop (completed with undelivered notifications\.|limit exceeded)$/.test(event.message)) {
+function ignoreResizeObserverWarning(event: ErrorEvent): void {
+  if (event.message === 'ResizeObserver loop completed with undelivered notifications.' ||
+      event.message === 'ResizeObserver loop limit exceeded') {
     event.stopImmediatePropagation();
     event.preventDefault();
   }
-});
+}
 
 const selector = (width?: number, alignment?: FeatureAlignment): FeatureConfig => ({
   type: 'input-select', entity: 'input_select.test', display: 'dropdown', width, alignment,
@@ -81,7 +83,15 @@ describe('feature row packing', () => {
 
 describe('singleton feature alignment geometry', () => {
   let card: MaterialThermostatCard;
-  afterEach(() => card?.remove());
+  beforeEach(() => window.addEventListener('error', ignoreResizeObserverWarning));
+  afterEach(async () => {
+    try {
+      card?.remove();
+      await nextFrame();
+    } finally {
+      window.removeEventListener('error', ignoreResizeObserverWarning);
+    }
+  });
 
   async function mount(features: FeatureConfig[], visible = false): Promise<void> {
     card = document.createElement('material-thermostat-card');
