@@ -58,6 +58,7 @@ export class MtAlignmentToggle extends LitElement {
       overflow: hidden;
     }
     button {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -76,6 +77,17 @@ export class MtAlignmentToggle extends LitElement {
     button.on {
       background: var(--primary-color);
       color: var(--text-primary-color, #fff);
+    }
+    /* A real border survives forced colours; keep it inside the separate focus outline. */
+    button.on::after {
+      content: '';
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      width: 18px;
+      border-bottom: 2px solid currentColor;
+      transform: translateX(-50%);
+      pointer-events: none;
     }
     button:focus-visible {
       outline: 2px solid currentColor;

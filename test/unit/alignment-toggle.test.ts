@@ -42,6 +42,37 @@ describe('mt-alignment-toggle', () => {
     expect(events).to.have.length(0);
   });
 
+  it('keeps a non-colour selected underline without moving buttons or icons', async () => {
+    const el = await fixture<MtAlignmentToggle>(html`<mt-alignment-toggle></mt-alignment-toggle>`);
+    const geometry = () => buttons(el).map((button) => {
+      const rect = button.getBoundingClientRect();
+      const icon = button.querySelector('ha-icon')!.getBoundingClientRect();
+      return [rect.x, rect.y, rect.width, rect.height, icon.x, icon.y];
+    });
+    const initialGeometry = geometry();
+
+    for (const [index, value] of ['left', 'center', 'right'].entries()) {
+      el.value = value as FeatureAlignment;
+      await el.updateComplete;
+      buttons(el).forEach((button, buttonIndex) => {
+        const marker = getComputedStyle(button, '::after');
+        if (buttonIndex === index) {
+          expect(button.matches(':focus')).to.equal(false);
+          expect(marker.content).to.equal('""');
+          expect(marker.position).to.equal('absolute');
+          expect(marker.borderBottomStyle).to.equal('solid');
+          expect(marker.borderBottomWidth).to.equal('2px');
+          expect(marker.borderBottomColor).to.equal(getComputedStyle(button).color);
+          expect(parseFloat(marker.width)).to.be.greaterThan(0);
+          expect(parseFloat(marker.bottom)).to.be.greaterThan(4);
+        } else {
+          expect(marker.content).to.equal('none');
+        }
+      });
+      expect(geometry()).to.deep.equal(initialGeometry);
+    }
+  });
+
   it('emits only alignment-changed, once, bubbling and composed; supports all selections', async () => {
     const el = await fixture<MtAlignmentToggle>(html`<mt-alignment-toggle></mt-alignment-toggle>`);
     const events: CustomEvent[] = [];
@@ -72,6 +103,8 @@ describe('mt-alignment-toggle', () => {
     expect(buttons(el)[1].matches(':focus-visible')).to.equal(true);
     expect(getComputedStyle(buttons(el)[1]).outlineStyle).to.equal('solid');
     expect(getComputedStyle(buttons(el)[1]).outlineWidth).to.equal('2px');
+    expect(getComputedStyle(buttons(el)[1], '::after').content).to.equal('none');
+    expect(getComputedStyle(buttons(el)[0], '::after').borderBottomStyle).to.equal('solid');
     buttons(el)[2].focus();
     await sendKeys({ press: 'Space' });
     expect(values).to.deep.equal(['center', 'right']);
