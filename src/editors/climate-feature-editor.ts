@@ -189,7 +189,9 @@ export class MtClimateFeatureEditor extends LitElement {
         <mt-width-field
           .hass=${this.hass}
           .value=${this.feature.width}
+          .alignment=${this.feature.alignment}
           @width-changed=${(e: CustomEvent) => this._emit({ width: e.detail.value })}
+          @alignment-changed=${(e: CustomEvent<{ value: 'left' | 'center' | 'right' }>) => this._emit({ alignment: e.detail.value === 'left' ? undefined : e.detail.value })}
         ></mt-width-field>
 
         ${values.length === 0

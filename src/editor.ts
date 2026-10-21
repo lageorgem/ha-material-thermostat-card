@@ -582,7 +582,9 @@ export class MaterialThermostatCardEditor extends LitElement implements Lovelace
           <mt-width-field
             .hass=${this.hass}
             .value=${feature.width}
+            .alignment=${feature.alignment}
             @width-changed=${(e: CustomEvent<{ value: number | undefined }>) => onChange(new CustomEvent('feature-changed', { detail: { feature: { ...feature, width: e.detail.value } } }))}
+            @alignment-changed=${(e: CustomEvent<{ value: 'left' | 'center' | 'right' }>) => onChange(new CustomEvent('feature-changed', { detail: { feature: { ...feature, alignment: e.detail.value === 'left' ? undefined : e.detail.value } } }))}
           ></mt-width-field>
         `;
         break;

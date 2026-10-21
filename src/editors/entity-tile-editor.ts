@@ -75,8 +75,10 @@ export class MtEntityTileEditor extends LitElement {
         <mt-width-field
           .hass=${this.hass}
           .value=${this.feature.width}
+          .alignment=${this.feature.alignment}
           .default=${TILE_DEFAULT_PCT}
           @width-changed=${(e: CustomEvent) => this._patch({ width: e.detail.value })}
+          @alignment-changed=${(e: CustomEvent<{ value: 'left' | 'center' | 'right' }>) => this._patch({ alignment: e.detail.value === 'left' ? undefined : e.detail.value })}
         ></mt-width-field>
 
         <div class="item">
