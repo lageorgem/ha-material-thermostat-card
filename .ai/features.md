@@ -337,8 +337,8 @@ highlighted option inside; rows remain pill-shaped with large text.
   (the recurring "HA components are inert in a custom editor" trap). Source
   reference: `home-assistant/frontend` →
   `src/panels/lovelace/editor/card-editor/ha-grid-layout-slider.ts`. The field
-   has a **reset** button to clear width back to auto (unset); when unset the
-   slider shows no handle (tap the track to set one).
+  has a **reset** button to clear width back to auto (unset); when unset the
+  slider shows no handle (tap the track to set one).
 - **Alignment control** sits beside width for every feature type: a labelled
   Left / Centre / Right pill using `mdi:format-align-left`,
   `mdi:format-align-center` and `mdi:format-align-right`. Despite the familiar

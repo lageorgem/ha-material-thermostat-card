@@ -110,4 +110,4 @@ squishing.
 - Check feature spans and singleton positioning separately; shared rows must keep
   their original placement even when alignment is configured.
 - `_widthPx` is set directly in tests (`(el as any)._widthPx = px; requestUpdate;
-  await updateComplete`) — there's no real ResizeObserver in jsdom-style mounts.
+await updateComplete`) — there's no real ResizeObserver in jsdom-style mounts.
