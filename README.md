@@ -228,12 +228,17 @@ icon use the full mode colour whenever heating/cooling is demanded or reported, 
 It is hidden when heating with the setpoint below room temperature, or cooling with the setpoint
 above room temperature.
 
-For **dual setpoints**, the active sub‑mode uses the reported heating/cooling action, falling back to
-the current temperature versus the range: it fills **blue**
+For **dual setpoints**, the halo and big number are neutral gray when `hvac_action` reports
+`idle` or `off`, even outside the range, or when the entity is off with range setpoints retained.
+Reported heating/cooling uses the corresponding mode colour. Missing or empty `hvac_action`
+keeps temperature-based colours: heating below the range, cooling above it, and heat/cool within it.
+The range/demand markers and centre layout still use the reported heating/cooling action, falling
+back to the current temperature versus the range: the demand band fills **blue**
 from the high setpoint up to the current temp when **cooling** (current above the range), **orange**
 from the low setpoint down when **heating**. The band between the two setpoints uses the heat/cool
-colour while idle and muted gray while active. The centre shows the **Heat/Cool range** while
-dragging, for 5 seconds after a setpoint change, and while idle within the range; otherwise it
+colour within the range and muted gray while the active sub-mode targets a setpoint.
+The centre shows the **Heat/Cool range** while dragging, for 5 seconds after a setpoint change,
+and when no sub-mode is active; otherwise it
 collapses to the single setpoint it's targeting, with the active mode icon on the ring.
 
 Changes are **optimistic** (the UI updates immediately) and the domain's `set_temperature` call is

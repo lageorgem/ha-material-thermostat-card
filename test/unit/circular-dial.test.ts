@@ -3141,6 +3141,138 @@ describe('mt-circular-dial', () => {
     });
   });
 
+  describe('dual reported inactivity', () => {
+    for (const mode of ['heat_cool', 'auto']) {
+      for (const action of [undefined, '', 'idle', 'off']) {
+        for (const [current, inferred] of [[14, 'heat'], [21, 'heat_cool'], [28, 'cool']] as const) {
+          it(`${mode}, action=${String(action)}, current=${current}: neutralizes only reported inactivity`, async () => {
+            const el = await mount();
+            el.style.setProperty('--mt-motion-dur', '0s');
+            el.style.setProperty('--mt-on-surface-variant', 'rgb(128, 128, 128)');
+            el.dual = true;
+            el.mode = mode;
+            el.lowValue = 18;
+            el.highValue = 24;
+            el.current = current;
+            el.hvacAction = action;
+            await el.updateComplete;
+            const root = el.shadowRoot!;
+            const dial = root.querySelector<HTMLElement>('.dial')!;
+            const idle = action === 'idle' || action === 'off';
+            expect((el as any)._dualIdle).to.equal(idle);
+            expect(dial.classList.contains('idle')).to.equal(idle);
+            expect(dial.classList.contains('off')).to.be.false;
+            expect(dial.style.getPropertyValue('--dial-color')).to.equal(idle ? IDLE_COLOR : climateModeColor(inferred));
+            const resolved = getComputedStyle(dial).getPropertyValue('--dial-color').trim();
+            expect(getComputedStyle(root.querySelector('.value-text')!).color).to.equal(resolved);
+            expect(getComputedStyle(root.querySelector('stop')!).stopColor).to.equal(resolved);
+            expect(getComputedStyle(root.querySelector('.glow')!).opacity).to.equal(idle ? '0.5' : '1');
+            if (idle) expect(resolved).to.equal('rgb(128, 128, 128)');
+            // Reported inactivity must not erase temperature-driven range/demand geometry.
+            expect((el as any)._dualActive).to.equal(inferred === 'heat_cool' ? null : inferred);
+            const range = root.querySelector('.range')!;
+            const demand = root.querySelector('.demand')!;
+            expect(range.getAttribute('style')).to.include(`stroke:${inferred === 'heat_cool' ? climateModeColor('heat_cool') : IDLE_COLOR}`);
+            expect(range.getAttribute('style')).to.include(`opacity:${inferred === 'heat_cool' ? 1 : 0.5};`);
+            expect(demand.getAttribute('style')).to.include(`opacity:${inferred === 'heat_cool' ? 0 : 1};`);
+            expect(demand.getAttribute('stroke-dasharray')).to.equal(inferred === 'heat_cool' ? '0.00 1000' : '142.86 1000');
+            expect(demand.getAttribute('stroke-dashoffset')).to.equal(current === 14 ? '-250.00' : '-607.14');
+          });
+        }
+      }
+    }
+
+    it('keeps a retained dual range neutral in off mode regardless of action or demand', async () => {
+      const el = await mount();
+      el.style.setProperty('--mt-motion-dur', '0s');
+      el.dual = true;
+      el.mode = 'off';
+      el.lowValue = 18;
+      el.highValue = 24;
+      for (const action of [undefined, '', 'heating', 'cooling', 'idle', 'off']) {
+        for (const current of [14, 21, 28]) {
+          el.hvacAction = action;
+          el.current = current;
+          await el.updateComplete;
+          const dial = el.shadowRoot!.querySelector<HTMLElement>('.dial')!;
+          expect((el as any)._dualIdle).to.be.true;
+          expect(dial.style.getPropertyValue('--dial-color')).to.equal(IDLE_COLOR);
+          expect(dial.classList.contains('off')).to.be.true;
+          expect(dial.classList.contains('idle')).to.be.false;
+          expect(el.shadowRoot!.querySelectorAll('.range, .demand')).to.have.length(2);
+          if (current === 21) {
+            expect(el.shadowRoot!.querySelector('.range')!.getAttribute('style')).to.include(`stroke:${climateModeColor('heat_cool')}`);
+          }
+        }
+      }
+    });
+
+    for (const [mode, action, current] of [['heat', 'heating', 14], ['cool', 'cooling', 28]] as const) {
+      it(`restores custom ${mode} halo/readout color after reported inactivity without moving demand`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.dual = true;
+        el.mode = mode;
+        el.modeColors = { [mode]: '#123456' };
+        el.lowValue = 18;
+        el.highValue = 24;
+        el.current = current;
+        el.hvacAction = action;
+        await el.updateComplete;
+        const demand = el.shadowRoot!.querySelector('.demand')!;
+        const geometry = ['stroke-dasharray', 'stroke-dashoffset'].map(name => demand.getAttribute(name));
+        for (const nextAction of ['idle', 'off', action]) {
+          el.hvacAction = nextAction;
+          await el.updateComplete;
+          const dial = el.shadowRoot!.querySelector<HTMLElement>('.dial')!;
+          const idle = nextAction !== action;
+          expect(dial.style.getPropertyValue('--dial-color')).to.equal(idle ? IDLE_COLOR : '#123456');
+          expect(dial.classList.contains('idle')).to.equal(idle);
+          expect(el.shadowRoot!.querySelector('.demand')).to.equal(demand);
+          expect(['stroke-dasharray', 'stroke-dashoffset'].map(name => demand.getAttribute(name))).to.deep.equal(geometry);
+          expect(demand.getAttribute('style')).to.include('stroke:#123456');
+          expect(demand.getAttribute('style')).to.include('opacity:1;');
+          if (!idle) expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).color).to.equal('rgb(18, 52, 86)');
+        }
+      });
+    }
+
+    it('preserves a custom in-band range color while the halo is explicitly idle', async () => {
+      const el = await mount();
+      el.dual = true;
+      el.mode = 'heat_cool';
+      el.modeColors = { heat_cool: '#123456' };
+      el.lowValue = 18;
+      el.highValue = 24;
+      el.current = 21;
+      el.hvacAction = 'idle';
+      await el.updateComplete;
+      expect((el as any)._dialColor).to.equal(IDLE_COLOR);
+      expect(el.shadowRoot!.querySelector('.range')!.getAttribute('style')).to.include('stroke:#123456');
+    });
+
+    for (const dual of [false, true]) {
+      it(`does not apply dual inactivity to readonly presentation (dual=${dual})`, async () => {
+        const el = await mount();
+        el.style.setProperty('--mt-motion-dur', '0s');
+        el.dual = dual;
+        el.readonly = true;
+        el.mode = 'heat';
+        el.modeColors = { heat: '#123456' };
+        el.current = 14;
+        for (const action of ['idle', 'off', 'heating']) {
+          el.hvacAction = action;
+          await el.updateComplete;
+          expect((el as any)._dualIdle).to.be.false;
+          expect((el as any)._dialColor).to.equal('#123456');
+          expect(getComputedStyle(el.shadowRoot!.querySelector('.value-text')!).color).to.equal('rgb(18, 52, 86)');
+          expect(el.shadowRoot!.querySelector('.dial')!.classList.contains('dual')).to.be.false;
+          expect(el.shadowRoot!.querySelector('.range, .demand')).to.equal(null);
+        }
+      });
+    }
+  });
+
   describe('dual segment rendering', () => {
     it('idle (current in range): green range band, demand band faded out', async () => {
       const el = await mount();

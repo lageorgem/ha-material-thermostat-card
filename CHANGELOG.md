@@ -4,6 +4,19 @@ All notable changes to the **Material Thermostat Card** are documented here. Thi
 project adheres to [Semantic Versioning](https://semver.org/) and the format of
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.1] — 2026-10-27
+
+### Fixed
+
+- Explicit **No Icon** selections now remove the icon placeholder from selector
+  tiles, dropdowns and menus while preserving labels and selection indicators
+  ([#4](https://github.com/lageorgem/ha-material-thermostat-card/issues/4)).
+- Dual-setpoint `heat_cool` and `auto` dials now show a gray halo and large
+  temperature number when `hvac_action` is `idle` or `off`, or the entity is off,
+  while retaining target ranges. Active colors, missing-action inference and
+  range-demand markers remain unchanged
+  ([#5](https://github.com/lageorgem/ha-material-thermostat-card/issues/5)).
+
 ## [1.11.0] — 2026-10-21
 
 ### Added

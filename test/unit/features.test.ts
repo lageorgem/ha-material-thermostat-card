@@ -951,6 +951,64 @@ describe('mt-input-select', () => {
   const isState = (options: string[], state = 'morning') =>
     entityState('input_select.mode', state, { options, friendly_name: 'Mode' });
 
+  it('preserves an empty icon from feature config through the input-select tile and service selection', async () => {
+    const hass = makeHass({
+      'input_select.mode': isState(['morning', 'day', 'night']),
+    });
+    const feature: FeatureConfig = {
+      type: 'input-select',
+      entity: 'input_select.mode',
+      display: 'tile',
+      label: 'Scene',
+      options: [
+        { value: 'morning', label: 'AM', icon: '' },
+        { value: 'day', icon: 'mdi:weather-sunny' },
+      ],
+    };
+    const el = await fixture<MtFeatureRow>(
+      html`<mt-feature-row
+        .hass=${hass}
+        entityId="climate.test"
+        .feature=${feature}
+      ></mt-feature-row>`
+    );
+    const input = el.shadowRoot!.querySelector<MtInputSelect>('mt-input-select')!;
+    await input.updateComplete;
+    const row = selectorRow(input)!;
+    await row.updateComplete;
+    const dropdown = row.shadowRoot!.querySelector<MtDropdown>('mt-dropdown')!;
+    await dropdown.updateComplete;
+    expect(dropdown.variant).to.equal('tile');
+    expect(dropdown.items.map((item) => item.icon)).to.deep.equal([
+      '',
+      'mdi:weather-sunny',
+      undefined,
+    ]);
+    const button = dropdown.shadowRoot!.querySelector<HTMLButtonElement>('.tile')!;
+    expect(button.querySelector('.ic, .dot, ha-icon')).to.equal(null);
+    expect(button.querySelector('.title')!.textContent).to.equal('Scene');
+    expect(button.querySelector('.value')!.textContent).to.equal('AM');
+
+    button.click();
+    await dropdown.updateComplete;
+    const options = dropdown.shadowRoot!.querySelectorAll<HTMLButtonElement>('.opt');
+    expect(options[0].querySelector('.dot, ha-icon:not(.check)')).to.equal(null);
+    expect(options[0].querySelector('.label')!.textContent).to.equal('AM');
+    expect(options[0].querySelector('.check')!.getAttribute('icon')).to.equal('mdi:check');
+    expect(options[1].querySelector('ha-icon')!.getAttribute('icon')).to.equal('mdi:weather-sunny');
+    expect(options[2].querySelector('.dot')).not.to.equal(null);
+    expect(hass.__calls).to.have.lengthOf(0);
+    options[0].click();
+    expect(hass.__calls).to.have.lengthOf(1);
+    expect(hass.__calls[0]).to.deep.include({ domain: 'input_select', service: 'select_option' });
+    expect(hass.__calls[0].data).to.deep.equal({
+      entity_id: 'input_select.mode',
+      option: 'morning',
+    });
+    await dropdown.updateComplete;
+    expect(dropdown.shadowRoot!.querySelector('.menu')).to.equal(null);
+  });
+
   it('renders nothing when there is no state', async () => {
     const hass = makeHass({});
     const el = await fixture<MtInputSelect>(

@@ -19,6 +19,112 @@ function trigger(el: MtDropdown): HTMLButtonElement {
 }
 
 describe('mt-dropdown', () => {
+  describe('explicit no-icon overrides', () => {
+    for (const variant of ['pill', 'tile'] as const) {
+      it(`omits ${variant} glyphs for empty icons without removing text or selection controls`, async () => {
+        const el = await fixture<MtDropdown>(
+          html`<mt-dropdown
+            variant=${variant}
+            label="Mode"
+            .items=${[
+              { value: 'a', label: 'Alpha', icon: '', active: true },
+              { value: 'b', label: 'Beta', icon: '' },
+            ]}
+          ></mt-dropdown>`
+        );
+        const button = el.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+        expect(button.querySelector('.lead, .dot, .ic')).to.equal(null);
+        if (variant === 'pill') {
+          expect(button.querySelector('.label')!.textContent).to.equal('Alpha');
+          expect(button.querySelector('.chev')!.getAttribute('icon')).to.equal('mdi:chevron-down');
+          expect(button.querySelectorAll('ha-icon')).to.have.lengthOf(1);
+        } else {
+          expect(button.querySelector('.title')!.textContent).to.equal('Mode');
+          expect(button.querySelector('.value')!.textContent).to.equal('Alpha');
+          expect(button.querySelector('ha-icon')).to.equal(null);
+        }
+
+        button.click();
+        await el.updateComplete;
+        expect(button.getAttribute('aria-expanded')).to.equal('true');
+        const options = el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.opt');
+        expect(options).to.have.lengthOf(2);
+        expect(
+          Array.from(options, (option) => option.querySelector('.label')!.textContent)
+        ).to.deep.equal(['Alpha', 'Beta']);
+        for (const option of options) {
+          expect(option.querySelector('.dot, ha-icon:not(.check)')).to.equal(null);
+        }
+        expect(options[0].getAttribute('aria-selected')).to.equal('true');
+        expect(options[0].querySelector('.check')!.getAttribute('icon')).to.equal('mdi:check');
+        expect(options[1].getAttribute('aria-selected')).to.equal('false');
+        expect(options[1].querySelector('.check')).to.equal(null);
+
+        const selected = oncePromise(el, 'item-selected');
+        options[1].click();
+        expect((await selected).detail).to.deep.equal({ value: 'b' });
+        await el.updateComplete;
+        expect(el.shadowRoot!.querySelector('.menu')).to.equal(null);
+        expect(button.getAttribute('aria-expanded')).to.equal('false');
+      });
+
+      it(`updates the ${variant} trigger and open menu from custom icon to empty icon to default dot`, async () => {
+        const el = await fixture<MtDropdown>(
+          html`<mt-dropdown
+            variant=${variant}
+            label="Mode"
+            .items=${[{ value: 'a', label: 'Alpha', icon: 'mdi:star', active: true }]}
+          ></mt-dropdown>`
+        );
+        const button = el.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+        button.click();
+        await el.updateComplete;
+
+        for (const icon of ['mdi:star', '', undefined]) {
+          el.items = [{ value: 'a', label: 'Alpha', icon, active: true }];
+          await el.updateComplete;
+          const option = el.shadowRoot!.querySelector('.opt')!;
+          expect(button.querySelectorAll('ha-icon[icon="mdi:star"]')).to.have.lengthOf(
+            icon === 'mdi:star' ? 1 : 0
+          );
+          expect(option.querySelectorAll('ha-icon:not(.check)')).to.have.lengthOf(
+            icon === 'mdi:star' ? 1 : 0
+          );
+          if (icon === 'mdi:star') {
+            expect(option.querySelector('ha-icon:not(.check)')!.getAttribute('icon')).to.equal(
+              icon
+            );
+          }
+          expect(button.querySelectorAll('.dot')).to.have.lengthOf(icon === undefined ? 1 : 0);
+          expect(option.querySelectorAll('.dot')).to.have.lengthOf(icon === undefined ? 1 : 0);
+          expect(
+            button.querySelector(variant === 'pill' ? '.label' : '.value')!.textContent
+          ).to.equal('Alpha');
+          expect(option.querySelector('.label')!.textContent).to.equal('Alpha');
+          expect(option.querySelector('.check')!.getAttribute('icon')).to.equal('mdi:check');
+          if (variant === 'tile') {
+            expect(button.querySelectorAll('.ic')).to.have.lengthOf(icon === '' ? 0 : 1);
+            expect(button.querySelector('.title')!.textContent).to.equal('Mode');
+          } else {
+            expect(button.querySelector('.chev')!.getAttribute('icon')).to.equal(
+              'mdi:chevron-down'
+            );
+          }
+        }
+
+        // An empty override on an inactive item must not suppress the neutral icon.
+        el.items = [{ value: 'a', label: 'Alpha', icon: '' }];
+        await el.updateComplete;
+        expect(button.querySelector('ha-icon[icon="mdi:tune-variant"]')).not.to.equal(null);
+        expect(button.querySelector('.dot')).to.equal(null);
+        expect(
+          button.querySelector(variant === 'pill' ? '.label' : '.value')!.textContent
+        ).to.equal('—');
+        expect(el.shadowRoot!.querySelector('.check')).to.equal(null);
+      });
+    }
+  });
+
   describe('menu layout', () => {
     async function openMenu(variant: 'pill' | 'tile', right: boolean, width = 300,
       options = items): Promise<MtDropdown> {

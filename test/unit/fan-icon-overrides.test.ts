@@ -70,7 +70,7 @@ async function renderedRow(card: MaterialThermostatCard): Promise<MtSelectorRow>
 function expectModeIcon(control: Element, icon: string | undefined): void {
   const icons = Array.from(control.querySelectorAll('ha-icon:not(.chev):not(.check)'));
   expect(icons.map(node => node.getAttribute('icon'))).to.deep.equal(icon ? [icon] : []);
-  if (icon === '') expect(control.querySelector('.dot, .chip-text')).not.to.equal(null);
+  if (icon === '') expect(control.querySelector('.dot, .ic')).to.equal(null);
 }
 
 /** Inspect both the active trigger and the real open option menu. */
@@ -89,6 +89,9 @@ async function quietControl(row: MtSelectorRow, display: Display, icon: string, 
   const trigger = dropdown.shadowRoot!.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
   expectModeIcon(trigger, icon);
   expect(trigger.querySelector(display === 'tile' ? '.value' : '.label')!.textContent).to.equal(label);
+  if (display === 'dropdown') {
+    expect(trigger.querySelector('ha-icon.chev')!.getAttribute('icon')).to.equal('mdi:chevron-down');
+  }
   trigger.click();
   await dropdown.updateComplete;
   expect(trigger.getAttribute('aria-expanded')).to.equal('true');
@@ -97,6 +100,7 @@ async function quietControl(row: MtSelectorRow, display: Display, icon: string, 
   expect(option, 'quiet menu option').not.to.equal(undefined);
   expect(option.getAttribute('aria-selected')).to.equal('true');
   expectModeIcon(option, icon);
+  expect(option.querySelector('ha-icon.check')!.getAttribute('icon')).to.equal('mdi:check');
   return option;
 }
 

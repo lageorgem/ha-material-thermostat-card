@@ -132,6 +132,8 @@ export class MtDropdown extends LitElement {
       >
         ${!active
           ? html`<ha-icon class="lead" icon="mdi:tune-variant"></ha-icon>`
+          : active.icon === ''
+          ? nothing
           : active.icon
           ? html`<ha-icon class="lead" icon=${active.icon}></ha-icon>`
           : html`<span class="dot"></span>`}
@@ -160,13 +162,15 @@ export class MtDropdown extends LitElement {
         aria-expanded=${this._open ? 'true' : 'false'}
         @click=${this._toggle}
       >
-        <div class="ic">
-          ${!active
-            ? html`<ha-icon icon="mdi:tune-variant"></ha-icon>`
-            : active.icon
-            ? html`<ha-icon icon=${active.icon}></ha-icon>`
-            : html`<span class="dot"></span>`}
-        </div>
+        ${active?.icon === ''
+          ? nothing
+          : html`<div class="ic">
+              ${!active
+                ? html`<ha-icon icon="mdi:tune-variant"></ha-icon>`
+                : active.icon
+                ? html`<ha-icon icon=${active.icon}></ha-icon>`
+                : html`<span class="dot"></span>`}
+            </div>`}
         <div class="text">
           ${this.label ? html`<div class="title">${this.label}</div>` : nothing}
           <div class="value">${active?.label ?? '—'}</div>
@@ -191,7 +195,9 @@ export class MtDropdown extends LitElement {
           tabindex=${it.disabled ? '-1' : '0'}
           @click=${(e: Event) => this._select(e, it.value)}
         >
-          ${it.icon
+          ${it.icon === ''
+            ? nothing
+            : it.icon
             ? html`<ha-icon icon=${it.icon}></ha-icon>`
             : html`<span class="dot"></span>`}
           <span class="label">${it.label}</span>

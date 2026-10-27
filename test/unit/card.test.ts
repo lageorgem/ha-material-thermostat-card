@@ -7,6 +7,7 @@ import { feelsLikeC } from '../../src/calc/comfort-metrics';
 import { fromCelsius, type TempUnit } from '../../src/calc/units';
 import type { MaterialThermostatCardConfig } from '../../src/types';
 import { GOOGLE_SANS_FLEX_URL } from '../../src/font';
+import { climateModeColor } from '../../src/theme';
 
 // The benign "ResizeObserver loop completed with undelivered notifications"
 // browser error is not a test failure; swallow it so Mocha doesn't fail tests
@@ -539,6 +540,99 @@ describe('material-thermostat-card', () => {
     });
     it('otherwise → the entity state', async () => {
       expect(await colorOf('idle', 'heat')).to.equal('heat');
+    });
+  });
+
+  describe('dual activity updates through the climate adapter', () => {
+    for (const mode of ['heat_cool', 'auto']) {
+      for (const [activeAction, activeMode, outside] of [['heating', 'heat', 17], ['cooling', 'cool', 28]] as const) {
+        for (const inactiveAction of ['idle', 'off']) {
+          for (const current of [outside, 21]) {
+            it(`${mode}, current=${current}: updates ${activeAction} → ${inactiveAction} → ${activeAction} without a target change`, async () => {
+              const attributes = {
+                supported_features: 2,
+                temperature: null,
+                target_temp_low: 18,
+                target_temp_high: 24,
+                current_temperature: current,
+              };
+              const el = track(await mount(baseConfig(), {
+                [ENTITY]: climateState({ ...attributes, hvac_action: activeAction }, mode),
+              }));
+              const d = dial(el);
+              d.style.setProperty('--mt-motion-dur', '0s');
+              d.style.setProperty('--mt-on-surface-variant', 'rgb(128, 128, 128)');
+              await d.updateComplete;
+              for (const action of [activeAction, inactiveAction, activeAction]) {
+                el.hass = makeHass({ [ENTITY]: climateState({ ...attributes, hvac_action: action }, mode) });
+                await el.updateComplete;
+                await d.updateComplete;
+                expect(dial(el)).to.equal(d);
+                expect(d.dual).to.equal(true);
+                expect(d.readonly).to.equal(false);
+                expect(d.current).to.equal(current);
+                expect([d.lowValue, d.highValue]).to.deep.equal([18, 24]);
+                expect(d.hvacAction).to.equal(action);
+                const idle = action === inactiveAction;
+                expect(d.mode).to.equal(idle ? mode : activeMode);
+                const root = d.shadowRoot as ShadowRoot;
+                const rendered = root.querySelector<HTMLElement>('.dial')!;
+                expect(rendered.classList.contains('idle')).to.equal(idle);
+                expect(rendered.classList.contains('off')).to.equal(false);
+                expect(rendered.style.getPropertyValue('--dial-color')).to.equal(
+                  idle ? 'var(--mt-on-surface-variant)' : climateModeColor(activeMode)
+                );
+                const color = getComputedStyle(rendered).getPropertyValue('--dial-color').trim();
+                expect(getComputedStyle(root.querySelector('.value-text')!).color).to.equal(color);
+                expect(getComputedStyle(root.querySelector('stop')!).stopColor).to.equal(color);
+                expect(getComputedStyle(root.querySelector('.glow')!).opacity).to.equal(idle ? '0.5' : '1');
+                if (idle) {
+                  expect(color).to.equal('rgb(128, 128, 128)');
+                  if (current === 21) {
+                    expect(root.querySelector('.range')!.getAttribute('style')).to.include(`stroke:${climateModeColor('heat_cool')}`);
+                    expect(root.querySelector('.demand')!.getAttribute('style')).to.include('opacity:0;');
+                  } else {
+                    expect(root.querySelector('.demand')!.getAttribute('style')).to.include('opacity:1;');
+                    expect(root.querySelector('.demand')!.getAttribute('stroke-dasharray')).not.to.equal('0.00 1000');
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+    }
+
+    it('keeps retained range targets neutral after switching the entity mode off', async () => {
+      const attributes = {
+        supported_features: 2,
+        temperature: null,
+        target_temp_low: 18,
+        target_temp_high: 24,
+        current_temperature: 28,
+      };
+      const el = track(await mount(baseConfig(), {
+        [ENTITY]: climateState({ ...attributes, hvac_action: 'cooling' }, 'auto'),
+      }));
+      const d = dial(el);
+      d.style.setProperty('--mt-motion-dur', '0s');
+      d.style.setProperty('--mt-on-surface-variant', 'rgb(128, 128, 128)');
+      await d.updateComplete;
+      el.hass = makeHass({ [ENTITY]: climateState({ ...attributes, hvac_action: undefined }, 'off') });
+      await el.updateComplete;
+      await d.updateComplete;
+      expect(d.dual).to.equal(true);
+      expect(d.mode).to.equal('off');
+      expect([d.lowValue, d.highValue]).to.deep.equal([18, 24]);
+      const root = d.shadowRoot as ShadowRoot;
+      const rendered = root.querySelector<HTMLElement>('.dial')!;
+      expect(rendered.classList.contains('off')).to.equal(true);
+      expect(rendered.classList.contains('idle')).to.equal(false);
+      expect(rendered.style.getPropertyValue('--dial-color')).to.equal('var(--mt-on-surface-variant)');
+      expect(getComputedStyle(root.querySelector('.value-text')!).color).to.equal('rgb(128, 128, 128)');
+      expect(getComputedStyle(root.querySelector('stop')!).stopColor).to.equal('rgb(128, 128, 128)');
+      expect(getComputedStyle(root.querySelector('.glow')!).opacity).to.equal('0.5');
+      expect(root.querySelectorAll('.range, .demand')).to.have.length(2);
     });
   });
 

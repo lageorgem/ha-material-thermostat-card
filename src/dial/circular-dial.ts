@@ -97,7 +97,7 @@ export class MtCircularDial extends LitElement {
   @property() mode = 'off';
   /** Dial backdrop: halo (default), bare minimal, or Google's solid disc. */
   @property() dialStyle: 'halo' | 'minimal' | 'google' = 'halo';
-  /** Reported HVAC action; when absent, single-mode activity is inferred from demand. */
+  /** Reported HVAC action; when absent, activity is inferred from temperature demand. */
   @property() hvacAction?: string;
   @property() modeLabel = '';
   /** Optional preset icon shown under the temperature (e.g. the eco leaf). */
@@ -209,6 +209,12 @@ export class MtCircularDial extends LitElement {
     return this._demandSensible;
   }
 
+  /** Reported dual inactivity affects the halo/readout, not inferred range geometry. */
+  private get _dualIdle(): boolean {
+    return this.dual && !this.readonly &&
+      (this.mode === 'off' || this.hvacAction === 'idle' || this.hvacAction === 'off');
+  }
+
   /** Demand markers stay fully colored while demand is inferred or reported. */
   private get _demandColored(): boolean {
     return COLORED_MODES.includes(this.mode) && (this._singleActive || this._demandSensible);
@@ -234,6 +240,7 @@ export class MtCircularDial extends LitElement {
   /** The dial's mode color (off / idle modes use the neutral variant). */
   private get _dialColor(): string {
     if (this.readonly) return this._modeColor(this.mode);
+    if (this._dualIdle) return MtCircularDial.IDLE_COLOR;
     if (!this.dual && COLORED_MODES.includes(this.mode) && !this._singleActive) {
       return MtCircularDial.IDLE_COLOR;
     }
@@ -899,7 +906,7 @@ export class MtCircularDial extends LitElement {
       ? this.dialStyle
       : 'halo';
     const isOff = !COLORED_MODES.includes(this.mode);
-    const isIdle = !this.dual && !isOff && !this._singleActive;
+    const isIdle = !isOff && (this.dual ? this._dualIdle : !this._singleActive);
     const color = this._dialColor;
     const modeLight = isOff
       ? 'var(--mt-on-surface)'
@@ -951,7 +958,7 @@ export class MtCircularDial extends LitElement {
       dualSegs.push({
         from: lo,
         to: hi,
-        color: active === null ? color : MtCircularDial.IDLE_COLOR,
+        color: active === null ? this._modeColor('heat_cool') : MtCircularDial.IDLE_COLOR,
         opacity: active === null ? 1 : 0.5,
         cls: 'range',
       });
