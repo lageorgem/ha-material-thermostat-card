@@ -155,7 +155,12 @@ export class MtDropdown extends LitElement {
     const accent = active?.color ? `--mt-tile-accent: ${active.color}` : nothing;
     return html`
       <button
-        class=${classMap({ tile: true, on: this._tileOn, open: this._open })}
+        class=${classMap({
+          tile: true,
+          on: this._tileOn,
+          open: this._open,
+          'no-icon': active?.icon === '',
+        })}
         style=${accent}
         aria-haspopup="listbox"
         ?disabled=${this._disabled}

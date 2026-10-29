@@ -104,6 +104,10 @@ describe('mt-dropdown', () => {
           expect(option.querySelector('.check')!.getAttribute('icon')).to.equal('mdi:check');
           if (variant === 'tile') {
             expect(button.querySelectorAll('.ic')).to.have.lengthOf(icon === '' ? 0 : 1);
+            expect(button.classList.contains('no-icon')).to.equal(icon === '');
+            expect(getComputedStyle(button.querySelector('.text')!).textAlign).to.equal(
+              icon === '' ? 'center' : 'left'
+            );
             expect(button.querySelector('.title')!.textContent).to.equal('Mode');
           } else {
             expect(button.querySelector('.chev')!.getAttribute('icon')).to.equal(

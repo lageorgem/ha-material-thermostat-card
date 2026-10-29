@@ -142,6 +142,9 @@ export class MtEntityTile extends LitElement {
         .tile .ic {
           display: none;
         }
+        .tile .text {
+          text-align: center;
+        }
       }
       /* Icon display: a bare centered icon (no circle chip), at the same height
          as the full tile (inherits the shared .tile min-height) so mixed rows

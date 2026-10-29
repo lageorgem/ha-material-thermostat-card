@@ -734,6 +734,11 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
     min-width: 0;
     flex: 1;
   }
+  /* Without the leading chip, center the title/value instead of leaving them
+     pinned to the left edge of an otherwise empty tile. */
+  .tile.no-icon .text {
+    text-align: center;
+  }
   .tile .title {
     font-size: var(--md-sys-typescale-label-medium-size, 13px);
     line-height: 1.2;
@@ -775,7 +780,7 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
       </button>
     `}_renderTile(t){const e=t?.color?`--mt-tile-accent: ${t.color}`:B;return U`
       <button
-        class=${me({tile:!0,on:this._tileOn,open:this._open})}
+        class=${me({tile:!0,on:this._tileOn,open:this._open,"no-icon":""===t?.icon})}
         style=${e}
         aria-haspopup="listbox"
         ?disabled=${this._disabled}
@@ -1126,6 +1131,9 @@ function t(t,e,i,s){var o,a=arguments.length,r=a<3?e:null===s?s=Object.getOwnPro
         }
         .tile .ic {
           display: none;
+        }
+        .tile .text {
+          text-align: center;
         }
       }
       /* Icon display: a bare centered icon (no circle chip), at the same height

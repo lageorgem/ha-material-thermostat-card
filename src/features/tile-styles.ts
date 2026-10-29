@@ -85,6 +85,11 @@ export const tileStyles = css`
     min-width: 0;
     flex: 1;
   }
+  /* Without the leading chip, center the title/value instead of leaving them
+     pinned to the left edge of an otherwise empty tile. */
+  .tile.no-icon .text {
+    text-align: center;
+  }
   .tile .title {
     font-size: var(--md-sys-typescale-label-medium-size, 13px);
     line-height: 1.2;
