@@ -4,6 +4,15 @@ All notable changes to the **Material Thermostat Card** are documented here. Thi
 project adheres to [Semantic Versioning](https://semver.org/) and the format of
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.2] — 2026-10-29
+
+### Fixed
+
+- Selector tiles whose active option uses **No Icon**, and entity tiles too narrow
+  to show their icon chip, now center their title and value instead of leaving them
+  against the left edge
+  ([#6](https://github.com/lageorgem/ha-material-thermostat-card/issues/6)).
+
 ## [1.11.1] — 2026-10-27
 
 ### Fixed
